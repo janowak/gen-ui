@@ -10,6 +10,7 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
 - Next:
   - **M0 spike:** real-host test via a tunnel.
   - **M4:** packaging (Docker, self-host docs).
+  - **M5:** hosted deploy (Hostinger VPS + Cloudflare), including the public MCP. See §9.
 - Deviations from the plan below:
   - SQLite through the built-in `node:sqlite` instead of Drizzle: no native dependencies, with all SQL kept in one store module.
   - Custom components declare the tools they call in their manifest, for typing and local mocks.
@@ -226,10 +227,97 @@ genui is a UI registry and release pipeline, not a permissions layer. Views may 
 | **M2 SDK + registry** | SQLite registry, bundles, channels, SDK mount/cache/fallback, demo server. | 2 wks |
 | **M3 Management + CI** | Registry MCP with OAuth and roles; theme controller; component list/promote/rollback; `genui publish`. | 1–2 wks |
 | **M4 Packaging** | Docker image (container + SQLite volume), self-host docs incl. MCP tunnels for Claude/ChatGPT, licences (MIT SDK/UI/format, FSL registry), examples. | 1 wk |
+| **M5 Hosted** | Stage 0 of §9: compose with tunnel + Litestream, Cloudflare (Pages, Tunnel, R2, WAF), CI deploy, staging, public MCP on its own hostname without validation webhooks, sign-up hardening. | 1 wk |
 
 ---
 
-## 9. Out of v1
+## 9. Hosting (genui cloud)
+
+The hosted version is the M4 self-host image with `GENUI_MODE=hosted`: one artifact for self-host, cloud and dedicated instances. A Hostinger VPS runs the Node services; Cloudflare sits in front of them and serves the static sites.
+
+### What runs where
+
+| Piece | Runs on | Address |
+|---|---|---|
+| Landing (`apps/site`), docs | Cloudflare Pages | `<domain>` |
+| Playground (`apps/playground`) | Cloudflare Pages | `play.<domain>` |
+| Registry: `/v1` API, management MCP `/mcp`, OAuth `/api/auth/*`, sign-in | VPS, `registry` container | `registry.<domain>` (`GENUI_PUBLIC_URL`) |
+| Public MCP: `/w/<workspace>/mcp`, `/w/<workspace>/beta/mcp` | VPS, same container for now | `mcp.<domain>` |
+| Demo server (`apps/demo`) | VPS, `demo` container | `demo.<domain>/mcp` |
+| SQLite backups | Cloudflare R2, via Litestream | |
+| SDKs, kit, CLI | npm (`@genui/*`), PyPI (`genui-sdk`) | |
+
+```
+Cloudflare: DNS, TLS, WAF, rate limits
+├─ <domain>, play.<domain>  → Pages
+├─ registry.<domain>        ┐
+├─ mcp.<domain>  (^/w/ only)├─ Tunnel → Hostinger VPS (KVM 2, EU), docker compose:
+└─ demo.<domain>            ┘           registry · demo · cloudflared · litestream → R2
+```
+
+- **VPS, not Hostinger's managed Node.js hosting:** the registry needs a persistent disk for SQLite, Docker and a Litestream sidecar.
+- **Cloudflare Tunnel, no open ports** except SSH (keys only). TLS ends at Cloudflare.
+- **EU data center:** render calls to the public MCP carry whatever the model puts in them.
+- **Cost:** about $10–15/month for the VPS. Cloudflare Free covers Pages, Tunnel and R2 at this size.
+
+### The public MCP puts us on the data path
+
+Without it, the registry is a control plane: customers' servers render from the SDK's last good snapshot, so a registry outage only blocks releases. The public MCP changes that for hosted workspaces:
+
+- Every tool list, render and view load in Claude/ChatGPT is a request to our VPS. Load and uptime now follow end-user usage.
+- What the model passes to render calls reaches us: form specs, pre-filled values, inline chart rows. So we are a data processor for those workspaces.
+
+What keeps it simple: **hosted forms have no submit tool and no validation.** Submitted values go back to the conversation through the host and never reach us. So the public MCP:
+
+- only reads the workspace's catalog, recipes and theme;
+- makes no outbound calls (no webhooks) and holds no secrets.
+
+That makes it cheap to isolate and easy to move to the edge.
+
+What follows:
+
+- **Own hostname from day one.** Connector URLs pasted into Claude/ChatGPT settings must never change. `mcp.<domain>` lets the public MCP move to its own container, then to the edge, without customers noticing.
+  - Needs a `GENUI_HOSTED_URL` setting, so `/v1/hosting` and the manager show full URLs on that host (they return paths today).
+  - The tunnel forwards only `^/w/` on that host.
+- **Per-request cost.** `hosted.ts` builds a server and reads the catalog from SQLite on every request; only bundles are cached. Fine for the POC. Next step: cache the snapshot per workspace and channel, invalidated by a workspace revision that publish, promote, rollback, theme and recipe saves bump.
+- **Drop recipe validation webhooks.** Remove the `validate` path the public MCP uses today: `webhook.ts`, `genui_validate`, the recipe `validate` field and `/v1/hosting/webhook-secret`.
+- **Abuse.** The endpoint is unauthenticated: a Cloudflare rate limit per IP on `mcp.<domain>` now, per-workspace request quotas later.
+- **Privacy.**
+  - No request-body logging: Cloudflare doesn't log bodies by default; strip them on `/w/*` in Sentry.
+  - DPA template before the first paying hosted customer.
+
+### Stage 0 setup
+
+1. **Image:** the M4 multi-stage Dockerfile, Node 24 pinned (`node:sqlite` is still experimental). One image for registry and demo, with different commands.
+2. **Compose:** `registry` (SQLite on a volume), `demo`, `cloudflared`, `litestream` → R2. Health check on `/health`.
+3. **CI:** GitHub Actions builds the image, pushes it to GHCR, then runs `docker compose pull && up -d` over SSH. Staging is a second compose project on the same VPS, with its own database and `*-staging` hostnames.
+4. **Cloudflare:**
+   - Tunnel ingress per hostname; Pages projects for the site and playground; an R2 bucket for backups.
+   - **Bot Fight Mode off** for the zone. Claude's and ChatGPT's backends call `/mcp`, `/.well-known/*` and `/w/*` from datacenter IPs. Challenging them breaks connectors, and on the Free plan Bot Fight Mode can't be skipped per path.
+   - No "cache everything" rules on the registry or MCP hostnames.
+   - Rate limits on `/api/auth/*`, `/v1/components` and `mcp.<domain>`.
+   - Requests idle for 100 s are dropped. Fine for today's request/response MCP; send keepalives if long SSE streams are added.
+5. **Settings:** `GENUI_MODE=hosted`, `GENUI_PUBLIC_URL`, `GENUI_HOSTED_URL`, `GENUI_AUTH_SECRET`, GitHub and Google OAuth apps. Password login and DCR off.
+6. **Before opening sign-ups:**
+   - quotas per workspace (components, versions, storage, hosted requests);
+   - `Content-Security-Policy: sandbox` on `/v1/bundles/:hash`, since it serves customer HTML from the origin that holds sign-in cookies.
+7. **Publish** `@genui/sdk`, `@genui/kit` and `@genui/cli` to npm, and `genui-sdk` to PyPI.
+
+### Scaling
+
+Writes (publish, promote, theme, sign-in) stay rare. Reads (SDK catalog polls, bundles, public MCP renders) carry the volume, are read-only and are versioned. So keep one write server as long as possible and move reads to Cloudflare's edge.
+
+| Stage | When | Change |
+|---|---|---|
+| **0. POC** | Now | Setup above. |
+| **1. Design partners** | First external workspace in production | <ul><li>Uptime checks, Sentry, staging.</li><li>Public MCP in its own container: same image, `/w/*` only, SQLite read-only. A flood can't starve sign-in.</li><li>Snapshot cache; `ETag`/304 on `/v1/catalog`.</li><li>Bundles move from SQLite to R2.</li></ul> |
+| **2. Edge data plane** | First hosted workspace with real end-user traffic, or an uptime promise | <ul><li>On every change, the registry writes the workspace snapshot (catalog, bundles, recipes, theme) to R2/KV.</li><li>A Worker serves `/v1/catalog`, `/v1/bundles` and the public MCP from it. The snapshot holds no secrets, so the Worker needs nothing else.</li><li>The VPS keeps writes, the management MCP and OAuth. Its outages no longer reach end users.</li><li>Prerequisite: `@genui/sdk` runs on Workers (`nodejs_compat`). Check early.</li></ul> |
+| **3. Redundant write plane** | A contractual SLA on management and releases (late) | Managed Postgres plus two app instances behind Cloudflare Load Balancing, or Workers + D1. Either way the store becomes async. The MCP handlers are built per request, so no sticky sessions. |
+| **Enterprise** | Data residency, compliance | A dedicated instance (same image, its own VPS) or self-host. |
+
+---
+
+## 10. Out of v1
 
 - Copilot / Gemini (A2UI)
 - Python SDK
