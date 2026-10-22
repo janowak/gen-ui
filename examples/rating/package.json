@@ -1,0 +1,21 @@
+{
+  "name": "@genui/example-rating",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "publish:beta": "genui publish ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@genui/cli": "workspace:*",
+    "vite": "^8.3.5",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

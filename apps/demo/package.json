@@ -1,0 +1,30 @@
+{
+  "name": "@genui/demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --env-file-if-exists=../../.env.local --import tsx src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env.local --watch --import tsx src/main.ts"
+  },
+  "dependencies": {
+    "@genui/sdk": "workspace:*",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.6.7",
+    "@genui/format": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.15"
+  }
+}

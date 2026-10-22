@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in · genui</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in to genui</h1>
+      <p>to manage your components from your AI assistant.</p>
+      <div id="providers"></div>
+      <form id="password" hidden>
+        <div class="divider">or with email</div>
+        <input id="name" type="text" placeholder="Name" autocomplete="name" hidden />
+        <input id="email" type="email" placeholder="Email" autocomplete="email" required />
+        <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required minlength="8" />
+        <button class="primary" id="submit" type="submit">Sign in</button>
+        <button class="link" id="toggle" type="button">Create an account</button>
+      </form>
+      <div class="error" id="error" role="alert"></div>
+    </main>
+    <script type="module" src="./src/sign-in.ts"></script>
+  </body>
+</html>

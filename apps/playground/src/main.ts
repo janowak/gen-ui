@@ -1,0 +1,175 @@
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import type { McpUiHostContext, McpUiStyles } from "@modelcontextprotocol/ext-apps";
+import { AppBridge, PostMessageTransport } from "@modelcontextprotocol/ext-apps/app-bridge";
+import { PlaygroundOAuth, takeCallback } from "./oauth";
+import { PRESETS } from "./presets";
+
+/**
+ * Minimal MCP Apps host for local development: calls a render tool like a model would,
+ * renders the returned ui:// view in a sandboxed iframe and logs what reaches the model.
+ */
+
+// Returning from sign-in: grab the code first; this restores the original ?server=… query.
+const callback = takeCallback();
+const params = new URLSearchParams(location.search);
+const SERVER_URL = params.get("server") ?? "http://localhost:3001/mcp";
+// ?channel=beta asks the demo server for the registry's beta channel.
+const CHANNEL = params.get("channel") ?? "stable";
+
+// Roughly Claude-like host variables, to check that views pick up host styling.
+const HOST_VARS = {
+  light: {
+    "--color-background-primary": "#ffffff",
+    "--color-background-secondary": "#f5f4ef",
+    "--color-text-primary": "#141413",
+    "--color-text-secondary": "#5e5d59",
+    "--color-border-primary": "#e8e6dc",
+    "--font-sans": "ui-sans-serif, system-ui, -apple-system, sans-serif",
+  },
+  dark: {
+    "--color-background-primary": "#262624",
+    "--color-background-secondary": "#30302e",
+    "--color-text-primary": "#faf9f5",
+    "--color-text-secondary": "#c2c0b6",
+    "--color-border-primary": "#3e3e38",
+    "--font-sans": "ui-sans-serif, system-ui, -apple-system, sans-serif",
+  },
+};
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const presetSelect = $<HTMLSelectElement>("preset");
+const argsInput = $<HTMLTextAreaElement>("args");
+const streamInput = $<HTMLInputElement>("stream");
+const themeSelect = $<HTMLSelectElement>("theme");
+const hostVarsInput = $<HTMLInputElement>("hostvars");
+const stage = $<HTMLDivElement>("stage");
+const log = $<HTMLPreElement>("log");
+
+function write(label: string, value: unknown) {
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  log.textContent = `[${new Date().toLocaleTimeString()}] ${label}\n${text}\n\n${log.textContent}`;
+}
+
+for (const name of Object.keys(PRESETS)) presetSelect.add(new Option(name, name));
+const loadPreset = () => (argsInput.value = JSON.stringify(PRESETS[presetSelect.value]!.args, null, 2));
+presetSelect.onchange = loadPreset;
+loadPreset();
+document.body.dataset.theme = themeSelect.value;
+themeSelect.onchange = () => (document.body.dataset.theme = themeSelect.value);
+
+// Servers that require OAuth (the registry MCP) trigger the sign-in flow on 401, like Claude's connectors.
+const oauth = new PlaygroundOAuth(SERVER_URL);
+const transport = () =>
+  new StreamableHTTPClientTransport(new URL(SERVER_URL), { authProvider: oauth, requestInit: { headers: { "x-genui-channel": CHANNEL } } });
+if (callback) await transport().finishAuth(callback);
+$<HTMLButtonElement>("signout").onclick = () => {
+  oauth.signOut();
+  location.reload();
+};
+
+const client = new Client({ name: "genui-playground", version: "0.1.0" });
+await client.connect(transport());
+const { tools } = await client.listTools();
+write("connected", { server: SERVER_URL, channel: CHANNEL, tools: tools.map((t) => t.name) });
+
+function hostContext(): McpUiHostContext {
+  const theme = themeSelect.value as "light" | "dark";
+  return {
+    theme,
+    displayMode: "inline" as const,
+    availableDisplayModes: ["inline", "fullscreen"],
+    // Hosts may send any subset of the standard variables.
+    ...(hostVarsInput.checked ? { styles: { variables: HOST_VARS[theme] as McpUiStyles } } : {}),
+  };
+}
+
+/** Yields growing prefixes of the arguments, like a model streaming JSON. */
+function* partials(args: Record<string, unknown>): Generator<Record<string, unknown>> {
+  const listKey = Array.isArray(args.fields) ? "fields" : undefined;
+  const rows = (args.data as { rows?: unknown[] } | undefined)?.rows;
+  if (listKey) {
+    const list = args[listKey] as unknown[];
+    for (let i = 0; i <= list.length; i++) yield { ...args, [listKey]: list.slice(0, i) };
+  } else if (rows) {
+    for (let i = 0; i <= rows.length; i += 2) yield { ...args, data: { rows: rows.slice(0, i) } };
+  } else {
+    yield { type: args.type };
+  }
+}
+
+let current: { bridge: AppBridge; iframe: HTMLIFrameElement } | undefined;
+
+$<HTMLButtonElement>("run").onclick = async () => {
+  const preset = PRESETS[presetSelect.value]!;
+  const args = JSON.parse(argsInput.value) as Record<string, unknown>;
+  const tool = tools.find((t) => t.name === preset.tool);
+  const uri = (tool?._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri;
+  if (!uri) return write("error", `${preset.tool} has no ui resource`);
+
+  if (current) {
+    await current.bridge.teardownResource({}).catch(() => {});
+    current.iframe.remove();
+  }
+
+  const resource = await client.readResource({ uri });
+  const html = (resource.contents[0] as { text: string }).text;
+  write("resource", `${uri} (${Math.round(html.length / 1024)} KB)`);
+
+  const t0 = performance.now();
+  const iframe = document.createElement("iframe");
+  iframe.sandbox.add("allow-scripts", "allow-forms");
+  iframe.srcdoc = html;
+  stage.replaceChildren(iframe);
+
+  const bridge = new AppBridge(
+    client,
+    { name: "genui-playground", version: "0.1.0" },
+    { serverTools: {}, openLinks: {}, logging: {}, updateModelContext: { text: {} }, message: { text: {} } },
+    { hostContext: hostContext() },
+  );
+  current = { bridge, iframe };
+
+  bridge.onsizechange = ({ height }) => {
+    if (height) iframe.style.height = `${height}px`;
+  };
+  bridge.onupdatemodelcontext = async (params) => {
+    write("→ model context (updateModelContext)", params.content?.map((c) => ("text" in c ? c.text : c)) ?? params);
+    return {};
+  };
+  bridge.onmessage = async (params) => {
+    write("→ chat message (sendMessage)", params.content.map((c) => ("text" in c ? c.text : c)));
+    return {};
+  };
+  bridge.onrequestdisplaymode = async ({ mode }) => {
+    document.body.classList.toggle("fullscreen", mode === "fullscreen");
+    bridge.sendHostContextChange({ ...hostContext(), displayMode: mode });
+    return { mode };
+  };
+  themeSelect.onchange = () => {
+    document.body.dataset.theme = themeSelect.value;
+    bridge.sendHostContextChange(hostContext());
+  };
+
+  bridge.oninitialized = async () => {
+    write("view initialized", `${Math.round(performance.now() - t0)} ms after iframe creation`);
+    try {
+      if (streamInput.checked) {
+        let n = 0;
+        for (const partial of partials(args)) {
+          await bridge.sendToolInputPartial({ arguments: partial });
+          n++;
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        write("streamed partial inputs", n);
+      }
+      await bridge.sendToolInput({ arguments: args });
+      const result = await client.callTool({ name: preset.tool, arguments: args });
+      write(`${preset.tool} result`, result);
+      await bridge.sendToolResult(result as Parameters<AppBridge["sendToolResult"]>[0]);
+    } catch (error) {
+      write("host error", String(error));
+    }
+  };
+
+  await bridge.connect(new PostMessageTransport(iframe.contentWindow!, iframe.contentWindow!));
+};

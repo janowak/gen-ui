@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Allow access · genui</title>
+  </head>
+  <body>
+    <main>
+      <h1>Allow access to genui?</h1>
+      <p>This app wants to manage your genui workspace on your behalf:</p>
+      <code id="client"></code>
+      <ul id="scopes"></ul>
+      <p>It can list and preview components. If you are an admin, you can promote, roll back and change the theme from it; those actions always need your click.</p>
+      <div class="row">
+        <button id="deny" type="button">Deny</button>
+        <button id="allow" class="primary" type="button">Allow</button>
+      </div>
+      <div class="error" id="error" role="alert"></div>
+    </main>
+    <script type="module" src="./src/consent.ts"></script>
+  </body>
+</html>

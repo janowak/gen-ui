@@ -1,0 +1,19 @@
+/*
+ * genui view chrome, kept out of shadcn's generated styles.css.
+ * Unlayered on purpose: wins over Tailwind's base layer.
+ */
+html,
+body {
+  /* Blend into the host's message surface. */
+  background: transparent;
+}
+
+html {
+  /* Host font (--font-sans from host style variables) when provided, else the system stack. */
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+#root {
+  /* shadcn Card draws its border as a 1px ring outside the box; keep it inside the iframe. */
+  padding: 1px;
+}
