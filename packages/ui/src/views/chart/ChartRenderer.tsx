@@ -70,16 +70,16 @@ export function ChartRenderer({ type, data, stacked, horizontal }: Props) {
       <ChartContainer config={config} className="aspect-auto h-64 w-full">
         <BarChart data={rows} layout={horizontal ? "vertical" : "horizontal"} accessibilityLayer>
           <CartesianGrid vertical={horizontal} horizontal={!horizontal} />
+          {/* No fragments here: recharts detects them with react-is, which never matches Preact's. */}
           {horizontal ? (
-            <>
-              <XAxis type="number" tickFormatter={tick} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} />
-            </>
+            <XAxis type="number" tickFormatter={tick} tickLine={false} axisLine={false} />
           ) : (
-            <>
-              <XAxis dataKey="category" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickFormatter={tick} tickLine={false} axisLine={false} width={56} />
-            </>
+            <XAxis dataKey="category" tickLine={false} axisLine={false} tickMargin={8} />
+          )}
+          {horizontal ? (
+            <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} />
+          ) : (
+            <YAxis tickFormatter={tick} tickLine={false} axisLine={false} width={56} />
           )}
           {tooltip}
           {legend}

@@ -1,11 +1,8 @@
-import { THEME_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY } from "@genui/format";
 import type { App, McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { useApp, useHostStyles } from "@modelcontextprotocol/ext-apps/react";
 import { useEffect, useState } from "react";
 import { applyTheme } from "./theme";
-
-/** Key under which the SDK lists the tools this view may call (validated server-side). */
-export const ALLOWED_TOOLS_META_KEY = "genui/allowedTools";
 
 export interface RenderResult {
   isError: boolean;
@@ -20,7 +17,7 @@ export interface ViewState {
   /** Latest tool arguments. While `streaming`, they are partial ("healed") JSON. */
   input: Record<string, unknown> | undefined;
   streaming: boolean;
-  /** Result of the render tool: server-side validation + theme + allowed tools. */
+  /** Result of the render tool: server-side validation + theme + preview flag. */
   result: RenderResult | undefined;
   cancelled: boolean;
   hostContext: McpUiHostContext | undefined;
@@ -71,8 +68,10 @@ export function useView(name: string): ViewState {
   return { app, connectError: error ?? null, input, streaming, result, cancelled, hostContext };
 }
 
-/** Tools the server approved for this view. Empty until the render result arrives. */
-export function allowedTools(result: RenderResult | undefined): Set<string> {
-  const list = result?.meta[ALLOWED_TOOLS_META_KEY];
-  return new Set(Array.isArray(list) ? list.filter((t): t is string => typeof t === "string") : []);
+/**
+ * Whether the view may call tools: once the server accepted the render, and never in registry
+ * previews (the tools live on the company's own server).
+ */
+export function toolsReady(result: RenderResult | undefined): boolean {
+  return Boolean(result && !result.isError && result.meta[PREVIEW_META_KEY] !== true);
 }

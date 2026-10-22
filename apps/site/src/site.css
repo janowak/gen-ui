@@ -1,0 +1,314 @@
+/* The views' shadcn theme (base-nova, neutral): the site and the genui views share one palette. */
+@import "@genui/ui/styles.css";
+
+@source "../index.html";
+@source "./";
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+}
+
+/* Class recipes from packages/ui/src/components/ui (button, card, input, badge), for plain HTML. */
+@layer components {
+  .btn {
+    @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-primary bg-clip-padding px-2.5 text-sm font-medium whitespace-nowrap text-primary-foreground transition-all outline-none select-none hover:bg-primary/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0;
+  }
+
+  .btn-outline {
+    @apply border-border bg-background text-foreground hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted/50;
+  }
+
+  .btn-lg {
+    @apply h-9 px-3.5;
+  }
+
+  .card {
+    @apply flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10;
+  }
+
+  .input {
+    @apply flex h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors dark:bg-input/30 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground;
+  }
+
+  .badge {
+    @apply inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:size-3;
+  }
+
+  .badge-default {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .badge-secondary {
+    @apply bg-secondary text-secondary-foreground;
+  }
+
+  .badge-outline {
+    @apply border-border text-foreground;
+  }
+
+  .code {
+    @apply m-0 overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-[13px] leading-relaxed text-muted-foreground;
+  }
+
+  .code .s,
+  .code .k {
+    @apply text-foreground;
+  }
+}
+
+/* Hero demo: steps hide until the script reveals them (see the inline script in index.html). */
+.motion .demo [data-reveal]:not(.is-in),
+.motion .demo [data-field]:not(.is-in),
+.motion .demo [data-done]:not(.is-in) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.demo [data-reveal],
+.demo [data-field],
+.demo [data-done] {
+  transition:
+    opacity 0.35s ease-out,
+    transform 0.35s ease-out;
+}
+
+/* While the model streams the form, fields are skeletons (as in FormView), then fill in. */
+.demo .is-skeleton .input {
+  @apply animate-pulse border-transparent bg-muted;
+}
+
+.demo .is-skeleton .input > * {
+  visibility: hidden;
+}
+
+.demo .is-filled .input {
+  animation: filled 1s ease-out;
+}
+
+@keyframes filled {
+  from {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+}
+
+.demo [data-submit]:not(.is-busy) [data-spinner] {
+  display: none;
+}
+
+.demo [data-submit].is-pressed {
+  transform: translateY(1px);
+}
+
+.demo [data-submit].is-busy,
+.demo [data-submit].is-sent {
+  opacity: 0.5;
+}
+
+/* Release lane: pins slide between versions; --stable and --beta are version indexes. */
+.lane-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 36px 0;
+}
+
+.lane-track::before {
+  content: "";
+  position: absolute;
+  left: 12.5%;
+  right: 12.5%;
+  top: 50%;
+  height: 1px;
+  background: var(--border);
+}
+
+.lane-ver {
+  @apply relative justify-self-center rounded-md border bg-background px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors;
+}
+
+.lane-ver.is-beta {
+  @apply border-dashed border-foreground/50 text-foreground;
+}
+
+.lane-ver.is-stable {
+  @apply border-solid border-foreground font-medium text-foreground;
+}
+
+.lane-pin {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  width: 25%;
+  transition: left 0.5s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.lane-pin-beta {
+  top: 0;
+  left: calc(var(--beta) * 25%);
+}
+
+.lane-pin-stable {
+  bottom: 0;
+  left: calc(var(--stable) * 25%);
+}
+
+/* Data flow diagram */
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px minmax(0, 1fr) 128px minmax(0, 1fr);
+  grid-template-areas:
+    "host a server b tools"
+    ". . c . ."
+    ". . registry . .";
+}
+
+.node-host {
+  grid-area: host;
+}
+
+.node-server {
+  grid-area: server;
+}
+
+.node-tools {
+  grid-area: tools;
+}
+
+.node-registry {
+  grid-area: registry;
+}
+
+.link-a {
+  grid-area: a;
+}
+
+.link-b {
+  grid-area: b;
+}
+
+.link-c {
+  grid-area: c;
+}
+
+.link {
+  position: relative;
+  min-height: 72px;
+}
+
+.link::before {
+  content: "";
+  position: absolute;
+  background: color-mix(in oklch, var(--foreground) 30%, transparent);
+}
+
+.link span {
+  @apply absolute text-xs leading-snug text-muted-foreground;
+}
+
+.link-a,
+.link-b {
+  &::before {
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+  }
+
+  & span {
+    left: 8px;
+    right: 8px;
+    bottom: calc(50% + 8px);
+    text-align: center;
+  }
+}
+
+.link-c {
+  &::before {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+  }
+
+  /* Arrowhead: the server pulls from the registry */
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border: 4px solid transparent;
+    border-top: 0;
+    border-bottom: 7px solid color-mix(in oklch, var(--foreground) 30%, transparent);
+    transform: translateX(-50%);
+  }
+
+  & span {
+    left: calc(50% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1023px) {
+  .flow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "host host"
+      "a a"
+      "server server"
+      "b c"
+      "tools registry";
+    column-gap: 12px;
+  }
+
+  .link-a::before,
+  .link-b::before {
+    left: 50%;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    height: auto;
+  }
+
+  .link span {
+    left: calc(50% + 12px);
+    right: auto;
+    top: 50%;
+    bottom: auto;
+    max-width: calc(50% - 16px);
+    text-align: left;
+    white-space: normal;
+    transform: translateY(-50%);
+  }
+
+  .link-a span {
+    max-width: none;
+  }
+}
+
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,4 +1,5 @@
-import { Field, FormSpec, SubmitResult } from "@genui/format";
+import { Field, FORM_META_KEY, FormSpec, SubmitResult } from "@genui/format";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { CheckCircle2Icon, Loader2Icon } from "lucide-react";
 import { useEffect, useMemo, useState, type SubmitEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,24 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { callTool } from "@/runtime/tools";
-import { allowedTools, useView } from "@/runtime/useView";
+import { toolsReady, useView } from "@/runtime/useView";
 import { FieldControl } from "./FieldControl";
 import { initialState, summarize, toSubmitValues, validate, type FormState } from "./values";
 
 type Status = { kind: "editing" } | { kind: "submitting" } | { kind: "done"; message: string };
+
+/**
+ * Puts the submitted values into the model's context, then posts a short message so the model
+ * replies. Hosts without model context get the values in the message itself.
+ */
+async function deliver(app: App, spec: FormSpec, summary: string): Promise<void> {
+  const inContext = await app.updateModelContext({ content: [{ type: "text", text: summary }] }).then(
+    () => true,
+    () => false,
+  );
+  const text = inContext ? `Submitted ${spec.title ? `"${spec.title}"` : "the form"}.` : summary;
+  await app.sendMessage({ role: "user", content: [{ type: "text", text }] }).catch(() => {});
+}
 
 /** While the model streams the spec, render the fields that are already complete. */
 function partialSpec(input: Record<string, unknown> | undefined): { title?: string; fields: Field[] } {
@@ -20,9 +34,14 @@ function partialSpec(input: Record<string, unknown> | undefined): { title?: stri
 
 export function FormView() {
   const { app, connectError, input, streaming, result, cancelled } = useView("form");
-  const parsed = useMemo(() => (input && !streaming ? FormSpec.safeParse(input) : undefined), [input, streaming]);
+  // use_recipe: the server builds the form and returns it in the result; render_form: the input is the form.
+  const recipeForm = result?.meta[FORM_META_KEY];
+  const parsed = useMemo(
+    () => (recipeForm ? FormSpec.safeParse(recipeForm) : input && !streaming && Array.isArray(input.fields) ? FormSpec.safeParse(input) : undefined),
+    [recipeForm, input, streaming],
+  );
   const spec = parsed?.success ? parsed.data : undefined;
-  const allowed = allowedTools(result);
+  const canCall = toolsReady(result);
 
   const [state, setState] = useState<FormState>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -57,7 +76,7 @@ export function FormView() {
   }
 
   const submitTool = spec.submit?.toolName;
-  const ready = Boolean(app && result && (!submitTool || allowed.has(submitTool)));
+  const ready = Boolean(app && result && (!submitTool || canCall));
   const busy = status.kind === "submitting";
 
   async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -72,7 +91,7 @@ export function FormView() {
     const values = toSubmitValues(spec.fields, state);
 
     if (!spec.submit) {
-      await app.sendMessage({ role: "user", content: [{ type: "text", text: summarize(spec, state) }] });
+      await deliver(app, spec, summarize(spec, state));
       setStatus({ kind: "done", message: "Sent." });
       return;
     }
@@ -94,7 +113,7 @@ export function FormView() {
 
     const message = (response.success && response.data.ok ? response.data.message : undefined) ?? (outcome.text || "Submitted.");
     setStatus({ kind: "done", message });
-    await app.updateModelContext({ content: [{ type: "text", text: summarize(spec, state, message) }] }).catch(() => {});
+    await deliver(app, spec, summarize(spec, state, message));
   }
 
   if (status.kind === "done") {
@@ -130,7 +149,7 @@ export function FormView() {
               error={errors[field.name]}
               disabled={busy}
               app={app}
-              allowed={allowed}
+              canCall={canCall}
               onChange={(value) => {
                 setState((prev) => ({ ...prev, [field.name]: value }));
                 if (errors[field.name]) setErrors(({ [field.name]: _, ...rest }) => rest);

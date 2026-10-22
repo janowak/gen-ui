@@ -12,7 +12,8 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
   - **M4:** packaging (Docker, self-host docs).
 - Deviations from the plan below:
   - SQLite through the built-in `node:sqlite` instead of Drizzle: no native dependencies, with all SQL kept in one store module.
-  - Custom components declare the tools they call in their manifest. The SDK intersects that list with `allowTools`.
+  - Custom components declare the tools they call in their manifest, for typing and local mocks.
+  - No tool allowlist (`allowTools`): see "Tool access" below.
 
 ---
 
@@ -22,7 +23,7 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
 |---|---|---|
 | MCP base | **`mcp-use` (TypeScript)** for *our* servers (registry MCP, demo server) | `use-mcp` is a different project: an archived React client hook (archived 2026-02-06). `mcp-use` is the MIT server framework with React views for MCP Apps, built on the official TS SDK. |
 | SDK dependency | SDK depends only on the **official TS SDK + `@modelcontextprotocol/ext-apps/server`** | The SDK runs inside *customers'* servers; depending on `mcp-use` would force them onto it. Add thin adapters for `mcp-use` / others. |
-| Inputs | **shadcn/ui** (React + Radix + Tailwind) | Theme via CSS variables: host `styles.variables` → shadcn tokens → workspace overrides. |
+| Inputs | **shadcn/ui** (Base UI + Tailwind; React code running on Preact via `@preact/compat`) | Theme via CSS variables: host `styles.variables` → shadcn tokens → workspace overrides. |
 | Charts | **shadcn charts (Recharts, MIT)** | Same theming system as the inputs; chart palette = shadcn `--chart-1..N` vars. Chart types v1: line, bar (incl. horizontal/stacked), area, pie/donut. Highcharts dropped (commercial licence, see §7). |
 | Database | **SQLite** (WAL mode) via Drizzle | Single instance is fine for v1 and self-host. Keep queries portable for Postgres/libSQL when cloud needs multiple instances. Bundles stored as BLOBs. |
 | Bundles | One **single-file HTML** per view (Vite + singlefile plugin), JS/CSS inlined | Default host CSP allows inline scripts/styles but no eval and no undeclared external scripts. Inlining works in every host. |
@@ -36,7 +37,7 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
 ```
 packages/
   format/     zod schemas: form spec, chart spec, component manifest, theme tokens
-  ui/         React views (shadcn + charts) + loading patterns + view runtime (ext-apps useApp)
+  ui/         views (shadcn + charts; React code on Preact) + loading patterns + view runtime (ext-apps useApp)
               → builds dist/form.html, dist/chart.html (single-file)
   sdk/        mountGenUI(server, opts): registers tools + ui:// resources, caches bundles, resolves channel
   cli/        genui publish / genui login
@@ -117,25 +118,14 @@ One tool, three ways to pass data. **The same mapping (`x`, `series`) applies to
 |---|---|---|
 | Inline rows | Data is already in the conversation, small to medium | Streams in: `ontoolinputpartial` draws points as rows arrive. Every row costs model output tokens. |
 | Inline series | Tiny, hand-built charts | No mapping needed |
-| Source | Large or live data, or data the model shouldn't see | Data never enters model context. Optional polling (`refreshSeconds`), paused offscreen. Requires the SDK in the customer's server and the tool on the allowlist. |
+| Source | Large or live data, or data the model shouldn't see | Data never enters model context. Optional polling (`refreshSeconds`), paused offscreen. Requires the SDK in the customer's server. |
 
 - Guidance in the tool description: "use `source` above ~200 rows or when data must stay fresh".
 - Optional `format` per series (number/currency/percent, unit) and `stacked` / `horizontal` flags.
 
-### Security: allowlist the tools a view may call
+### Tool access
 
-The model chooses `toolName` at runtime. A prompt-injected model could build a form whose submit button calls a destructive tool. The human click still applies, but that is not enough on its own. So the SDK takes an allowlist of tools usable as option sources and as submit targets, and rejects everything else.
-
-```ts
-mountGenUI(server, {
-  registry: { url: process.env.GENUI_URL!, key: process.env.GENUI_KEY! },
-  allowTools: {
-    sources: ["search_customers", "list_products", "get_revenue"],
-    submit: ["create_order"],
-  },
-  user: (extra) => ({ id: extra.authInfo?.clientId, groups: [] }), // beta/stable targeting
-});
-```
+genui is a UI registry and release pipeline, not a permissions layer. Views may call any tool the server exposes to apps. Which calls run is left to the host (`visibility`, its approval settings) and to the server's own auth. Registry previews flag their results (`genui/preview`), so views render there without calling tools.
 
 ### Loading patterns built into the views
 
@@ -233,7 +223,7 @@ mountGenUI(server, {
 |---|---|---|
 | **M0 Spike** | Hello-world in Claude + ChatGPT. Hashed `ui://` URIs, `list_changed` behaviour, result `_meta` reaching the view, app→server calls, fullscreen, host vars. | 1 wk |
 | **M1 Views** | Format schemas; `render_form` (all field types, resource selects, submit validation); `render_chart` (static + source); loading patterns; host theming. | 2 wks |
-| **M2 SDK + registry** | SQLite registry, bundles, channels, SDK mount/cache/fallback, allowlist, demo server. | 2 wks |
+| **M2 SDK + registry** | SQLite registry, bundles, channels, SDK mount/cache/fallback, demo server. | 2 wks |
 | **M3 Management + CI** | Registry MCP with OAuth and roles; theme controller; component list/promote/rollback; `genui publish`. | 1–2 wks |
 | **M4 Packaging** | Docker image (container + SQLite volume), self-host docs incl. MCP tunnels for Claude/ChatGPT, licences (MIT SDK/UI/format, FSL registry), examples. | 1 wk |
 

@@ -1,3 +1,4 @@
+import "@/runtime/preact";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeView } from "@/views/theme/ThemeView";

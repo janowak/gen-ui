@@ -18,6 +18,3 @@ export const Theme = z.object({
   dark: ThemeTokens.optional(),
 });
 export type Theme = z.infer<typeof Theme>;
-
-/** Key under which the SDK attaches the current theme to `render_*` tool results' `_meta`. */
-export const THEME_META_KEY = "genui/theme";

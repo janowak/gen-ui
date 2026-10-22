@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>genui: UI for MCP Apps, released like code</title>
+    <meta
+      name="description"
+      content="Forms, charts and your own components for your MCP server. They render inside Claude, ChatGPT and other MCP Apps hosts, call your tools, and ship through beta and stable channels."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Before first paint: apply the saved theme or the system's (shadcn's .dark class), and animate the
+      // hero demo only when motion is welcome so it doesn't flash its finished state.
+      const dark = matchMedia("(prefers-color-scheme: dark)");
+      const savedTheme = () => {
+        try {
+          return localStorage.getItem("theme");
+        } catch {
+          return null;
+        }
+      };
+      const applyTheme = () =>
+        document.documentElement.classList.toggle("dark", savedTheme() ? savedTheme() === "dark" : dark.matches);
+      applyTheme();
+      dark.addEventListener("change", applyTheme);
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body class="antialiased">
+    <a
+      class="sr-only rounded-lg bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60]"
+      href="#main"
+      >Skip to content</a
+    >
+
+    <header class="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
+      <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+        <a class="flex items-center gap-2 font-semibold tracking-tight" href="/" aria-label="genui home">
+          <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true">
+            <rect class="fill-foreground" x="2" y="3" width="20" height="18" rx="5" />
+            <rect class="fill-background" x="6" y="8" width="12" height="3" rx="1.5" />
+            <rect class="fill-background" x="6" y="13.5" width="7" height="3" rx="1.5" />
+          </svg>
+          genui
+        </a>
+        <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
+          <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#features">What's included</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#releases">Releases</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#data">Your data</a>
+        </nav>
+        <div class="ml-auto flex items-center gap-2 md:ml-0">
+          <button class="btn btn-ghost w-8 px-0" type="button" aria-label="Switch to dark theme" data-theme-toggle>
+            <svg class="dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+            <svg class="hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
+          </button>
+          <a class="btn" href="#early-access">Get early access</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section
+        class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16"
+      >
+        <div>
+          <h1 class="text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl lg:leading-[1.05]">
+            UI for MCP Apps, released like code.
+          </h1>
+          <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
+            genui adds forms, charts and your own components to your MCP server. They render inside Claude, ChatGPT and
+            other MCP Apps hosts, work with the tools you already have, and move from beta to stable when you say so.
+          </p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a class="btn btn-lg" href="#early-access">Get early access</a>
+            <a class="btn btn-lg btn-outline" href="#how">See how it works</a>
+          </div>
+          <p class="mt-6 text-sm text-muted-foreground">
+            Built on the MCP Apps standard and the official MCP TypeScript SDK.
+          </p>
+        </div>
+
+        <figure
+          class="demo m-0 overflow-hidden rounded-xl bg-muted/40 shadow-sm ring-1 ring-foreground/10"
+          id="demo"
+          aria-label="Example: a customer reorders through a form in a chat"
+        >
+          <div class="flex h-11 items-center justify-between border-b px-4 text-sm">
+            <span class="font-medium text-muted-foreground">Chat with Packwell Supply</span>
+            <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
+          </div>
+          <ol class="flex list-none flex-col gap-4 p-4 sm:p-5">
+            <li
+              class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground"
+              data-reveal
+            >
+              Reorder the mailer boxes from last month, 400 of them, delivered by the 30th.
+            </li>
+            <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
+              <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M10 4v4" /><path d="M2 8h20" /><path d="M6 4v4" /></svg>
+              <span>Opened the <span class="font-medium text-foreground">New order</span> form</span>
+            </li>
+            <li data-reveal>
+              <div class="card">
+                <div class="grid gap-1 px-4">
+                  <div class="text-base leading-snug font-medium">New order</div>
+                  <div class="text-muted-foreground">Check the details and place the order.</div>
+                </div>
+                <div class="flex flex-col gap-4 px-4">
+                  <div class="flex flex-col gap-2" data-field>
+                    <span class="font-medium">Ship to</span>
+                    <span class="input">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                      <span class="truncate">Halden Coffee, Leeds</span>
+                    </span>
+                  </div>
+                  <div class="flex flex-col gap-2" data-field>
+                    <span class="font-medium">Products</span>
+                    <span class="input">
+                      <span class="badge badge-secondary">Mailer box, medium</span>
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-2" data-field>
+                      <span class="font-medium">Quantity</span>
+                      <span class="input"><span>400</span></span>
+                    </div>
+                    <div class="flex flex-col gap-2" data-field>
+                      <span class="font-medium">Delivery date</span>
+                      <span class="input">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></svg>
+                        <span class="truncate">Fri, Oct 30</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span class="btn" data-submit>
+                      <svg class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-spinner><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                      <span data-label>Place order</span>
+                    </span>
+                    <span class="flex items-center gap-1.5 text-muted-foreground" data-done>
+                      <svg class="size-4 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+                      Order 4821 placed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </li>
+            <li class="text-sm" data-reveal>
+              Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.
+            </li>
+          </ol>
+          <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+            The model picks the form and pre-fills it. The customer search, the product list and the order itself run on
+            your tools.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="how" aria-labelledby="how-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="how-title">How it works</h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Three steps, and the first one is a single function call in the server you already run.
+          </p>
+          <ol class="mt-12 grid list-none gap-12 md:grid-cols-3 md:gap-x-6 md:gap-y-4">
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">1</span>
+                Mount the SDK in your server
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                One call adds forms, charts, your recipes and your custom components as tools, from the release channel
+                you pick.
+              </p>
+              <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
+  registry,
+  channel: <span class="s">"stable"</span>,
+});</code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">2</span>
+                The model builds the UI
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                It picks a form or chart and fills in what it knows. Selects search your tools as people type, and
+                submit errors from your tool show next to the field.
+              </p>
+              <pre class="code"><code>{
+  <span class="s">"name"</span>: <span class="s">"customer"</span>,
+  <span class="s">"type"</span>: <span class="s">"resource_select"</span>,
+  <span class="s">"source"</span>: {
+    <span class="s">"toolName"</span>: <span class="s">"search_customers"</span>
+  }
+}</code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
+                Release from the registry
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Publish to beta from CI, try it in the chat, then promote to stable. Running servers switch over
+                without a restart.
+              </p>
+              <pre class="code"><code>$ <span class="k">genui publish .</span>
+# 1.3.0 is on beta
+$ <span class="k">genui promote order-summary</span>
+# 1.3.0 is on stable</code></pre>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="features" aria-labelledby="features-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">
+            What's included
+          </h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            The parts every in-chat view needs, so your team writes the component and not the plumbing around it.
+          </p>
+          <dl class="mt-12 divide-y border-y">
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Forms</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Text, numbers, dates, switches and selects, including selects that search your own tools. Errors from
+                your submit tool appear next to the field, and the values stay put.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">"type": "resource_select"</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Charts</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Line, bar, area and pie. Pass rows inline, or let the chart call your tool so large or private data
+                stays out of the model's context. Refreshes pause while the chart is off screen.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">"data": { "source": … }</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Recipes</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Forms your business owns. Fields, validation and the submit tool are fixed; the model only picks the
+                recipe and pre-fills values. Each recipe is also a slash command.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Custom components</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Write your own with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in plain
+                TypeScript or the framework you use. Props are a Zod schema, and the build is a single HTML file ready
+                to publish.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Theme</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and
+                chart colors once for the workspace, with a live preview in the chat.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Loading states</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Fields appear while the model is still writing. Searches debounce and cancel, submits can't fire twice,
+                and failures tell the model what went wrong.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">streaming → ready</code></dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="releases" aria-labelledby="releases-title">
+        <div
+          class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 md:py-28 lg:grid-cols-2 lg:gap-16"
+        >
+          <div class="max-w-xl">
+            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="releases-title">
+              Beta and stable channels for the chat
+            </h2>
+            <div class="mt-5 flex flex-col gap-4 text-muted-foreground">
+              <p>
+                Every version is immutable, and removing a prop needs a major version. Give beta to your team or a few
+                customers, promote when it's ready, and roll back if it isn't.
+              </p>
+              <p>
+                Old messages keep rendering the version they were made with, so a release never breaks a conversation
+                that already happened.
+              </p>
+              <p>
+                The registry is an MCP server too. Admins promote, roll back and edit the theme from views inside
+                Claude or ChatGPT, and those buttons only run when a person clicks them.
+              </p>
+            </div>
+          </div>
+
+          <div class="card px-5" id="lane" style="--stable: 2; --beta: 3">
+            <div>
+              <p class="font-mono text-sm font-medium">order-summary</p>
+              <p class="text-xs text-muted-foreground">Custom component</p>
+            </div>
+            <div class="lane-track" role="list" aria-label="Versions">
+              <span class="lane-ver" role="listitem">1.0.0</span>
+              <span class="lane-ver" role="listitem">1.1.0</span>
+              <span class="lane-ver" role="listitem">1.2.0</span>
+              <span class="lane-ver" role="listitem">1.3.0</span>
+              <span class="lane-pin lane-pin-beta" aria-hidden="true"><span class="badge badge-outline">beta</span></span>
+              <span class="lane-pin lane-pin-stable" aria-hidden="true"><span class="badge badge-default">stable</span></span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn" type="button" data-promote>Promote 1.3.0</button>
+              <button class="btn btn-outline" type="button" data-rollback>Roll back</button>
+            </div>
+            <p class="min-h-10 text-muted-foreground" aria-live="polite" data-log>
+              Stable is on 1.2.0. Beta testers see 1.3.0.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="data" aria-labelledby="data-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="data-title">
+            Your data stays on your server
+          </h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Views call your tools through the host, over the connection your customers already have with you. genui
+            never sits between them.
+          </p>
+
+          <div class="flow mt-12 text-sm">
+            <div class="node-host rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p class="font-medium">AI client</p>
+              <p class="mt-1 text-muted-foreground">Claude, ChatGPT or another MCP Apps host renders the view.</p>
+            </div>
+            <div class="link link-a"><span>Tool calls and results</span></div>
+            <div class="node-server rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p class="font-medium">Your MCP server</p>
+              <p class="mt-1 text-muted-foreground">With the genui SDK inside, serving what your registry released.</p>
+            </div>
+            <div class="link link-b"><span>Your code, as today</span></div>
+            <div class="node-tools rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p class="font-medium">Your tools and APIs</p>
+              <p class="mt-1 text-muted-foreground">Customers, orders, billing: whatever your tools already reach.</p>
+            </div>
+            <div class="link link-c"><span>Bundles, recipes, theme</span></div>
+            <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
+              <p class="font-medium">genui registry</p>
+              <p class="mt-1 text-muted-foreground">
+                Stores components, recipes and your theme. It never sees a tool call or its result.
+              </p>
+            </div>
+          </div>
+
+          <ul class="mt-16 grid list-none gap-8 md:grid-cols-3">
+            <li>
+              <h3 class="font-medium">Versions that never change</h3>
+              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                A published version is immutable. Breaking prop changes need a major version, and a bad release rolls
+                back in one click.
+              </p>
+            </li>
+            <li>
+              <h3 class="font-medium">People confirm, not the model</h3>
+              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Promote, roll back and theme changes are hidden from the model. They run only from a click in the view.
+              </p>
+            </li>
+            <li>
+              <h3 class="font-medium">Run the registry yourself</h3>
+              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                One Node process and a SQLite file. Sign in with GitHub, Google or your company's OIDC provider.
+              </p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="early-access" aria-labelledby="cta-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <div class="rounded-xl bg-muted/40 px-6 py-12 ring-1 ring-foreground/10 sm:px-12">
+            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="cta-title">
+              Put your product inside the chat
+            </h2>
+            <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+              We're working with a small group of teams that run MCP servers for their own customers. Tell us what you
+              want people to do in the chat, and we'll help you ship the first view.
+            </p>
+            <!-- TODO: point this at the early access form or contact address. -->
+            <a class="btn btn-lg mt-8" href="mailto:?subject=genui%20early%20access">Get early access</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t">
+      <div
+        class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6"
+      >
+        <span class="font-semibold tracking-tight text-foreground">genui</span>
+        <span>Forms, charts and components for MCP Apps.</span>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -25,10 +25,6 @@ async function createServer(channel: Channel): Promise<McpServer> {
   await mountGenUI(server, {
     registry,
     channel,
-    allowTools: {
-      sources: ["search_customers", "list_products", "get_revenue"],
-      submit: ["create_order", "save_rating"],
-    },
     // Without a registry, use a local theme; with one, the registry's workspace theme applies.
     theme: registry
       ? undefined

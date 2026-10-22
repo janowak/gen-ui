@@ -32,7 +32,8 @@
     "better-auth": "1.7.12",
     "better-call": "1.4.4",
     "hono": "^4.13.13",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "@genui/sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -3,12 +3,20 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
+  "sideEffects": false,
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schemas/*": "./schemas/*"
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "schemas"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/export-schemas.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

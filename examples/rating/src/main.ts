@@ -1,28 +1,33 @@
-import { App, applyDocumentTheme, applyHostStyleVariables, type McpUiHostContext } from "@modelcontextprotocol/ext-apps";
+import { mount, type ContextOf } from "@genui/kit";
+import rating from "./component";
 
 /**
- * A registry component built without @genui/ui: any framework works as long as it ships a
- * single-file HTML bundle. The genui SDK passes the tools this component may call
- * (`genui/allowedTools`) and the workspace theme (`genui/theme`) in the render result's _meta.
+ * A registry component built with @genui/kit and no UI framework. The kit validates props,
+ * applies host styles and the workspace theme (`--genui-*`), only calls tools the server
+ * approved, and keeps the rating per render so a re-rendered message stays rated.
  */
 
 const questionEl = document.getElementById("question")!;
 const starsEl = document.getElementById("stars")!;
 const statusEl = document.getElementById("status")!;
 
-let props: { question?: string; subject?: string; max?: number } = {};
-let allowed = new Set<string>();
-let locked = false;
+type Context = ContextOf<typeof rating>;
 
-const app = new App({ name: "genui-rating", version: "1.0.0" });
+let saving = 0; // stars being saved
+let message = "";
 
-function applyHost(ctx: McpUiHostContext | undefined) {
-  if (ctx?.theme) applyDocumentTheme(ctx.theme);
-  if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-}
+function render(ctx: Context) {
+  questionEl.textContent = ctx.props?.question ?? ctx.partial?.question ?? "…";
+  if (ctx.status === "error") {
+    starsEl.replaceChildren();
+    statusEl.textContent = ctx.error ?? "Something went wrong.";
+    return;
+  }
 
-function render(selected = 0) {
-  const max = Math.min(10, Math.max(3, props.max ?? 5));
+  const saved = ctx.state.get<number>();
+  const selected = saved ?? saving;
+  const locked = ctx.status !== "ready" || saved !== undefined || saving > 0;
+  const max = ctx.props?.max ?? 5;
   starsEl.replaceChildren(
     ...Array.from({ length: max }, (_, i) => i + 1).map((n) => {
       const button = document.createElement("button");
@@ -32,55 +37,32 @@ function render(selected = 0) {
       button.setAttribute("aria-checked", String(n === selected));
       if (n <= selected) button.dataset.on = "";
       button.disabled = locked;
-      button.onclick = () => void rate(n);
+      button.onclick = () => void rate(ctx, n);
       return button;
     }),
   );
+  statusEl.textContent = saved !== undefined ? "Thanks for your rating!" : message;
 }
 
-async function rate(stars: number) {
-  if (locked) return;
-  locked = true;
-  render(stars);
-  statusEl.textContent = "Saving…";
-  const summary = `The user rated "${props.question}" ${stars}/${Math.min(10, Math.max(3, props.max ?? 5))}.`;
+async function rate(ctx: Context, stars: number) {
+  const { question, subject, max = 5 } = ctx.props!;
+  saving = stars;
+  message = "Saving…";
+  render(ctx);
 
-  if (allowed.has("save_rating")) {
-    try {
-      const result = await app.callServerTool({ name: "save_rating", arguments: { stars, question: props.question, subject: props.subject } });
-      if (result.isError) throw new Error("save_rating failed");
-      statusEl.textContent = "Thanks for your rating!";
-      await app.updateModelContext({ content: [{ type: "text", text: `${summary} It was saved.` }] });
-    } catch {
-      locked = false;
-      render(stars);
-      statusEl.textContent = "Could not save. Try again.";
-    }
+  const summary = `The user rated "${question}" ${stars}/${max}.`;
+  const result = await ctx.tools.call("save_rating", { stars, question, subject });
+  saving = 0;
+  if (result.ok) {
+    await ctx.model.update(`${summary} It was saved.`);
+  } else if (result.unavailable) {
+    // Tools don't run here (e.g. a registry preview): hand the rating to the conversation instead.
+    await ctx.model.send(summary);
   } else {
-    // No save tool allowed on this server: hand the rating to the conversation.
-    await app.sendMessage({ role: "user", content: [{ type: "text", text: summary }] });
-    statusEl.textContent = "Thanks for your rating!";
+    message = "Could not save. Try again.";
+    return render(ctx);
   }
+  ctx.state.set(stars); // re-renders
 }
 
-app.ontoolinput = ({ arguments: args }) => {
-  props = (args ?? {}) as typeof props;
-  questionEl.textContent = props.question ?? "Rate";
-  render();
-};
-
-app.ontoolresult = (result) => {
-  const meta = (result._meta ?? {}) as Record<string, unknown>;
-  const tools = meta["genui/allowedTools"];
-  allowed = new Set(Array.isArray(tools) ? tools : []);
-  const theme = meta["genui/theme"] as { light?: { primary?: string }; dark?: { primary?: string } } | undefined;
-  const mode = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-  const primary = theme?.[mode]?.primary;
-  if (primary) document.documentElement.style.setProperty("--genui-primary", primary);
-};
-
-app.onhostcontextchanged = applyHost;
-
-render();
-await app.connect();
-applyHost(app.getHostContext());
+mount(rating, render);

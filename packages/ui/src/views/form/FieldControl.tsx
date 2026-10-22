@@ -18,13 +18,13 @@ interface Props {
   error?: string;
   disabled: boolean;
   app: App | null;
-  /** Tools the server approved for this form. */
-  allowed: Set<string>;
+  /** Whether tool-backed selects may load their options. */
+  canCall: boolean;
   onChange: (value: FieldState) => void;
 }
 
 /** One form field, laid out with shadcn Field primitives as in the shadcn field examples. */
-export function FieldControl({ field, value, error, disabled, app, allowed, onChange }: Props) {
+export function FieldControl({ field, value, error, disabled, app, canCall, onChange }: Props) {
   const id = `field-${field.name}`;
   const invalid = Boolean(error);
   const label = (
@@ -71,14 +71,14 @@ export function FieldControl({ field, value, error, disabled, app, allowed, onCh
   return (
     <Field data-invalid={invalid || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Control id={id} field={field} value={value} invalid={invalid} disabled={disabled} app={app} allowed={allowed} onChange={onChange} />
+      <Control id={id} field={field} value={value} invalid={invalid} disabled={disabled} app={app} canCall={canCall} onChange={onChange} />
       {description}
       {errors}
     </Field>
   );
 }
 
-function Control({ id, field, value, invalid, disabled, app, allowed, onChange }: Omit<Props, "error"> & { id: string; invalid: boolean }) {
+function Control({ id, field, value, invalid, disabled, app, canCall, onChange }: Omit<Props, "error"> & { id: string; invalid: boolean }) {
   const aria = invalid || undefined;
   switch (field.type) {
     case "text":
@@ -145,7 +145,7 @@ function Control({ id, field, value, invalid, disabled, app, allowed, onChange }
           id={id}
           app={app}
           source={field.source}
-          ready={allowed.has(field.source.toolName)}
+          ready={canCall}
           value={value as Option | undefined}
           onChange={onChange}
           placeholder={field.placeholder}
@@ -159,7 +159,7 @@ function Control({ id, field, value, invalid, disabled, app, allowed, onChange }
           id={id}
           app={app}
           source={field.source}
-          ready={allowed.has(field.source.toolName)}
+          ready={canCall}
           multiple
           value={(value as Option[]) ?? []}
           onChange={onChange}

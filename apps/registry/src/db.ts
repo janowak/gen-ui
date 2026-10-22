@@ -72,6 +72,38 @@ const MIGRATIONS = [
     PRIMARY KEY (workspace_id, email)
   );
   `,
+  `
+  -- Named, business-owned forms. Saving one makes it live (no channels yet).
+  CREATE TABLE recipes (
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    name TEXT NOT NULL,
+    recipe TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, name)
+  );
+  `,
+  `
+  -- Release tokens: publish to any channel, promote, roll back. SQLite cannot alter a CHECK, so rebuild.
+  CREATE TABLE tokens_next (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    name TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('server', 'publish', 'release', 'admin')),
+    hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+  );
+  INSERT INTO tokens_next SELECT id, workspace_id, name, scope, hash, created_at FROM tokens;
+  DROP TABLE tokens;
+  ALTER TABLE tokens_next RENAME TO tokens;
+  `,
+  `
+  -- Hosted MCP: the registry serves the workspace's end-user MCP at /w/<id>/mcp. Off until an admin turns it on.
+  ALTER TABLE workspaces ADD COLUMN hosted INTEGER NOT NULL DEFAULT 0;
+  `,
+  `
+  -- Signs requests to recipe validation webhooks. Kept in plain text: signing needs the secret itself.
+  ALTER TABLE workspaces ADD COLUMN webhook_secret TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): DatabaseSync {

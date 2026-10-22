@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { Channel, Theme } from "@genui/format";
+import { Channel, PREVIEW_META_KEY, Recipe, Theme, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { mountGenUI } from "@genui/sdk";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -11,12 +12,12 @@ const require = createRequire(import.meta.url);
 
 /** Management views shipped with @genui/ui, read and hashed once per process. */
 const VIEWS = (() => {
-  const load = (name: "manager" | "theme") => {
+  const load = (name: "manager" | "theme" | "recipes") => {
     const html = readFileSync(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
     const hash = createHash("sha256").update(html).digest("hex").slice(0, 16);
     return { html, uri: `ui://genui-registry/${name}/${hash}` };
   };
-  return { manager: load("manager"), theme: load("theme") };
+  return { manager: load("manager"), theme: load("theme"), recipes: load("recipes") };
 })();
 
 const text = (value: string) => ({ type: "text" as const, text: value });
@@ -36,10 +37,14 @@ function failed(error: unknown) {
  * what users see (promote, rollback, save theme). Those are never callable by the model:
  * they run only when a person clicks a button in the management views.
  */
-export function createRegistryMcp(store: Store, member: Membership): McpServer {
+export async function createRegistryMcp(store: Store, member: Membership): Promise<McpServer> {
   const server = new McpServer({ name: "genui-registry", version: "0.1.0" });
   const isAdmin = member.role === "admin";
   const ws = member.workspaceId;
+
+  // Built-in forms and charts as previews (preview_form / preview_chart) in the workspace theme.
+  // No data tools here: those live on the customer's server, so only inline data works.
+  await mountGenUI(server, { preview: true, theme: store.getTheme(ws) ?? undefined, recipes: store.listRecipes(ws) });
 
   for (const view of Object.values(VIEWS)) {
     registerAppResource(server, view.uri, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
@@ -78,6 +83,46 @@ export function createRegistryMcp(store: Store, member: Membership): McpServer {
     async () => ok("Showing the theme controller.", { role: member.role, theme: store.getTheme(ws) }),
   );
 
+  const recipesState = () => ({ mode: "list", role: member.role, recipes: store.listRecipes(ws) });
+
+  registerAppTool(
+    server,
+    "manage_recipes",
+    {
+      title: "Recipes",
+      description:
+        "Show the workspace's recipes: ready-made forms the AI uses for matching requests, each also available as a slash command. Admins can delete them from the view.",
+      inputSchema: z.object({}),
+      _meta: { ui: { resourceUri: VIEWS.recipes.uri } },
+    },
+    async () => {
+      const state = recipesState();
+      const lines = state.recipes.map((r) => `- /${r.name}: ${r.when}`);
+      return ok(state.recipes.length ? `Recipes:\n${lines.join("\n")}` : "No recipes yet.", state);
+    },
+  );
+
+  registerAppTool(
+    server,
+    "draft_recipe",
+    {
+      title: "Draft recipe",
+      description:
+        "Draft a recipe for review: a named form (fields, validation, submit tool) plus `when` (which requests it handles) and `notes` for the AI. " +
+        "Nothing is saved: an admin reviews the draft and clicks Save. Use the customer server's tool names for tool-backed selects and submit. " +
+        "Use preview_form first if you want to show how the form looks.",
+      inputSchema: Recipe,
+      _meta: { ui: { resourceUri: VIEWS.recipes.uri } },
+    },
+    async (recipe) =>
+      ok(`Drafted /${recipe.name} for review. ${isAdmin ? "Click Save recipe to make it live." : "An admin must save it."}`, {
+        mode: "draft",
+        role: member.role,
+        recipe,
+        replaces: Boolean(store.getRecipe(ws, recipe.name)),
+      }),
+  );
+
   // Preview the beta version of each component, rendered with props the model provides.
   for (const component of store.catalog(ws, "beta").components) {
     const html = store.bundle(ws, component.hash);
@@ -95,8 +140,14 @@ export function createRegistryMcp(store: Store, member: Membership): McpServer {
         inputSchema: fromJsonSchema(component.manifest.props as Parameters<typeof fromJsonSchema>[0]),
         _meta: { ui: { resourceUri: uri } },
       },
-      // No tools are allowed in previews: the component's data tools live on the company's server.
-      async () => ok(`Previewing ${component.name}@${component.version}.`, { "genui/allowedTools": [] }),
+      // Previews call no tools: the component's data tools live on the company's server.
+      async () => {
+        const theme = store.getTheme(ws);
+        return {
+          content: [text(`Previewing ${component.name}@${component.version}.`)],
+          _meta: { [PREVIEW_META_KEY]: true, [VIEW_ID_META_KEY]: randomUUID(), ...(theme ? { [THEME_META_KEY]: theme } : {}) },
+        };
+      },
     );
   }
 
@@ -136,6 +187,46 @@ export function createRegistryMcp(store: Store, member: Membership): McpServer {
       try {
         const version = store.rollback(ws, name, channel);
         return ok(`${name}: ${channel} → ${version}`, componentsState());
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "recipe_save",
+    {
+      title: "Save recipe",
+      description: "Make a drafted recipe live. Servers pick it up on their next registry refresh.",
+      inputSchema: z.object({ recipe: Recipe }),
+      _meta: appOnly(VIEWS.recipes.uri),
+    },
+    async ({ recipe }) => {
+      const replaced = store.saveRecipe(ws, recipe);
+      return ok(`${replaced ? "Updated" : "Saved"} /${recipe.name}. It reaches your servers within a minute.`, {
+        mode: "draft",
+        role: member.role,
+        recipe,
+        replaces: false,
+        saved: true,
+      });
+    },
+  );
+
+  registerAppTool(
+    server,
+    "recipe_delete",
+    {
+      title: "Delete recipe",
+      description: "Delete a recipe and its slash command.",
+      inputSchema: z.object({ name: z.string() }),
+      _meta: appOnly(VIEWS.recipes.uri),
+    },
+    async ({ name }) => {
+      try {
+        store.deleteRecipe(ws, name);
+        return ok(`Deleted /${name}.`, recipesState());
       } catch (error) {
         return failed(error);
       }

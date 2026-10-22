@@ -136,7 +136,9 @@ describe("management MCP", () => {
     const admin = await mcpClient(await accessToken(await signUp("alice@acme.test")));
     const { tools } = await admin.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    expect(Object.keys(byName)).toEqual(expect.arrayContaining(["manage_components", "open_theme_controller", "preview_rating", "component_promote", "component_rollback", "theme_save"]));
+    expect(Object.keys(byName)).toEqual(
+      expect.arrayContaining(["manage_components", "open_theme_controller", "preview_form", "preview_chart", "preview_rating", "component_promote", "component_rollback", "theme_save"]),
+    );
     expect((byName.component_promote?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
 
     const listed = await admin.callTool({ name: "manage_components", arguments: {} });
@@ -151,6 +153,43 @@ describe("management MCP", () => {
     expect(saved.isError).toBeFalsy();
     const theme = await admin.callTool({ name: "open_theme_controller", arguments: {} });
     expect(theme.structuredContent).toMatchObject({ role: "admin", theme: { light: { primary: "#16a34a" } } });
+
+    // Built-in previews render inline data with the saved workspace theme.
+    const chart = await admin.callTool({ name: "preview_chart", arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } } });
+    expect(chart.isError).toBeFalsy();
+    expect(chart._meta?.["genui/theme"]).toEqual({ light: { primary: "#16a34a" } });
+
+    // Component previews get the same _meta contract as a customer server, with no tools approved.
+    const preview = await admin.callTool({ name: "preview_rating", arguments: { question: "How was it?" } });
+    expect(preview._meta).toMatchObject({ "genui/preview": true, "genui/theme": { light: { primary: "#16a34a" } } });
+    expect(preview._meta?.["genui/viewId"]).toEqual(expect.any(String));
+  });
+
+  it("drafts recipes for review; only an admin click saves them", async () => {
+    store.invite(workspaceId, "dana@acme.test", "admin");
+    const cookie = await signUp("dana@acme.test");
+    db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("dana@acme.test");
+    const admin = await mcpClient(await accessToken(cookie));
+    const recipe = {
+      name: "add_item",
+      when: "The user wants to add an item.",
+      form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
+    };
+
+    const draft = await admin.callTool({ name: "draft_recipe", arguments: recipe });
+    expect(draft.structuredContent).toMatchObject({ mode: "draft", replaces: false });
+    expect(store.listRecipes(workspaceId)).toEqual([]);
+
+    const tools = (await admin.listTools()).tools;
+    expect((tools.find((t) => t.name === "recipe_save")?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe } })).isError).toBeFalsy();
+    expect(store.listRecipes(workspaceId).map((r) => r.name)).toEqual(["add_item"]);
+
+    // A fresh session previews it with the workspace theme.
+    const again = await mcpClient(await accessToken(await signUp("erin@acme.test")));
+    const preview = await again.callTool({ name: "preview_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });
+    expect(preview.isError).toBeFalsy();
+    expect((preview._meta?.["genui/form"] as { fields: { defaultValue?: unknown }[] }).fields[0]?.defaultValue).toBe("Mug");
   });
 
   it("gives later people member tools only", async () => {

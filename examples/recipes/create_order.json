@@ -1,0 +1,40 @@
+{
+  "name": "create_order",
+  "title": "New order",
+  "when": "The user wants to create, place or add an order for a customer.",
+  "notes": "Pre-fill the customer ({ id, label } from search_customers) and products ({ id: sku, label: title }) when the user names them. Don't ask questions the form already covers.",
+  "form": {
+    "title": "New order",
+    "description": "Pick a customer and products.",
+    "fields": [
+      {
+        "name": "customer",
+        "label": "Customer",
+        "type": "resource_select",
+        "required": true,
+        "placeholder": "Search customers…",
+        "source": { "toolName": "search_customers", "searchParam": "query", "itemsPath": "items", "idPath": "id", "labelPath": "name" }
+      },
+      {
+        "name": "products",
+        "label": "Products",
+        "type": "resource_multiselect",
+        "source": { "toolName": "list_products", "searchParam": "q", "itemsPath": "data.products", "idPath": "sku", "labelPath": "title" }
+      },
+      {
+        "name": "priority",
+        "label": "Priority",
+        "type": "select",
+        "defaultValue": "normal",
+        "options": [
+          { "id": "low", "label": "Low" },
+          { "id": "normal", "label": "Normal" },
+          { "id": "high", "label": "High" }
+        ]
+      },
+      { "name": "delivery_date", "label": "Delivery date", "type": "date" },
+      { "name": "notes", "label": "Notes", "type": "textarea", "maxLength": 500 }
+    ],
+    "submit": { "toolName": "create_order", "label": "Create order" }
+  }
+}

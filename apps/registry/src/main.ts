@@ -7,7 +7,7 @@ const PORT = Number(process.env.PORT ?? 4000);
 const DATABASE = process.env.GENUI_DB ?? "genui-registry.sqlite";
 
 const db = openDatabase(DATABASE);
-const { app, store } = createRegistryApp(db);
+const { app, store } = createRegistryApp(db, { allowPrivateWebhooks: process.env.GENUI_ALLOW_PRIVATE_WEBHOOKS === "1" });
 
 // Self-host bootstrap: first start creates a workspace and prints an admin token once.
 if (store.countWorkspaces() === 0) {
@@ -21,5 +21,8 @@ const config = authConfigFromEnv(process.env);
 await enableManagement(app, db, store, config);
 
 serve({ fetch: app.fetch, port: PORT }, () =>
-  console.log(`genui registry on ${config.baseURL} (db: ${DATABASE})\n  MCP for Claude / ChatGPT: ${config.baseURL}/mcp`),
+  console.log(
+    `genui registry on ${config.baseURL} (db: ${DATABASE})\n  MCP for Claude / ChatGPT: ${config.baseURL}/mcp\n` +
+      `  Hosted end-user MCP (workspaces with hosting on): ${config.baseURL}/w/<workspace id>/mcp`,
+  ),
 );

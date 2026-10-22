@@ -30,6 +30,16 @@
         "start"
       ],
       "port": 4000
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@genui/site",
+        "dev"
+      ],
+      "port": 5180
     }
   ]
 }

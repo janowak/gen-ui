@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "recipe": {
+      "type": "string"
+    },
+    "prefill": {
+      "description": "Known values keyed by field name. Selects take an option id; tool-backed selects take { id, label }.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    }
+  },
+  "required": [
+    "recipe"
+  ]
+}

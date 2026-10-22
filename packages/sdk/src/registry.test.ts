@@ -1,14 +1,14 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { THEME_META_KEY } from "@genui/format";
+import { COMPONENT_CONTRACT, THEME_META_KEY } from "@genui/format";
 import { serve, type ServerType } from "@hono/node-server";
 import type { AddressInfo } from "node:net";
 import { createRegistryApp, openDatabase } from "@genui/registry";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ALLOWED_TOOLS_META_KEY, createRegistryClient, mountGenUI, type RegistryClient } from "./index.js";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createRegistryClient, mountGenUI, type RegistryClient } from "./index.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const rating = (version: string) => ({
@@ -17,7 +17,7 @@ const rating = (version: string) => ({
   title: "Star rating",
   description: "Ask the user to rate something from 1 to 5 stars.",
   props: { type: "object", properties: { question: { type: "string" } }, required: ["question"] },
-  tools: ["save_rating", "drop_tables"],
+  tools: ["save_rating"],
 });
 
 let http: ServerType;
@@ -33,7 +33,7 @@ async function api(method: string, path: string, token: string, body?: unknown) 
 
 async function connect(registry: RegistryClient, channel: "beta" | "stable", watch = false) {
   const server = new McpServer({ name: "test", version: "1.0.0" });
-  const handle = await mountGenUI(server, { registry, channel, watch, allowTools: { submit: ["save_rating"] } });
+  const handle = await mountGenUI(server, { registry, channel, watch });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "c", version: "1.0.0" });
   await Promise.all([server.connect(b), client.connect(a)]);
@@ -70,7 +70,7 @@ function registryClient(extra: Partial<Parameters<typeof createRegistryClient>[0
 }
 
 describe("registry components", () => {
-  it("mounts the channel's version as render_<name> with registry theme and allowlisted tools", async () => {
+  it("mounts the channel's version as render_<name> with the registry theme", async () => {
     const registry = registryClient();
     const stable = await connect(registry, "stable");
     const beta = await connect(registry, "beta");
@@ -85,7 +85,6 @@ describe("registry components", () => {
     expect((resource.contents[0] as { text: string }).text).toContain("v1");
 
     const result = await stable.client.callTool({ name: "render_rating", arguments: { question: "How was it?" } });
-    expect(result._meta?.[ALLOWED_TOOLS_META_KEY]).toEqual(["save_rating"]); // drop_tables is not allowlisted
     expect(result._meta?.[THEME_META_KEY]).toEqual({ light: { primary: "#16a34a" } });
 
     const invalid = await stable.client.callTool({ name: "render_rating", arguments: {} }).catch((e: Error) => ({ isError: true, error: e.message }));
@@ -124,5 +123,16 @@ describe("registry components", () => {
 
     const { handle } = await connect(restarted, "stable");
     expect(handle.components()).toEqual(["rating@1.0.0"]);
+  });
+
+  it("skips components built for a newer component contract than this SDK serves", async () => {
+    const future = { ...rating("1.0.0"), name: "future", contract: COMPONENT_CONTRACT + 1 };
+    await api("POST", "/v1/components", admin, { manifest: future, html: html("future") });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { handle } = await connect(registryClient(), "beta");
+    expect(handle.components()).toEqual(["rating@1.1.0"]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`needs component contract ${COMPONENT_CONTRACT + 1}`));
+    warn.mockRestore();
   });
 });

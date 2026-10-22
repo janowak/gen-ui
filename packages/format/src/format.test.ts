@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ChartSpec, FormSpec, SubmitResult, getPath, inlineSeries, rowsToSeries, toOptions } from "./index.js";
+import { builtInJsonSchemas, ChartSpec, FormSpec, Recipe, SubmitResult, getPath, inlineSeries, recipeForm, rowsToSeries, toOptions } from "./index.js";
 
 describe("getPath", () => {
   it("reads nested and indexed paths", () => {
@@ -54,5 +55,43 @@ describe("schemas", () => {
   it("validates submit results", () => {
     expect(SubmitResult.safeParse({ ok: false, fieldErrors: { email: "taken" } }).success).toBe(true);
     expect(SubmitResult.safeParse({ ok: "yes" }).success).toBe(false);
+  });
+});
+
+describe("recipes", () => {
+  const recipe = Recipe.parse({
+    name: "add_item",
+    when: "The user wants to add an item.",
+    form: {
+      fields: [
+        { name: "name", label: "Name", type: "text", required: true },
+        { name: "price", label: "Price", type: "number" },
+        { name: "category", label: "Category", type: "resource_select", source: { toolName: "list_categories", labelPath: "name" } },
+        { name: "tags", label: "Tags", type: "multiselect", options: [{ id: "new", label: "New" }] },
+      ],
+      submit: { toolName: "create_item" },
+    },
+  });
+
+  it("pre-fills fields with light coercion and ignores values that don't fit", () => {
+    const form = recipeForm(recipe, { name: "Mug", price: "12", category: "c-1", tags: "new", unknown: 1 });
+    const byName = Object.fromEntries(form.fields.map((f) => [f.name, f.defaultValue]));
+    expect(byName).toEqual({ name: "Mug", price: 12, category: { id: "c-1", label: "c-1" }, tags: ["new"] });
+    expect(recipeForm(recipe, { price: "not a number" }).fields[1]?.defaultValue).toBeUndefined();
+    expect(form.submit?.toolName).toBe("create_item");
+  });
+
+  it("rejects bad recipe names", () => {
+    expect(Recipe.safeParse({ ...recipe, name: "Add Item" }).success).toBe(false);
+  });
+});
+
+describe("JSON schemas", () => {
+  it("are object schemas, and the files the build wrote are current", () => {
+    for (const [name, schema] of Object.entries(builtInJsonSchemas())) {
+      expect(schema.type).toBe("object");
+      const file = JSON.parse(readFileSync(new URL(`../schemas/${name}.json`, import.meta.url), "utf8"));
+      expect(file, `schemas/${name}.json is stale: run pnpm --filter @genui/format build`).toEqual(schema);
+    }
   });
 });

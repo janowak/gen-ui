@@ -3,7 +3,7 @@ import { Loader2Icon, RotateCwIcon } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { allowedTools, useView } from "@/runtime/useView";
+import { toolsReady, useView } from "@/runtime/useView";
 import { ChartRenderer } from "./ChartRenderer";
 import { useSourceData } from "./useSourceData";
 
@@ -26,7 +26,7 @@ export function ChartView() {
 
   const isSource = Boolean(spec && "source" in spec.data);
   const sourceTool = spec && "source" in spec.data ? spec.data.source.toolName : undefined;
-  const sourceReady = Boolean(sourceTool && result && !result.isError && allowedTools(result).has(sourceTool));
+  const sourceReady = Boolean(sourceTool && toolsReady(result));
   const source = useSourceData(app, spec, sourceReady, containerRef);
   const inline = useMemo(() => (spec ? inlineSeries(spec) : null), [spec]);
   const partial = useMemo(() => (spec ? null : partialChart(input)), [spec, input]);

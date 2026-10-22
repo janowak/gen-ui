@@ -1,9 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import type { Catalog, CatalogComponent, Channel, ComponentManifest, Theme } from "@genui/format";
+import type { Catalog, CatalogComponent, Channel, ComponentManifest, Recipe, Theme } from "@genui/format";
 import { breakingChanges, compareSemver, parseSemver } from "./compat.js";
 
-export type Scope = "server" | "publish" | "admin";
+export type Scope = "server" | "publish" | "release" | "admin";
 export type Role = "member" | "admin";
 
 export interface Membership {
@@ -55,6 +55,31 @@ export class Store {
 
   countWorkspaces(): number {
     return Number((this.db.prepare("SELECT COUNT(*) AS n FROM workspaces").get() as { n: number }).n);
+  }
+
+  /** The workspace, if the registry hosts its end-user MCP. */
+  hostedWorkspace(workspaceId: string): { id: string; name: string } | undefined {
+    return this.db.prepare("SELECT id, name FROM workspaces WHERE id = ? AND hosted = 1").get(workspaceId) as { id: string; name: string } | undefined;
+  }
+
+  isHosted(workspaceId: string): boolean {
+    return Boolean(this.hostedWorkspace(workspaceId));
+  }
+
+  setHosted(workspaceId: string, hosted: boolean): void {
+    this.db.prepare("UPDATE workspaces SET hosted = ? WHERE id = ?").run(hosted ? 1 : 0, workspaceId);
+  }
+
+  /** The secret recipe validation webhooks are signed with; created on first use. */
+  webhookSecret(workspaceId: string): string {
+    const row = this.db.prepare("SELECT webhook_secret FROM workspaces WHERE id = ?").get(workspaceId) as { webhook_secret: string | null } | undefined;
+    return row?.webhook_secret ?? this.rotateWebhookSecret(workspaceId);
+  }
+
+  rotateWebhookSecret(workspaceId: string): string {
+    const secret = `whsec_${randomBytes(24).toString("base64url")}`;
+    this.db.prepare("UPDATE workspaces SET webhook_secret = ? WHERE id = ?").run(secret, workspaceId);
+    return secret;
   }
 
   /** Returns the plaintext token once; only its hash is stored. */
@@ -141,6 +166,34 @@ export class Store {
     });
   }
 
+  // Recipes
+
+  listRecipes(workspaceId: string): Recipe[] {
+    const rows = this.db.prepare("SELECT recipe FROM recipes WHERE workspace_id = ? ORDER BY name").all(workspaceId) as { recipe: string }[];
+    return rows.map((r) => JSON.parse(r.recipe) as Recipe);
+  }
+
+  getRecipe(workspaceId: string, name: string): Recipe | undefined {
+    const row = this.db.prepare("SELECT recipe FROM recipes WHERE workspace_id = ? AND name = ?").get(workspaceId, name) as { recipe: string } | undefined;
+    return row ? (JSON.parse(row.recipe) as Recipe) : undefined;
+  }
+
+  /** Creates or replaces a recipe. Returns true when it replaced an existing one. */
+  saveRecipe(workspaceId: string, recipe: Recipe): boolean {
+    const existed = Boolean(this.getRecipe(workspaceId, recipe.name));
+    this.db
+      .prepare(
+        "INSERT INTO recipes (workspace_id, name, recipe, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id, name) DO UPDATE SET recipe = excluded.recipe, updated_at = excluded.updated_at",
+      )
+      .run(workspaceId, recipe.name, JSON.stringify(recipe), now());
+    return existed;
+  }
+
+  deleteRecipe(workspaceId: string, name: string): void {
+    const result = this.db.prepare("DELETE FROM recipes WHERE workspace_id = ? AND name = ?").run(workspaceId, name);
+    if (!result.changes) throw new RegistryError(404, `Recipe "${name}" not found`);
+  }
+
   // Theme
 
   getTheme(workspaceId: string): Theme | null {
@@ -180,18 +233,55 @@ export class Store {
       .run(componentId, channel, versionId, now());
   }
 
-  /** Publishes an immutable version and points `beta` at it. */
-  publish(workspaceId: string, manifest: ComponentManifest, html: string): { version: string; hash: string } {
+  /** Points a channel at a version unless it already points at a newer one: publishing never moves a channel back. */
+  private advanceChannel(componentId: string, channel: Channel, versionId: string, version: string): void {
+    const current = this.db
+      .prepare("SELECT v.version FROM channels c JOIN versions v ON v.id = c.version_id WHERE c.component_id = ? AND c.channel = ?")
+      .get(componentId, channel) as { version: string } | undefined;
+    if (current && compareSemver(current.version, version) > 0) return;
+    this.setChannel(componentId, channel, versionId);
+  }
+
+  private channelVersions(componentId: string): Partial<Record<Channel, string>> {
+    const rows = this.db
+      .prepare("SELECT c.channel, v.version FROM channels c JOIN versions v ON v.id = c.version_id WHERE c.component_id = ?")
+      .all(componentId) as { channel: Channel; version: string }[];
+    return Object.fromEntries(rows.map((r) => [r.channel, r.version]));
+  }
+
+  /**
+   * Publishes an immutable version and points `beta` at it (with `stable`, both). Publishing the same
+   * version with the same bundle and manifest again only advances the channels, so CI jobs can be re-run.
+   */
+  publish(
+    workspaceId: string,
+    manifest: ComponentManifest,
+    html: string,
+    channel: Channel = "beta",
+  ): { version: string; hash: string; created: boolean; channels: Partial<Record<Channel, string>> } {
     return this.transaction(() => {
       let componentId = this.componentId(workspaceId, manifest.name);
       if (!componentId) {
         componentId = randomUUID();
         this.db.prepare("INSERT INTO components (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?)").run(componentId, workspaceId, manifest.name, now());
       }
+      // Beta is never behind stable: a release lands on both.
+      const targets: Channel[] = channel === "stable" ? ["beta", "stable"] : ["beta"];
+      const hash = sha256(html).slice(0, 16);
 
-      const existing = this.db.prepare("SELECT version, manifest FROM versions WHERE component_id = ?").all(componentId) as { version: string; manifest: string }[];
-      if (existing.some((v) => v.version === manifest.version)) {
-        throw new RegistryError(409, `${manifest.name}@${manifest.version} already exists; versions are immutable`);
+      const existing = this.db.prepare("SELECT id, version, hash, manifest FROM versions WHERE component_id = ?").all(componentId) as {
+        id: string;
+        version: string;
+        hash: string;
+        manifest: string;
+      }[];
+      const same = existing.find((v) => v.version === manifest.version);
+      if (same) {
+        if (same.hash !== hash || same.manifest !== JSON.stringify(manifest)) {
+          throw new RegistryError(409, `${manifest.name}@${manifest.version} already exists with different content; versions are immutable`);
+        }
+        for (const target of targets) this.advanceChannel(componentId, target, same.id, same.version);
+        return { version: manifest.version, hash, created: false, channels: this.channelVersions(componentId) };
       }
       const latest = existing.sort((a, b) => compareSemver(b.version, a.version))[0];
       if (latest) {
@@ -205,13 +295,12 @@ export class Store {
         }
       }
 
-      const hash = sha256(html).slice(0, 16);
       const versionId = randomUUID();
       this.db
         .prepare("INSERT INTO versions (id, component_id, version, hash, manifest, html, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .run(versionId, componentId, manifest.version, hash, JSON.stringify(manifest), html, now());
-      this.setChannel(componentId, "beta", versionId);
-      return { version: manifest.version, hash };
+      for (const target of targets) this.setChannel(componentId, target, versionId);
+      return { version: manifest.version, hash, created: true, channels: this.channelVersions(componentId) };
     });
   }
 
@@ -249,14 +338,7 @@ export class Store {
   listComponents(workspaceId: string): ComponentSummary[] {
     const components = this.db.prepare("SELECT id, name FROM components WHERE workspace_id = ? ORDER BY name").all(workspaceId) as { id: string; name: string }[];
     return components.map(({ id, name }) => {
-      const channels = Object.fromEntries(
-        (
-          this.db.prepare("SELECT c.channel, v.version FROM channels c JOIN versions v ON v.id = c.version_id WHERE c.component_id = ?").all(id) as {
-            channel: Channel;
-            version: string;
-          }[]
-        ).map((r) => [r.channel, r.version]),
-      );
+      const channels = this.channelVersions(id);
       const versions = (this.db.prepare("SELECT version FROM versions WHERE component_id = ?").all(id) as { version: string }[])
         .map((r) => r.version)
         .sort((a, b) => compareSemver(b, a));
@@ -274,7 +356,7 @@ export class Store {
       )
       .all(workspaceId, channel) as { name: string; version: string; hash: string; manifest: string }[];
     const components: CatalogComponent[] = rows.map((r) => ({ name: r.name, version: r.version, hash: r.hash, manifest: JSON.parse(r.manifest) }));
-    return { channel, theme: this.getTheme(workspaceId), components };
+    return { channel, theme: this.getTheme(workspaceId), components, recipes: this.listRecipes(workspaceId) };
   }
 
   /** Bundles are looked up within the caller's workspace only: no cross-tenant sharing by hash. */

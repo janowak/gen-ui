@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Recipe } from "./recipe.js";
 import { Theme } from "./theme.js";
 
 export const CHANNELS = ["beta", "stable"] as const;
@@ -23,6 +24,12 @@ export const ComponentManifest = z.object({
     .record(z.string(), z.unknown())
     .describe("JSON Schema (type: object) of the props the model passes. Becomes the tool's input schema."),
   tools: z.array(z.string()).default([]).describe("Tools on the host MCP server the component calls."),
+  contract: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("Component contract version the bundle was built against (set by @genui/kit). Absent for hand-built bundles."),
 });
 export type ComponentManifest = z.infer<typeof ComponentManifest>;
 
@@ -39,6 +46,8 @@ export interface Catalog {
   channel: Channel;
   theme: Theme | null;
   components: CatalogComponent[];
+  /** Workspace recipes (not channel-specific: saving one makes it live). */
+  recipes: Recipe[];
 }
 
 /** Max bundle size accepted by the registry. */

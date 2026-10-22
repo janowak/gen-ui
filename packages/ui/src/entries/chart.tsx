@@ -1,3 +1,4 @@
+import "@/runtime/preact";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ChartView } from "@/views/chart/ChartView";

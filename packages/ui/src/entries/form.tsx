@@ -1,3 +1,4 @@
+import "@/runtime/preact";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { FormView } from "@/views/form/FormView";

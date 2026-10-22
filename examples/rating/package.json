@@ -4,18 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "genui dev .",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "publish:beta": "genui publish ."
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/ext-apps": "^2.0.3",
-    "zod": "^4.6.7"
+    "@genui/kit": "workspace:*"
   },
   "devDependencies": {
     "@genui/cli": "workspace:*",
-    "vite": "^8.3.5",
-    "vite-plugin-singlefile": "^2.3.4"
+    "vite": "^8.3.5"
   }
 }
