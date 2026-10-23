@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Channel, PREVIEW_META_KEY, Recipe, Theme, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
-import { mountGenUI } from "@genui/sdk";
+import { mountGenUI } from "./runtime.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import json
-import re
+import uuid
 from typing import Any
 
-import httpx2
 import pytest
+from mcp import Client
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.resources import TextResource
+from mcp.types import CallToolResult, TextContent
 
-from genui.views import content_hash
+MIME = "text/html;profile=mcp-app"
+THEME = {"light": {"primary": "#16a34a"}}
 
 
 @pytest.fixture
@@ -19,82 +22,75 @@ def html(label: str) -> str:
     return f"<!doctype html><html><body>{label}</body></html>"
 
 
-def rating(version: str, **extra: Any) -> dict[str, Any]:
-    return {
-        "name": "rating",
-        "version": version,
-        "title": "Star rating",
-        "description": "Ask the user to rate something from 1 to 5 stars.",
-        "props": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]},
-        "tools": ["save_rating"],
-        **extra,
-    }
+class FakeGenUI:
+    """genui's end-user MCP, served in-process: built per request like apps/registry, one server per channel.
 
-
-class FakeRegistry:
-    """The registry's server-token API (GET /v1/catalog, GET /v1/bundles/:hash), served in-process.
-
-    Mirrors apps/registry: publishing moves beta, promote copies beta to stable, rollback restores
-    the channel's previous version.
+    Publishing moves beta, promote copies beta to stable, rollback restores stable's previous version.
     """
 
-    token = "server-token"
-
     def __init__(self) -> None:
-        self.versions: dict[tuple[str, str], tuple[dict[str, Any], str]] = {}
-        self.channels: dict[str, dict[str, list[str]]] = {"beta": {}, "stable": {}}
-        self.theme: dict[str, Any] | None = None
-        self.recipes: list[dict[str, Any]] = []
+        self.rating: dict[str, list[str]] = {"beta": [], "stable": []}
+        self.versions: dict[str, str] = {}  # version -> html
         self.down = False
-        self.tampered: set[str] = set()
-        self.requests: list[httpx2.Request] = []
+        self.sessions = 0
 
-    def publish(self, manifest: dict[str, Any], body: str) -> None:
-        self.versions[(manifest["name"], manifest["version"])] = (manifest, body)
-        self.channels["beta"].setdefault(manifest["name"], []).append(manifest["version"])
+    def publish(self, version: str) -> None:
+        self.versions[version] = html(f"rating v{version}")
+        self.rating["beta"].append(version)
 
-    def promote(self, name: str) -> None:
-        self.channels["stable"].setdefault(name, []).append(self.channels["beta"][name][-1])
+    def promote(self) -> None:
+        self.rating["stable"].append(self.rating["beta"][-1])
 
-    def rollback(self, name: str, channel: str = "stable") -> None:
-        self.channels[channel][name].pop()
+    def rollback(self) -> None:
+        self.rating["stable"].pop()
 
-    def catalog(self, channel: str) -> dict[str, Any]:
-        components = []
-        for name, history in sorted(self.channels[channel].items()):
-            manifest, body = self.versions[(name, history[-1])]
-            components.append({"name": name, "version": manifest["version"], "hash": content_hash(body), "manifest": manifest})
-        return {"channel": channel, "theme": self.theme, "components": components, "recipes": self.recipes}
+    @staticmethod
+    def uri(version: str) -> str:
+        return f"ui://genui/c/rating/{version.replace('.', '')}"
 
-    def handle(self, request: httpx2.Request) -> httpx2.Response:
-        self.requests.append(request)
+    def build(self, channel: str) -> MCPServer:
+        server = MCPServer("Acme")
+
+        def result(text: str) -> CallToolResult:
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)], _meta={"genui/theme": THEME, "genui/viewId": str(uuid.uuid4())}
+            )
+
+        @server.tool(name="render_form", title="Show form", description="Show a form.", meta={"ui": {"resourceUri": "ui://genui/form/aaaa"}})
+        def render_form(fields: list[dict[str, Any]], title: str | None = None) -> CallToolResult:
+            return result(f"Showing form ({len(fields)} fields).")
+
+        server.add_resource(TextResource(uri="ui://genui/form/aaaa", name="genui form", mime_type=MIME, text=html("form")))
+
+        version = self.rating[channel][-1]
+
+        @server.tool(name="render_rating", description="Ask for a rating.", meta={"ui": {"resourceUri": self.uri(version)}})
+        def render_rating(question: str) -> CallToolResult:
+            return result("Showing Star rating.")
+
+        server.add_resource(TextResource(uri=self.uri(version), name="genui rating", mime_type=MIME, text=self.versions[version]))
+
+        @server.resource("ui://genui/c/rating/{digest}", mime_type=MIME)
+        def rating_version(digest: str) -> str:
+            return next(body for v, body in self.versions.items() if v.replace(".", "") == digest)
+
+        @server.prompt(name="add_item", title="Add item", description="The user wants to add an item.")
+        def add_item(details: str | None = None) -> str:
+            return f'Use the "add_item" recipe. Pre-fill from: {details}'
+
+        return server
+
+    def client(self, channel: str, mode: str = "legacy") -> Client:
         if self.down:
-            raise httpx2.ConnectError("ECONNREFUSED", request=request)
-        if request.headers.get("authorization") != f"Bearer {self.token}":
-            return httpx2.Response(401, json={"error": "unauthorized"})
-        if request.url.path == "/v1/catalog":
-            channel = request.url.params.get("channel", "stable")
-            return httpx2.Response(200, json=self.catalog(channel if channel in self.channels else "stable"))
-        match = re.fullmatch(r"/v1/bundles/([0-9a-f]+)", request.url.path)
-        if match:
-            for _, body in self.versions.values():
-                if content_hash(body) == match[1]:
-                    return httpx2.Response(200, text=body + ("<!-- tampered -->" if match[1] in self.tampered else ""))
-        return httpx2.Response(404, json={"error": "not found"})
-
-    def transport(self) -> httpx2.MockTransport:
-        return httpx2.MockTransport(self.handle)
+            raise ConnectionError("genui is down")
+        self.sessions += 1
+        return Client(self.build(channel), mode=mode)
 
 
 @pytest.fixture
-def fake_registry() -> FakeRegistry:
-    registry = FakeRegistry()
-    registry.publish(rating("1.0.0"), html("v1"))
-    registry.promote("rating")
-    registry.publish(rating("1.1.0"), html("v1.1"))
-    registry.theme = {"light": {"primary": "#16a34a"}}
-    return registry
-
-
-def dump(value: Any) -> str:
-    return json.dumps(value, sort_keys=True)
+def fake_genui() -> FakeGenUI:
+    fake = FakeGenUI()
+    fake.publish("1.0.0")
+    fake.promote()
+    fake.publish("1.1.0")
+    return fake

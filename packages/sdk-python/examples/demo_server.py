@@ -1,11 +1,11 @@
 """genui demo server in Python: the mock company tools of apps/demo plus mount_genui.
 
-    uv run python examples/demo_server.py            # http://localhost:3002/mcp
+genui's tools come from the registry's end-user MCP (a server token: `genui token server demo`):
 
-Then open the playground against it: http://localhost:5173/?server=http://localhost:3002/mcp
+    GENUI_MCP_URL=http://localhost:4000/w/<workspace>/mcp GENUI_MCP_TOKEN=... uv run python examples/demo_server.py
 
-Optional registry (custom components, recipes, workspace theme):
-    GENUI_REGISTRY_URL=http://localhost:4000 GENUI_REGISTRY_TOKEN=... GENUI_CHANNEL=beta uv run python examples/demo_server.py
+Set GENUI_CHANNEL=beta for the beta channel. Then open the playground against it:
+http://localhost:5173/?server=http://localhost:3002/mcp
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 from starlette.middleware.cors import CORSMiddleware
 
-from genui import create_registry_client, mount_genui
+from genui import connect_genui, mount_genui
 
 PORT = int(os.environ.get("PORT", "3002"))
 
@@ -115,30 +115,19 @@ async def get_revenue(year: int) -> dict[str, Any]:
 
 
 def main() -> None:
-    # Optional: pull custom components, recipes and the theme from a genui registry.
-    url = os.environ.get("GENUI_REGISTRY_URL")
-    registry = (
-        create_registry_client(url, os.environ.get("GENUI_REGISTRY_TOKEN", ""), refresh_seconds=10, cache_file=".genui-cache.json")
-        if url
-        else None
-    )
-    mount_genui(
-        server,
-        registry=registry,
-        channel=os.environ.get("GENUI_CHANNEL", "stable"),
-        # This server is long-lived, so it can follow registry releases and tell clients about them.
-        watch=registry is not None,
-        # Without a registry, use a local theme; with one, the registry's workspace theme applies.
-        theme=None
-        if registry
-        else {"light": {"primary": "#4f46e5", "primaryForeground": "#ffffff"}, "dark": {"primary": "#818cf8", "primaryForeground": "#0b0b1a"}},
-    )
+    url = os.environ.get("GENUI_MCP_URL")
+    if url:
+        genui = connect_genui(url, os.environ.get("GENUI_MCP_TOKEN", ""), refresh_seconds=10)
+        # This server is long-lived, so it can follow genui releases and tell clients about them.
+        mount_genui(server, genui, channel=os.environ.get("GENUI_CHANNEL", "stable"), watch=True)
+    else:
+        print("GENUI_MCP_URL is not set: serving the company tools only.")
 
     app = server.streamable_http_app()
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["mcp-session-id"]
     )
-    print(f"genui Python demo MCP server on http://localhost:{PORT}/mcp" + (f" (registry: {url})" if url else ""))
+    print(f"genui Python demo MCP server on http://localhost:{PORT}/mcp" + (f" (genui: {url})" if url else ""))
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
 
 

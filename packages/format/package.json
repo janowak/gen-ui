@@ -8,15 +8,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./schemas/*": "./schemas/*"
+    }
   },
   "files": [
-    "dist",
-    "schemas"
+    "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/export-schemas.mjs",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

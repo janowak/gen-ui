@@ -57,6 +57,10 @@ export class Store {
     return Number((this.db.prepare("SELECT COUNT(*) AS n FROM workspaces").get() as { n: number }).n);
   }
 
+  workspace(workspaceId: string): { id: string; name: string } | undefined {
+    return this.db.prepare("SELECT id, name FROM workspaces WHERE id = ?").get(workspaceId) as { id: string; name: string } | undefined;
+  }
+
   /** The workspace, if the registry hosts its end-user MCP. */
   hostedWorkspace(workspaceId: string): { id: string; name: string } | undefined {
     return this.db.prepare("SELECT id, name FROM workspaces WHERE id = ? AND hosted = 1").get(workspaceId) as { id: string; name: string } | undefined;

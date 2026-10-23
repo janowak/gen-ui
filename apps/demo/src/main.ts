@@ -1,5 +1,4 @@
-import { createRegistryClient, mountGenUI } from "@genui/sdk";
-import type { Channel } from "@genui/format";
+import { connectGenUI, mountGenUI, type Channel } from "@genui/sdk";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
@@ -9,27 +8,16 @@ import { registerCompanyTools } from "./tools.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
-// Optional: pull custom components and the theme from a genui registry.
-const registry = process.env.GENUI_REGISTRY_URL
-  ? createRegistryClient({
-      url: process.env.GENUI_REGISTRY_URL,
-      token: process.env.GENUI_REGISTRY_TOKEN ?? "",
-      refreshSeconds: 10,
-      cacheFile: ".genui-cache.json",
-    })
+// genui's end-user MCP (the registry's /w/<workspace>/mcp) and a server token for it.
+const genui = process.env.GENUI_MCP_URL
+  ? connectGenUI({ url: process.env.GENUI_MCP_URL, token: process.env.GENUI_MCP_TOKEN ?? "", refreshSeconds: 10 })
   : undefined;
+if (!genui) console.warn("GENUI_MCP_URL is not set: serving the company tools only. Set GENUI_MCP_URL and GENUI_MCP_TOKEN in .env.local for forms and charts.");
 
 async function createServer(channel: Channel): Promise<McpServer> {
   const server = new McpServer({ name: "genui-demo", version: "0.1.0" });
   registerCompanyTools(server);
-  await mountGenUI(server, {
-    registry,
-    channel,
-    // Without a registry, use a local theme; with one, the registry's workspace theme applies.
-    theme: registry
-      ? undefined
-      : { light: { primary: "#4f46e5", primaryForeground: "#ffffff" }, dark: { primary: "#818cf8", primaryForeground: "#0b0b1a" } },
-  });
+  if (genui) await mountGenUI(server, { genui, channel });
   return server;
 }
 
@@ -56,5 +44,5 @@ app.all("/mcp", async (req: Request, res: Response) => {
 });
 
 app.listen(PORT, () =>
-  console.log(`genui demo MCP server on http://localhost:${PORT}/mcp${registry ? ` (registry: ${process.env.GENUI_REGISTRY_URL})` : ""}`),
+  console.log(`genui demo MCP server on http://localhost:${PORT}/mcp${genui ? ` (genui: ${process.env.GENUI_MCP_URL})` : ""}`),
 );

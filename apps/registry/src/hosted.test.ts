@@ -43,9 +43,9 @@ function startWebhook(): Promise<string> {
   return new Promise((resolve) => webhook.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(webhook.address() as AddressInfo).port}/validate`)));
 }
 
-async function mcpClient(path: string): Promise<Client> {
+async function mcpClient(path: string, headers?: Record<string, string>): Promise<Client> {
   const client = new Client({ name: "test-host", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${path}`)));
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${path}`), headers && { requestInit: { headers } }));
   return client;
 }
 
@@ -183,5 +183,58 @@ describe("hosted end-user MCP", () => {
     store.setHosted(other, false);
     const res = await fetch(`${base}/w/${other}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("upstream for a company's own server (server token)", () => {
+  const bearer = (token: string, channel?: string) => ({ authorization: `Bearer ${token}`, ...(channel ? { "x-genui-channel": channel } : {}) });
+
+  it("turns data tools on: tool-backed fields, submit tools and recipe submits work", async () => {
+    const client = await mcpClient(`/w/${acme}/mcp`, bearer(store.createToken(acme, "server", "acme-mcp")));
+    const description = (await client.listTools()).tools.find((t) => t.name === "render_form")?.description;
+    expect(description).toContain("resource_select");
+
+    const withSubmit = await client.callTool({
+      name: "render_form",
+      arguments: { fields: [{ name: "email", label: "Email", type: "email" }], submit: { toolName: "create_lead" } },
+    });
+    expect(withSubmit.isError).toBeFalsy();
+    const recipe = await client.callTool({ name: "use_recipe", arguments: { recipe: "add_item" } });
+    expect(recipe._meta?.["genui/form"]).toMatchObject({ submit: { toolName: "create_item" } });
+  });
+
+  it("serves workspaces without hosting turned on", async () => {
+    const solo = store.createWorkspace("Solo");
+    store.publish(solo, component("poll", "1.0.0"), html("poll v1"), "stable");
+    expect((await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(404);
+
+    const client = await mcpClient(`/w/${solo}/mcp`, bearer(store.createToken(solo, "server", "solo-mcp")));
+    expect(client.getServerVersion()?.name).toBe("Solo");
+    expect(await resourceText(client, "render_poll")).toBe(html("poll v1"));
+  });
+
+  it("picks the channel from x-genui-channel", async () => {
+    const token = store.createToken(acme, "server", "channels");
+    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
+    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, bearer(token, "beta")), "render_rating")).toBe(html("rating v1.1"));
+  });
+
+  it("keeps every component version readable for old messages", async () => {
+    const token = store.createToken(acme, "server", "versions");
+    const beta = await mcpClient(`/w/${acme}/mcp`, bearer(token, "beta"));
+    const betaUri = ((await beta.listTools()).tools.find((t) => t.name === "render_rating")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+
+    // Stable points at 1.0.0, yet still reads the 1.1.0 bundle by its hash.
+    const stable = await mcpClient(`/w/${acme}/mcp`, bearer(token));
+    expect(((await stable.readResource({ uri: betaUri })).contents[0] as { text?: string }).text).toBe(html("rating v1.1"));
+    await expect(stable.readResource({ uri: "ui://genui/c/rating/0000000000000000" })).rejects.toThrow();
+  });
+
+  it("rejects bad tokens, other workspaces' tokens and non-server scopes", async () => {
+    const post = (headers: Record<string, string>) =>
+      fetch(`${base}/w/${acme}/mcp`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}" });
+    expect((await post(bearer("gnu_server_nope"))).status).toBe(401);
+    expect((await post(bearer(store.createToken(other, "server", "other-mcp")))).status).toBe(403);
+    expect((await post(bearer(store.createToken(acme, "publish", "ci")))).status).toBe(403);
   });
 });

@@ -1,6 +1,6 @@
 # genui
 
-Forms, charts and custom components for MCP Apps, with built-in loading patterns, mounted into your MCP server through an SDK and released through a registry. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
+Forms, charts and custom components for MCP Apps, with built-in loading patterns, served by genui's MCP, forwarded from your MCP server through a thin SDK and released through a registry. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
 
 ## Packages
 
@@ -8,9 +8,10 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 |---|---|
 | `packages/format` | Zod schemas (form, chart, submit result, theme, component manifest) + helpers |
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
-| `packages/sdk` | `mountGenUI(server, opts)`: `render_form`, `render_chart` and registry components, plus `createRegistryClient` |
+| `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
+| `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
 | `packages/cli` | `genui` CLI: publish (beta or stable) / promote / rollback / list / theme / token |
-| `apps/registry` | Registry: HTTP API on SQLite with workspaces, scoped tokens, immutable versions, beta/stable channels, theme |
+| `apps/registry` | genui server: the registry (HTTP API on SQLite with workspaces, scoped tokens, immutable versions, beta/stable channels, theme), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` (the only genui runtime) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
 | `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@genui/ui/styles.css`): `pnpm --filter @genui/site dev` on http://localhost:5180 |
@@ -24,12 +25,13 @@ Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/com
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @genui/registry start     # http://localhost:4000; first start prints an admin token
+pnpm --filter @genui/registry start     # http://localhost:4000; first start prints an admin token and the end-user MCP URL
+GENUI_URL=http://localhost:4000 GENUI_TOKEN=<admin> genui token server demo   # a server token for the demo
 pnpm --filter @genui/demo start         # MCP server on http://localhost:3001/mcp
 pnpm --filter @genui/playground dev     # host on http://localhost:5173 (?channel=beta for beta)
 ```
 
-The demo reads `.env.local` (gitignored) for `GENUI_REGISTRY_URL` and `GENUI_REGISTRY_TOKEN`. Without them it runs without a registry.
+The demo reads `.env.local` (gitignored) for `GENUI_MCP_URL` (`http://localhost:4000/w/<workspace id>/mcp`) and `GENUI_MCP_TOKEN` (the server token). Without them it serves its company tools only.
 
 ## Registry and release flow
 
@@ -37,7 +39,7 @@ The demo reads `.env.local` (gitignored) for `GENUI_REGISTRY_URL` and `GENUI_REG
 export GENUI_URL=http://localhost:4000
 GENUI_TOKEN=<admin> genui token publish ci-preview    # CI: publish to beta only
 GENUI_TOKEN=<admin> genui token release ci-release    # CI: also publish to stable, promote, roll back
-GENUI_TOKEN=<admin> genui token server demo           # SDK: read-only
+GENUI_TOKEN=<admin> genui token server demo           # SDK: the end-user MCP with data tools
 GENUI_TOKEN=<publish> genui publish examples/rating                    # → beta
 GENUI_TOKEN=<release> genui publish examples/rating --channel stable   # → beta and stable
 GENUI_TOKEN=<release> genui promote rating --version 1.2.0             # stable → 1.2.0
@@ -138,19 +140,26 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 ## Use the SDK
 
-```ts
-import { createRegistryClient, mountGenUI } from "@genui/sdk";
+genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`) are served by genui's end-user MCP. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
 
-// Once per process: pulls catalogs, verifies bundle hashes, keeps the last good version.
-const registry = createRegistryClient({ url: REGISTRY_URL, token: SERVER_TOKEN, cacheFile: ".genui-cache.json" });
+```ts
+import { connectGenUI, mountGenUI } from "@genui/sdk";
+
+// Once per process: lists genui's tools and prompts in the background.
+const genui = connectGenUI({ url: "https://<genui>/w/<workspace>/mcp", token: SERVER_TOKEN });
 
 // Per server instance:
 await mountGenUI(server, {
-  registry,
+  genui,
   channel: userIsBetaTester ? "beta" : "stable",
-  watch: true, // long-lived servers: re-sync tools and send tools/list_changed on promote/rollback
+  watch: true, // long-lived servers: re-sync tools and send list_changed on promote/rollback
 });
 ```
+
+Python: `genui = connect_genui(url, token)`, then `mount_genui(server, genui, channel="stable")`. See [packages/sdk-python](packages/sdk-python/README.md).
+
+- **Fast, not offline.** `tools/list` is answered from memory, and `ui://` resources are content-hashed, so each is fetched once. Calls always go to genui. When genui is down, they return "genui is unavailable right now, try again shortly.", and the model tells the user.
+- **Cloud or self-hosted.** In genui's cloud, genui sees what the model passes to its tools (form specs, pre-filled values, inline chart rows), never your own tool calls or results. If that matters, run the genui server yourself: it's the same image.
 
 - **Submit tools** return `{ ok: true, message?, result? }` or `{ ok: false, fieldErrors?, formError? }` in `structuredContent`.
 - **Source tools** return any JSON. The model maps it with `itemsPath` / `idPath` / `labelPath` (selects) or `x` / `series` (charts).

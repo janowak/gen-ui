@@ -258,7 +258,6 @@ source = { editable = "." }
 dependencies = [
     { name = "httpx2", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "httpx2", version = "2.16.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "jsonschema" },
     { name = "mcp" },
 ]
 
@@ -272,7 +271,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx2", specifier = ">=2.10" },
-    { name = "jsonschema", specifier = ">=4.20" },
     { name = "mcp", specifier = ">=2.3,<3" },
 ]
 

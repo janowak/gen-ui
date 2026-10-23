@@ -17,9 +17,6 @@ importers:
 
   apps/demo:
     dependencies:
-      '@genui/format':
-        specifier: workspace:*
-        version: link:../../packages/format
       '@genui/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -29,9 +26,6 @@ importers:
       '@modelcontextprotocol/express':
         specifier: ^2.0.2
         version: 2.0.2(@modelcontextprotocol/server@2.3.1)(express@5.3.0)
-      '@modelcontextprotocol/ext-apps':
-        specifier: ^2.0.3
-        version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)
       '@modelcontextprotocol/node':
         specifier: ^2.1.1
         version: 2.1.1(@modelcontextprotocol/server@2.3.1)
@@ -100,9 +94,6 @@ importers:
       '@genui/format':
         specifier: workspace:*
         version: link:../../packages/format
-      '@genui/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
       '@genui/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -234,13 +225,6 @@ importers:
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/sdk:
-    dependencies:
-      '@genui/format':
-        specifier: workspace:*
-        version: link:../format
-      '@genui/ui':
-        specifier: workspace:*
-        version: link:../ui
     devDependencies:
       '@genui/registry':
         specifier: workspace:*
@@ -251,9 +235,6 @@ importers:
       '@modelcontextprotocol/client':
         specifier: ^2.3.1
         version: 2.3.1
-      '@modelcontextprotocol/ext-apps':
-        specifier: ^2.0.3
-        version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)
       '@modelcontextprotocol/server':
         specifier: ^2.3.1
         version: 2.3.1

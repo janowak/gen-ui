@@ -176,7 +176,7 @@
                 you pick.
               </p>
               <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
-  registry,
+  genui,
   channel: <span class="s">"stable"</span>,
 });</code></pre>
             </li>
@@ -343,18 +343,19 @@ $ <span class="k">genui promote order-summary</span>
             <div class="link link-a"><span>Tool calls and results</span></div>
             <div class="node-server rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <p class="font-medium">Your MCP server</p>
-              <p class="mt-1 text-muted-foreground">With the genui SDK inside, serving what your registry released.</p>
+              <p class="mt-1 text-muted-foreground">With the genui SDK inside, forwarding genui's tools to genui.</p>
             </div>
             <div class="link link-b"><span>Your code, as today</span></div>
             <div class="node-tools rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <p class="font-medium">Your tools and APIs</p>
               <p class="mt-1 text-muted-foreground">Customers, orders, billing: whatever your tools already reach.</p>
             </div>
-            <div class="link link-c"><span>Bundles, recipes, theme</span></div>
+            <div class="link link-c"><span>Calls to genui's tools</span></div>
             <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
-              <p class="font-medium">genui registry</p>
+              <p class="font-medium">genui</p>
               <p class="mt-1 text-muted-foreground">
-                Stores components, recipes and your theme. It never sees a tool call or its result.
+                Serves forms, charts, recipes and your components. It sees calls to its own tools, never your tools'
+                calls or their results.
               </p>
             </div>
           </div>
@@ -374,9 +375,10 @@ $ <span class="k">genui promote order-summary</span>
               </p>
             </li>
             <li>
-              <h3 class="font-medium">Run the registry yourself</h3>
+              <h3 class="font-medium">Run genui yourself</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                One Node process and a SQLite file. Sign in with GitHub, Google or your company's OIDC provider.
+                One Node process and a SQLite file, so nothing leaves your network. Sign in with GitHub, Google or your
+                company's OIDC provider.
               </p>
             </li>
           </ul>

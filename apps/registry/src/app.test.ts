@@ -52,26 +52,19 @@ afterAll(() => server.close());
 
 describe("registry", () => {
   it("rejects missing and under-scoped tokens", async () => {
-    expect((await call("GET", "/v1/catalog", "nope")).status).toBe(401);
+    expect((await call("GET", "/v1/components", "nope")).status).toBe(401);
     expect((await call("POST", "/v1/components", reader, { manifest: manifest("1.0.0"), html: HTML("v1") })).status).toBe(403);
     expect((await call("POST", "/v1/components/rating/promote", publisher, {})).status).toBe(403);
   });
 
-  it("publishes to beta, promotes to stable, serves bundles by hash", async () => {
+  it("publishes to beta and promotes to stable", async () => {
     const published = await call("POST", "/v1/components", publisher, { manifest: manifest("1.0.0"), html: HTML("v1") });
     expect(published.status).toBe(201);
-    expect(published.body).toMatchObject({ version: "1.0.0", channel: "beta" });
-
-    expect((await call("GET", "/v1/catalog?channel=stable", reader)).body.components).toEqual([]);
-    const beta = await call("GET", "/v1/catalog?channel=beta", reader);
-    expect(beta.body.components[0]).toMatchObject({ name: "rating", version: "1.0.0", hash: published.body.hash });
+    expect(published.body).toMatchObject({ version: "1.0.0", channel: "beta", hash: expect.stringMatching(/^[0-9a-f]{16}$/) });
+    expect((await call("GET", "/v1/components", reader)).body.components[0].channels).toEqual({ beta: "1.0.0" });
 
     expect((await call("POST", "/v1/components/rating/promote", admin, {})).body.version).toBe("1.0.0");
-    const stable = await call("GET", "/v1/catalog?channel=stable", reader);
-    expect(stable.body.components[0].version).toBe("1.0.0");
-
-    const bundle = await call("GET", `/v1/bundles/${published.body.hash}`, reader);
-    expect(bundle.body).toContain("v1");
+    expect((await call("GET", "/v1/components", reader)).body.components[0].channels).toEqual({ beta: "1.0.0", stable: "1.0.0" });
   });
 
   it("keeps versions immutable and increasing", async () => {
@@ -93,19 +86,17 @@ describe("registry", () => {
     expect((await call("POST", "/v1/components/rating/promote", admin, {})).body.version).toBe("2.0.0");
     const rolled = await call("POST", "/v1/components/rating/rollback", admin, { channel: "stable" });
     expect(rolled.body.version).toBe("1.0.0");
-    expect((await call("GET", "/v1/catalog?channel=stable", reader)).body.components[0].version).toBe("1.0.0");
+    expect((await call("GET", "/v1/components", reader)).body.components[0].channels.stable).toBe("1.0.0");
     expect((await call("POST", "/v1/components/rating/rollback", admin, { channel: "stable" })).status).toBe(409);
   });
 
   it("stores the theme and isolates workspaces", async () => {
     const theme = { light: { primary: "#4f46e5" } };
     expect((await call("PUT", "/v1/theme", admin, { theme })).status).toBe(200);
-    expect((await call("GET", "/v1/catalog", reader)).body.theme).toEqual(theme);
+    expect((await call("GET", "/v1/theme", reader)).body.theme).toEqual(theme);
 
-    const other = await call("GET", "/v1/catalog?channel=beta", otherReader);
-    expect(other.body).toEqual({ channel: "beta", theme: null, components: [], recipes: [] });
-    const hash = (await call("GET", "/v1/catalog?channel=beta", reader)).body.components[0].hash;
-    expect((await call("GET", `/v1/bundles/${hash}`, otherReader)).status).toBe(404);
+    expect((await call("GET", "/v1/theme", otherReader)).body.theme).toBeNull();
+    expect((await call("GET", "/v1/components", otherReader)).body.components).toEqual([]);
   });
 
   it("lists components with their channels", async () => {
@@ -128,14 +119,14 @@ describe("recipes", () => {
     form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
   };
 
-  it("saves, lists in the catalog, replaces and deletes recipes", async () => {
+  it("saves, lists, replaces and deletes recipes", async () => {
     expect((await call("PUT", "/v1/recipes/add_item", publisher, recipe)).status).toBe(403);
     expect((await call("PUT", "/v1/recipes/add_item", admin, recipe)).status).toBe(201);
     expect((await call("PUT", "/v1/recipes/add_item", admin, { ...recipe, notes: "Pre-fill the name." })).body).toEqual({ name: "add_item", replaced: true });
     expect((await call("PUT", "/v1/recipes/Bad Name", admin, recipe)).status).toBe(400);
 
-    const catalog = await call("GET", "/v1/catalog", reader);
-    expect(catalog.body.recipes).toEqual([{ name: "add_item", ...recipe, notes: "Pre-fill the name." }]);
+    const listed = await call("GET", "/v1/recipes", reader);
+    expect(listed.body.recipes).toEqual([{ name: "add_item", ...recipe, notes: "Pre-fill the name." }]);
 
     expect((await call("DELETE", "/v1/recipes/add_item", admin)).status).toBe(200);
     expect((await call("DELETE", "/v1/recipes/add_item", admin)).status).toBe(404);

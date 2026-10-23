@@ -1,136 +1,67 @@
-"""`mount_genui`: registers render_form, render_chart, use_recipe and registry components on an MCPServer.
+"""`mount_genui`: puts genui's tools, `ui://` resources and recipe prompts on your MCPServer.
 
-A port of `packages/sdk/src/mount.ts` for servers that run their own data tools.
+A port of `packages/sdk/src/mount.ts`. Calls are forwarded to genui; your own tools stay on your
+server, where genui's views call them through the host.
 """
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
-import logging
 import threading
-import uuid
 import weakref
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import Annotated, Any
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from jsonschema import Draft202012Validator
 from mcp.server.mcpserver import Context, MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
-from mcp.server.mcpserver.prompts.base import Prompt
-from mcp.server.mcpserver.resources import TextResource
+from mcp.server.mcpserver.prompts.base import Prompt as ServerPrompt
+from mcp.server.mcpserver.prompts.base import PromptArgument
+from mcp.server.mcpserver.resources import FunctionResource
 from mcp.server.subscriptions import PromptsListChanged, ResourcesListChanged, SubscriptionBus, ToolsListChanged
-from mcp.types import CallToolResult, TextContent
-from pydantic import Field
+from mcp.types import CallToolResult, Prompt, Tool
 
-from .meta import COMPONENT_CONTRACT, FORM_META_KEY, RESOURCE_MIME_TYPE, THEME_META_KEY, VIEW_ID_META_KEY
-from .recipe import recipe_form
-from .registry import RegistryClient
-from .views import ViewBundle, load_built_in_views, tool_schema
+from .client import GenUIClient, resource_uri
 
-Theme = Mapping[str, Any]
-ThemeOption = Theme | Callable[[], Theme | None | Awaitable[Theme | None]]
-Handler = Callable[[dict[str, Any]], Awaitable[CallToolResult]]
-
-logger = logging.getLogger("genui")
-
-FORM_DESCRIPTION = (
-    "Show an interactive form to the user inside the chat. Use it to collect structured input instead of asking question by question. "
-    "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect, resource_select, resource_multiselect. "
-    "resource_select / resource_multiselect load options by calling a tool (source.toolName) with source.params (fill the tool's required parameters) "
-    "and send the user's search text in source.searchParam; map results with itemsPath, idPath, labelPath. "
-    "With `submit`, the form calls submit.toolName with the field values (keyed by field name) merged into submit.params; field names must match that tool's parameters. "
-    "Without `submit`, the values are sent back to the conversation. Do not call the submit tool yourself."
-)
-
-CHART_DESCRIPTION = (
-    "Show a chart (line, bar, area, pie, donut) inside the chat. Three ways to pass data: "
-    "data.rows (rows you already have; map them with `x` and `series`), "
-    "data.categories + data.series (chart-native values for small charts), or "
-    "data.source (the chart calls a tool itself; use for ~200+ rows or live data, optionally with refreshSeconds). "
-    "Pie and donut plot the first series."
-)
-
-RECIPE_DESCRIPTION = (
-    "Show one of this workspace's ready-made forms. Prefer it over render_form whenever a recipe matches what the user wants. "
-    "Pick the recipe and pre-fill the fields you already know from the conversation; the fields, validation and submit action are fixed. "
-    "Do not call the submit tool yourself.\nRecipes:\n"
-)
+RESOURCE_MIME_TYPE = "text/html;profile=mcp-app"
 
 
 class GenUIHandle:
     """What `mount_genui` returns."""
 
-    def __init__(self, views: dict[str, ViewBundle], components: Callable[[], list[str]], close: Callable[[], None]):
-        self.views = views
-        self._components = components
+    def __init__(self, tools: Callable[[], list[str]], close: Callable[[], None]):
+        self._tools = tools
         self._close = close
 
-    def components(self) -> list[str]:
-        """Custom components currently registered, as name@version."""
-        return self._components()
+    def tools(self) -> list[str]:
+        """genui tools currently on the server."""
+        return self._tools()
 
     def close(self) -> None:
-        """Stops watching the registry."""
+        """Stops watching genui."""
         self._close()
 
 
-def _text(text: str, meta: dict[str, Any]) -> CallToolResult:
-    return CallToolResult(content=[TextContent(type="text", text=text)], _meta=meta)
+def _key(item: Tool | Prompt) -> str:
+    return json.dumps(item.model_dump(mode="json"), sort_keys=True)
 
 
-def _arguments(ctx: Context) -> dict[str, Any]:
-    params = ctx.request_context.params or {}
-    arguments = params.get("arguments")
-    return dict(arguments) if isinstance(arguments, Mapping) else {}
-
-
-def _validation_error(validator: Draft202012Validator, arguments: dict[str, Any]) -> str | None:
-    errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.absolute_path))
-    if not errors:
-        return None
-    def where(error: Any) -> str:
-        return ".".join(str(part) for part in error.absolute_path) or "(root)"
-    return "; ".join(f"{where(error)}: {error.message}" for error in errors[:5])
-
-
-def _add_tool(
-    server: MCPServer,
-    name: str,
-    *,
-    title: str | None,
-    description: str,
-    input_schema: dict[str, Any],
-    resource_uri: str,
-    handler: Handler,
-) -> None:
-    """Registers a tool whose input schema is our JSON Schema rather than one derived from a signature."""
-    # MCPServer derives input schemas from function signatures and has no public way to pass a JSON
-    # Schema to add_tool; the registered Tool's `parameters` is the schema tools/list advertises.
-    tools = server._tool_manager
-    if tools.get_tool(name) is not None:
-        raise ValueError(f"genui: a tool named {name} is already registered on this server")
-    validator = Draft202012Validator(input_schema)
-
-    async def call(ctx: Context) -> CallToolResult:
-        arguments = _arguments(ctx)
-        error = _validation_error(validator, arguments)
-        if error:
-            raise ToolError(f"Invalid arguments: {error}")
-        return await handler(arguments)
-
-    server.add_tool(
-        call,
-        name=name,
-        title=title,
-        description=description,
-        meta={"ui": {"resourceUri": resource_uri}},
-        structured_output=False,
-    )
-    tool = tools.get_tool(name)
-    assert tool is not None
-    tool.parameters = input_schema
+def _mirror(mounted: dict[str, str], wanted: list[Any], register: Callable[[Any], None], remove: Callable[[str], None]) -> bool:
+    """Brings registered items in line with `wanted`, re-registering any whose definition changed. Returns True if anything changed."""
+    by_name = {item.name: item for item in wanted}
+    changed = False
+    for name, key in list(mounted.items()):
+        if name in by_name and _key(by_name[name]) == key:
+            continue
+        remove(name)
+        del mounted[name]
+        changed = True
+    for name, item in by_name.items():
+        if name in mounted:
+            continue
+        register(item)
+        mounted[name] = _key(item)
+        changed = True
+    return changed
 
 
 class _Notifier:
@@ -200,209 +131,106 @@ class _Notifier:
 
 def mount_genui(
     server: MCPServer,
+    genui: GenUIClient,
     *,
-    registry: RegistryClient | None = None,
     channel: str = "stable",
-    theme: ThemeOption | None = None,
-    recipes: Sequence[Mapping[str, Any]] | None = None,
     watch: bool = False,
     bus: SubscriptionBus | None = None,
-    views: dict[str, ViewBundle] | None = None,
 ) -> GenUIHandle:
-    """Registers render_form, render_chart, use_recipe and registry components (tools + `ui://` resources).
+    """Puts genui's tools (render_form, render_chart, use_recipe, render_<component>), their `ui://`
+    resources and the recipe prompts on your server, next to your own tools.
 
     Args:
         server: The MCPServer that also serves your data and submit tools.
-        registry: Registry to pull custom components, recipes and the theme from.
-        channel: Registry channel this server serves, e.g. "beta" for beta testers.
-        theme: Workspace theme, or a function returning the current one (may be async). Overrides the registry theme.
-        recipes: Recipes offered through use_recipe and as prompts (slash commands). Defaults to the registry's.
-        watch: Re-sync components and recipes when the registry changes and notify clients (list_changed).
+        genui: From `connect_genui`, once per process.
+        channel: Channel this server serves, e.g. "beta" for beta testers.
+        watch: Re-sync when genui's tools change (a promote, a rollback, a new recipe) and notify clients (list_changed).
         bus: The SubscriptionBus passed to MCPServer(subscriptions=...), used for watch notifications to
             2026-07-28 clients. Defaults to the server's own bus.
-        views: Override the built-in view bundles.
     """
-    views = views or load_built_in_views()
-    if registry is not None:
-        registry.ready()
-
-    async def current_theme() -> Theme | None:
-        if theme is not None:
-            if not callable(theme):
-                return theme
-            value = theme()
-            return await value if inspect.isawaitable(value) else value
-        snapshot = registry.snapshot(channel) if registry else None
-        return snapshot.catalog.get("theme") if snapshot else None
-
-    async def meta() -> dict[str, Any]:
-        current = await current_theme()
-        return {VIEW_ID_META_KEY: str(uuid.uuid4()), **({THEME_META_KEY: current} if current is not None else {})}
-
+    genui.ready()
+    tools: dict[str, str] = {}
+    prompts: dict[str, str] = {}
     resources: set[str] = set()
+    lock = threading.RLock()
 
-    def add_resource(name: str, uri: str, html: str) -> None:
-        # MCPServer has no remove_resource: replaced component versions stay readable, which also lets
-        # hosts re-render older messages. Tools always point at the current version.
+    def add_tool(tool: Tool) -> None:
+        # MCPServer derives input schemas from function signatures and has no public way to pass a JSON
+        # Schema to add_tool; the registered Tool's `parameters` is the schema tools/list advertises.
+        async def call(ctx: Context) -> CallToolResult:
+            params = ctx.request_context.params or {}
+            arguments = params.get("arguments")
+            return await genui.call_tool(channel, tool.name, dict(arguments) if isinstance(arguments, dict) else {})
+
+        server.add_tool(
+            call,
+            name=tool.name,
+            title=tool.title,
+            description=tool.description,
+            annotations=tool.annotations,
+            meta=tool.meta,
+            structured_output=False,
+        )
+        registered = server._tool_manager.get_tool(tool.name)
+        assert registered is not None
+        registered.parameters = tool.input_schema
+
+    def add_prompt(prompt: Prompt) -> None:
+        async def forward(**arguments: Any) -> list[dict[str, Any]]:
+            values = {name: str(value) for name, value in arguments.items() if value is not None}
+            result = await genui.get_prompt(channel, prompt.name, values)
+            return [message.model_dump(mode="json", by_alias=True, exclude_none=True) for message in result.messages]
+
+        server.add_prompt(
+            ServerPrompt(
+                name=prompt.name,
+                title=prompt.title,
+                description=prompt.description,
+                arguments=[PromptArgument(name=a.name, description=a.description, required=a.required) for a in prompt.arguments or []],
+                fn=forward,
+            )
+        )
+
+    async def read(uri: str) -> str:
+        content = (await genui.read_resource(channel, uri)).contents[0]
+        return getattr(content, "text", "")
+
+    def add_resource(uri: str) -> None:
+        # MCPServer has no remove_resource: earlier versions stay listed, read from genui when asked for.
         if uri in resources:
             return
         resources.add(uri)
-        server.add_resource(TextResource(uri=uri, name=f"genui {name}", mime_type=RESOURCE_MIME_TYPE, text=html))
+        cached = genui.resource(uri)
+        mime_type = cached.contents[0].mime_type if cached and cached.contents else None
 
-    for view in views.values():
-        add_resource(view.name, view.uri, view.html)
+        async def load() -> str:
+            return await read(uri)
 
-    async def render_form(spec: dict[str, Any]) -> CallToolResult:
-        count = len(spec["fields"])
-        fields = f"{count} field{'' if count == 1 else 's'}"
-        title = f' "{spec["title"]}"' if spec.get("title") else ""
-        submit = spec.get("submit")
-        then = (
-            f"When the user submits, the form calls {submit['toolName']} and you receive the submitted values and result in context."
-            if submit
-            else "When the user submits, the values arrive as a message."
-        )
-        return _text(f"Showing form{title} ({fields}). {then}", await meta())
+        server.add_resource(FunctionResource(uri=uri, name=uri, mime_type=mime_type or RESOURCE_MIME_TYPE, fn=load))
 
-    async def render_chart(spec: dict[str, Any]) -> CallToolResult:
-        data = spec["data"]
-        what = f"data from {data['source']['toolName']}" if "source" in data else "the provided data"
-        title = f' "{spec["title"]}"' if spec.get("title") else ""
-        return _text(f"Showing {spec['type']} chart{title} with {what}.", await meta())
+    # Earlier component versions, for old messages the host renders again: read from genui.
+    @server.resource("ui://genui/c/{name}/{digest}", name="genui component version", mime_type=RESOURCE_MIME_TYPE)
+    async def component_version(name: str, digest: str) -> str:
+        return await read(f"ui://genui/c/{name}/{digest}")
 
-    _add_tool(
-        server,
-        "render_form",
-        title="Show form",
-        description=FORM_DESCRIPTION,
-        input_schema=tool_schema("form"),
-        resource_uri=views["form"].uri,
-        handler=render_form,
-    )
-    _add_tool(
-        server,
-        "render_chart",
-        title="Show chart",
-        description=CHART_DESCRIPTION,
-        input_schema=tool_schema("chart"),
-        resource_uri=views["chart"].uri,
-        handler=render_chart,
-    )
-
-    # Registry components: render_<name>, each backed by its own content-hashed ui:// resource.
-    mounted: dict[str, tuple[str, str]] = {}  # name -> (hash, version)
-    too_new: set[str] = set()
-    lock = threading.RLock()
-
-    def mount_component(component: Mapping[str, Any], html: str) -> None:
-        manifest = component["manifest"]
-        name = manifest["name"]
-        label = manifest.get("title") or name
-        uri = f"ui://genui/c/{name}/{component['hash']}"
-        add_resource(name, uri, html)
-
-        async def render(_: dict[str, Any]) -> CallToolResult:
-            return _text(f"Showing {label}.", await meta())
-
-        _add_tool(
-            server,
-            f"render_{name}",
-            title=label,
-            description=manifest["description"],
-            input_schema={"type": "object", **manifest["props"]},
-            resource_uri=uri,
-            handler=render,
-        )
-        mounted[name] = (component["hash"], manifest["version"])
-
-    def sync() -> bool:
-        """Brings registered components in line with the channel's snapshot. Returns True if anything changed."""
-        snapshot = registry.snapshot(channel) if registry else None
+    def sync() -> tuple[bool, bool]:
+        """Returns whether tools and prompts changed."""
+        snapshot = genui.snapshot(channel)
         if snapshot is None:
-            return False
-        wanted = {c["manifest"]["name"]: c for c in snapshot.catalog["components"]}
-        changed = False
-        for name, (digest, _) in list(mounted.items()):
-            if name not in wanted or wanted[name]["hash"] != digest:
-                server.remove_tool(f"render_{name}")
-                del mounted[name]
-                changed = True
-        for name, component in wanted.items():
-            if name in mounted:
-                continue
-            # Built with a newer @genui/kit than this SDK serves: it would render without data it expects.
-            contract = component["manifest"].get("contract") or 0
-            if contract > COMPONENT_CONTRACT:
-                if component["hash"] not in too_new:
-                    too_new.add(component["hash"])
-                    logger.warning(
-                        "[genui] skipping %s@%s: needs component contract %s, this SDK serves %s. Update genui-sdk.",
-                        name,
-                        component["version"],
-                        contract,
-                        COMPONENT_CONTRACT,
-                    )
-                continue
-            html = snapshot.bundles.get(component["hash"])
-            if html is not None:
-                mount_component(component, html)
-                changed = True
-        return changed
-
-    # Recipes: one use_recipe tool (the server builds the form; the model picks and pre-fills)
-    # plus one prompt per recipe, which hosts show as a slash command.
-    recipe_state: dict[str, Any] = {"key": None, "tool": False, "prompts": [], "registered": False}
-
-    def mount_recipes() -> bool:
-        snapshot = registry.snapshot(channel) if registry else None
-        if recipes is not None:
-            current = list(recipes)
-        else:
-            current = (snapshot.catalog.get("recipes") if snapshot else None) or []
-        key = json.dumps(current, sort_keys=True)
-        if key == recipe_state["key"]:
-            return False
-        if recipe_state["tool"]:
-            server.remove_tool("use_recipe")
-        for name in recipe_state["prompts"]:
-            server.remove_prompt(name)
-        recipe_state.update(key=key, tool=False, prompts=[])
-        if not current:
-            return True
-
-        by_name = {r["name"]: r for r in current}
-        listing = "\n".join(f"- {r['name']}: {r['when']}{' ' + r['notes'] if r.get('notes') else ''}" for r in current)
-        schema = tool_schema("recipe-input")
-        schema["properties"]["recipe"]["enum"] = list(by_name)
-
-        async def use_recipe(arguments: dict[str, Any]) -> CallToolResult:
-            recipe = by_name[arguments["recipe"]]
-            form = recipe_form(recipe, arguments.get("prefill"))
-            text = f'Showing the "{recipe.get("title") or recipe["name"]}" form. The user fills it in; you receive the result in context.'
-            return _text(text, {**(await meta()), FORM_META_KEY: form})
-
-        _add_tool(
-            server,
-            "use_recipe",
-            title="Use recipe",
-            description=RECIPE_DESCRIPTION + listing,
-            input_schema=schema,
-            resource_uri=views["form"].uri,
-            handler=use_recipe,
-        )
-        recipe_state["tool"] = True
-        for recipe in current:
-            server.add_prompt(_recipe_prompt(recipe))
-            recipe_state["prompts"].append(recipe["name"])
-        recipe_state["registered"] = True
-        return True
+            return False, False
+        tools_changed = _mirror(tools, snapshot.tools, add_tool, server.remove_tool)
+        prompts_changed = _mirror(prompts, snapshot.prompts, add_prompt, server.remove_prompt)
+        for tool in snapshot.tools:
+            uri = resource_uri(tool)
+            if uri:
+                add_resource(uri)
+        return tools_changed, prompts_changed
 
     with lock:
         sync()
-        mount_recipes()
 
     cleanup: list[Callable[[], None]] = []
-    if registry is not None and watch:
+    if watch:
         notifier = _Notifier(server, bus)
         server.middleware.append(notifier.middleware)
         cleanup.append(lambda: server.middleware.remove(notifier.middleware))
@@ -411,33 +239,17 @@ def mount_genui(
             if changed != channel:
                 return
             with lock:
-                components_changed = sync()
-                recipes_changed = mount_recipes()
-            if components_changed or recipes_changed:
-                notifier.notify(tools=True, prompts=recipes_changed and recipe_state["registered"])
+                tools_changed, prompts_changed = sync()
+            if tools_changed or prompts_changed:
+                notifier.notify(tools=tools_changed, prompts=prompts_changed)
 
-        cleanup.append(registry.on_change(on_change))
+        cleanup.append(genui.on_change(on_change))
 
     def close() -> None:
         while cleanup:
             cleanup.pop()()
 
-    return GenUIHandle(
-        views=views,
-        components=lambda: [f"{name}@{version}" for name, (_, version) in mounted.items()],
-        close=close,
-    )
-
-
-def _recipe_prompt(recipe: Mapping[str, Any]) -> Prompt:
-    label = recipe.get("title") or recipe["name"]
-
-    def prompt(details: Annotated[str | None, Field(description="Anything to pre-fill, in plain words.")] = None) -> str:
-        return f'Use the "{label}" recipe: call use_recipe with recipe "{recipe["name"]}". ' + (
-            f"Pre-fill from: {details}" if details else "Pre-fill what you already know from this conversation."
-        )
-
-    return Prompt.from_function(prompt, name=recipe["name"], title=label, description=recipe["when"])
+    return GenUIHandle(tools=lambda: list(tools), close=close)
 
 
 __all__ = ["GenUIHandle", "mount_genui"]

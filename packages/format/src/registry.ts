@@ -36,7 +36,7 @@ export type ComponentManifest = z.infer<typeof ComponentManifest>;
 export interface CatalogComponent {
   name: string;
   version: string;
-  /** Content hash of the bundle; fetch it from /v1/bundles/:hash. */
+  /** Content hash of the bundle; part of its `ui://genui/c/<name>/<hash>` URI. */
   hash: string;
   manifest: ComponentManifest;
 }

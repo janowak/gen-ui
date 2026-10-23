@@ -6,4 +6,3 @@ export * from "./normalize.js";
 export * from "./registry.js";
 export * from "./recipe.js";
 export * from "./meta.js";
-export * from "./json-schema.js";

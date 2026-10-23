@@ -1,211 +1,150 @@
-"""Mirrors packages/sdk/src/mount.test.ts (preview mode and dataTools are Node-only: the registry's hosted MCP)."""
+"""Mirrors packages/sdk/src/mount.test.ts against an in-process fake of genui's end-user MCP."""
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
+import anyio
 import pytest
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 
-from genui import FORM_META_KEY, PREVIEW_META_KEY, THEME_META_KEY, VIEW_ID_META_KEY, mount_genui, recipe_form, tool_schema
+from genui import GenUIClient, connect_genui, mount_genui
+
+from .conftest import THEME, FakeGenUI, html
 
 pytestmark = pytest.mark.anyio
 
 # "legacy" runs the initialize handshake (2025-11-25); "auto" talks 2026-07-28 to an in-process server.
 MODES = ["legacy", "auto"]
 
-FORM = {
-    "title": "New order",
-    "fields": [
-        {
-            "name": "customer",
-            "label": "Customer",
-            "type": "resource_select",
-            "source": {"toolName": "search_customers", "searchParam": "query", "labelPath": "name"},
-        },
-        {"name": "notes", "label": "Notes", "type": "textarea"},
-    ],
-    "submit": {"toolName": "create_order"},
-}
+clients: list[GenUIClient] = []
 
 
-def tool_named(tools: Any, name: str) -> Any:
-    return next((t for t in tools.tools if t.name == name), None)
+@pytest.fixture(autouse=True)
+def close_clients() -> Any:
+    yield
+    while clients:
+        clients.pop().close()
 
 
-@pytest.fixture(params=MODES)
-async def client(request: pytest.FixtureRequest) -> AsyncIterator[Client]:
-    server = MCPServer("test")
-    mount_genui(server, theme={"light": {"primary": "#4f46e5"}})
-    async with Client(server, mode=request.param) as c:
-        yield c
+def genui_client(fake: FakeGenUI, **extra: Any) -> GenUIClient:
+    client = connect_genui("https://genui.test/w/acme/mcp", "server-token", refresh_seconds=0, client_factory=fake.client, **extra)
+    clients.append(client)
+    return client
 
 
-class TestMountGenUI:
-    async def test_registers_render_tools_linked_to_content_hashed_ui_resources(self, client: Client) -> None:
-        tools = await client.list_tools()
-        form_tool = tool_named(tools, "render_form")
-        uri = form_tool.meta["ui"]["resourceUri"]
-        assert re.fullmatch(r"ui://genui/form/[0-9a-f]{16}", uri)
-        assert tool_named(tools, "render_chart") is not None
+@asynccontextmanager
+async def company_server(genui: GenUIClient, channel: str = "stable", watch: bool = False, mode: str = "legacy", **client: Any) -> AsyncIterator[tuple[Client, Any]]:
+    """The company's own server: its data tools plus genui's, as a host sees it."""
+    server = MCPServer("acme")
 
-        resource = await client.read_resource(uri)
-        content = resource.contents[0]
-        assert content.mime_type == "text/html;profile=mcp-app"
-        assert "<html" in content.text
+    @server.tool(description="Search customers.")
+    def search_customers(query: str | None = None) -> list[str]:
+        return []
 
-    async def test_advertises_the_input_schemas_exported_from_format(self, client: Client) -> None:
-        tools = await client.list_tools()
-        assert tool_named(tools, "render_form").input_schema == tool_schema("form")
-        assert tool_named(tools, "render_chart").input_schema == tool_schema("chart")
-        assert tool_named(tools, "render_form").title == "Show form"
-        assert tool_named(tools, "render_form").description.startswith("Show an interactive form to the user inside the chat.")
+    handle = mount_genui(server, genui, channel=channel, watch=watch)
+    async with Client(server, mode=mode, **client) as c:
+        yield c, handle
 
-    async def test_returns_theme_and_a_view_id_in_meta(self, client: Client) -> None:
-        result = await client.call_tool("render_form", FORM)
+
+async def uri_of(client: Client, tool: str) -> str | None:
+    found = next((t for t in (await client.list_tools()).tools if t.name == tool), None)
+    return found.meta["ui"]["resourceUri"] if found else None
+
+
+async def text_of(client: Client, tool: str) -> str:
+    uri = await uri_of(client, tool)
+    assert uri is not None
+    return (await client.read_resource(uri)).contents[0].text
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_puts_genuis_tools_and_prompts_next_to_the_companys_own(fake_genui: FakeGenUI, mode: str) -> None:
+    async with company_server(genui_client(fake_genui), mode=mode) as (client, handle):
+        tools = (await client.list_tools()).tools
+        assert {"search_customers", "render_form", "render_rating"} <= {t.name for t in tools}
+        assert sorted(handle.tools()) == ["render_form", "render_rating"]
+
+        # Schemas are genui's, not derived from a Python signature.
+        form = next(t for t in tools if t.name == "render_form")
+        assert form.input_schema["required"] == ["fields"]
+        assert form.title == "Show form"
+
+        assert [p.name for p in (await client.list_prompts()).prompts] == ["add_item"]
+        prompt = await client.get_prompt("add_item", {"details": "a blue mug"})
+        assert "a blue mug" in prompt.messages[0].content.text
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_forwards_calls_and_returns_genuis_result(fake_genui: FakeGenUI, mode: str) -> None:
+    async with company_server(genui_client(fake_genui), mode=mode) as (client, _):
+        result = await client.call_tool("render_rating", {"question": "How was it?"})
         assert not result.is_error
-        assert PREVIEW_META_KEY not in result.meta
-        assert result.meta[THEME_META_KEY] == {"light": {"primary": "#4f46e5"}}
-        assert result.content[0].text == (
-            'Showing form "New order" (2 fields). When the user submits, the form calls create_order '
-            "and you receive the submitted values and result in context."
-        )
-
-        again = await client.call_tool("render_form", FORM)
-        assert re.fullmatch(r"[0-9a-f-]{36}", result.meta[VIEW_ID_META_KEY])
-        assert again.meta[VIEW_ID_META_KEY] != result.meta[VIEW_ID_META_KEY]
-
-    async def test_renders_inline_charts(self, client: Client) -> None:
-        result = await client.call_tool(
-            "render_chart",
-            {"type": "pie", "data": {"categories": ["A", "B"], "series": [{"name": "n", "values": [1, 2]}]}},
-        )
-        assert not result.is_error
-        assert result.content[0].text == "Showing pie chart with the provided data."
-
-        sourced = await client.call_tool("render_chart", {"type": "line", "title": "Revenue", "data": {"source": {"toolName": "get_revenue"}}})
-        assert sourced.content[0].text == 'Showing line chart "Revenue" with data from get_revenue.'
-
-    async def test_rejects_specs_that_do_not_match_the_schema(self, client: Client) -> None:
-        empty = await client.call_tool("render_form", {"fields": []})
-        assert empty.is_error
-        assert "fields" in empty.content[0].text
-
-        unknown_type = await client.call_tool("render_chart", {"type": "radar", "data": {"rows": []}})
-        assert unknown_type.is_error
+        assert result.meta["genui/theme"] == THEME
+        assert re.fullmatch(r"[0-9a-f-]{36}", result.meta["genui/viewId"])
 
 
-async def test_theme_can_be_a_sync_or_async_function() -> None:
-    themes = iter([{"radius": "0.5rem"}, None])
+async def test_answers_tools_list_and_resource_reads_from_memory(fake_genui: FakeGenUI) -> None:
+    async with company_server(genui_client(fake_genui)) as (client, _):
+        before = fake_genui.sessions
+        assert await text_of(client, "render_rating") == html("rating v1.0.0")
+        assert await text_of(client, "render_rating") == html("rating v1.0.0")
+        assert fake_genui.sessions == before
 
-    async def current() -> Any:
-        return next(themes)
-
-    server = MCPServer("themed")
-    mount_genui(server, theme=current)
-    async with Client(server) as c:
-        first = await c.call_tool("render_form", FORM)
-        second = await c.call_tool("render_form", FORM)
-    assert first.meta[THEME_META_KEY] == {"radius": "0.5rem"}
-    assert THEME_META_KEY not in second.meta
-
-    server = MCPServer("sync-themed")
-    mount_genui(server, theme=lambda: {"radius": "0"})
-    async with Client(server) as c:
-        assert (await c.call_tool("render_chart", {"type": "bar", "data": {"rows": []}})).meta[THEME_META_KEY] == {"radius": "0"}
+        await client.call_tool("render_form", {"fields": []})
+        assert fake_genui.sessions == before + 1
 
 
-def test_refuses_to_replace_an_existing_render_tool() -> None:
-    server = MCPServer("taken")
-
-    @server.tool()
-    def render_form() -> str:
-        return "mine"
-
-    with pytest.raises(ValueError, match="render_form is already registered"):
-        mount_genui(server)
+async def test_serves_the_channel_the_server_is_for(fake_genui: FakeGenUI) -> None:
+    genui = genui_client(fake_genui)
+    async with company_server(genui, "stable") as (stable, _), company_server(genui, "beta") as (beta, _):
+        assert await text_of(stable, "render_rating") == html("rating v1.0.0")
+        assert await text_of(beta, "render_rating") == html("rating v1.1.0")
 
 
-ADD_ORDER = {
-    "name": "add_order",
-    "title": "New order",
-    "when": "The user wants to create an order.",
-    "notes": "Pre-fill the customer when mentioned.",
-    "form": {
-        "title": "New order",
-        "fields": [
-            {"name": "customer", "label": "Customer", "type": "resource_select", "source": {"toolName": "search_customers", "labelPath": "name"}},
-            {"name": "quantity", "label": "Quantity", "type": "number"},
-        ],
-        "submit": {"toolName": "create_order"},
-    },
-}
-WIPE = {"name": "wipe", "when": "Never.", "form": {"fields": [{"name": "x", "label": "X", "type": "text"}], "submit": {"toolName": "drop_tables"}}}
+@pytest.mark.parametrize("mode", MODES)
+async def test_resyncs_a_watching_server_and_notifies_the_host(fake_genui: FakeGenUI, mode: str) -> None:
+    genui = genui_client(fake_genui)
+    notifications: list[str] = []
+
+    async def on_message(message: Any) -> None:
+        notifications.append(getattr(message, "method", type(message).__name__))
+
+    async with company_server(genui, "stable", watch=True, mode=mode, message_handler=on_message) as (client, handle):
+        before = await uri_of(client, "render_rating")
+        fake_genui.promote()
+        genui.refresh()
+        after = await uri_of(client, "render_rating")
+        assert after != before
+        assert await text_of(client, "render_rating") == html("rating v1.1.0")
+        # An old message still renders: the earlier version is read from genui.
+        assert (await client.read_resource(before)).contents[0].text == html("rating v1.0.0")
+
+        await anyio.sleep(0.05)
+        if mode == "legacy":  # 2026-07-28 clients get list changes over subscriptions/listen instead
+            assert "notifications/tools/list_changed" in notifications
+        handle.close()
 
 
-@pytest.fixture(params=MODES)
-async def recipe_client(request: pytest.FixtureRequest) -> AsyncIterator[Client]:
-    server = MCPServer("recipes")
-    mount_genui(server, recipes=[ADD_ORDER, WIPE])
-    async with Client(server, mode=request.param) as c:
-        yield c
-
-
-class TestRecipes:
-    async def test_builds_the_form_on_the_server_from_the_recipe_and_the_models_prefill(self, recipe_client: Client) -> None:
-        tool = tool_named(await recipe_client.list_tools(), "use_recipe")
-        assert "- add_order: The user wants to create an order. Pre-fill the customer when mentioned." in tool.description
-        assert tool.input_schema["properties"]["recipe"]["enum"] == ["add_order", "wipe"]
-
-        result = await recipe_client.call_tool(
-            "use_recipe", {"recipe": "add_order", "prefill": {"customer": {"id": "c-2", "label": "Globex"}, "quantity": "3"}}
-        )
-        assert not result.is_error
-        form = result.meta[FORM_META_KEY]
-        assert [f.get("defaultValue") for f in form["fields"]] == [{"id": "c-2", "label": "Globex"}, 3]
-        assert result.meta[VIEW_ID_META_KEY]
-        assert result.content[0].text == 'Showing the "New order" form. The user fills it in; you receive the result in context.'
-
-    async def test_rejects_unknown_recipes(self, recipe_client: Client) -> None:
-        result = await recipe_client.call_tool("use_recipe", {"recipe": "drop_everything"})
+async def test_returns_a_clear_error_when_genui_is_unreachable(fake_genui: FakeGenUI, caplog: pytest.LogCaptureFixture) -> None:
+    async with company_server(genui_client(fake_genui)) as (client, _):
+        fake_genui.down = True
+        with caplog.at_level(logging.WARNING, logger="genui"):
+            result = await client.call_tool("render_form", {"fields": []})
         assert result.is_error
-
-    async def test_exposes_each_recipe_as_a_prompt(self, recipe_client: Client) -> None:
-        prompts = await recipe_client.list_prompts()
-        assert [p.name for p in prompts.prompts] == ["add_order", "wipe"]
-        assert prompts.prompts[0].title == "New order"
-        assert prompts.prompts[0].description == "The user wants to create an order."
-        assert prompts.prompts[0].arguments[0].description == "Anything to pre-fill, in plain words."
-
-        prompt = await recipe_client.get_prompt("add_order", {"details": "3 mugs for Globex"})
-        text = prompt.messages[0].content.text
-        assert 'call use_recipe with recipe "add_order"' in text
-        assert "3 mugs for Globex" in text
+        assert result.content[0].text == "genui is unavailable right now, try again shortly."
+        assert "genui unreachable" in caplog.text
 
 
-def test_recipe_form_prefills_with_light_coercion_and_ignores_values_that_dont_fit() -> None:
-    """Mirrors the recipes test in packages/format/src/format.test.ts."""
-    recipe = {
-        "name": "add_item",
-        "when": "The user wants to add an item.",
-        "form": {
-            "fields": [
-                {"name": "name", "label": "Name", "type": "text", "required": True},
-                {"name": "price", "label": "Price", "type": "number"},
-                {"name": "category", "label": "Category", "type": "resource_select", "source": {"toolName": "list_categories", "labelPath": "name"}},
-                {"name": "tags", "label": "Tags", "type": "multiselect", "options": [{"id": "new", "label": "New"}]},
-            ],
-            "submit": {"toolName": "create_item"},
-        },
-    }
-    form = recipe_form(recipe, {"name": "Mug", "price": "12", "category": "c-1", "tags": "new", "unknown": 1})
-    by_name = {f["name"]: f.get("defaultValue") for f in form["fields"]}
-    assert by_name == {"name": "Mug", "price": 12, "category": {"id": "c-1", "label": "c-1"}, "tags": ["new"]}
-    assert recipe_form(recipe, {"price": "not a number"})["fields"][1].get("defaultValue") is None
-    assert form["submit"]["toolName"] == "create_item"
-    # Scalars become strings for text fields, as JavaScript's String() writes them.
-    assert recipe_form(recipe, {"name": True})["fields"][0]["defaultValue"] == "true"
-    assert recipe_form(recipe, {"name": 3.0})["fields"][0]["defaultValue"] == "3"
+async def test_mounts_nothing_when_genui_was_never_reached(fake_genui: FakeGenUI, caplog: pytest.LogCaptureFixture) -> None:
+    fake_genui.down = True
+    with caplog.at_level(logging.WARNING, logger="genui"):
+        async with company_server(genui_client(fake_genui)) as (client, handle):
+            assert [t.name for t in (await client.list_tools()).tools] == ["search_customers"]
+            assert handle.tools() == []
+    assert "could not list genui's stable tools" in caplog.text

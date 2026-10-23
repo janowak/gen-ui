@@ -11,7 +11,7 @@ interface Caller {
 }
 
 /** Which token scopes may call what. Release can also publish; admin can do everything. */
-const ALLOWED: Record<Scope, Scope[]> = {
+export const ALLOWED: Record<Scope, Scope[]> = {
   server: ["server", "admin"],
   publish: ["publish", "release", "admin"],
   release: ["release", "admin"],
@@ -29,7 +29,7 @@ const HostingBody = z.object({ enabled: z.boolean() });
 
 type Env = { Variables: { caller: Caller } };
 
-/** Token-authenticated REST API used by the SDK (server), CI (publish, release) and the CLI (admin). */
+/** Token-authenticated REST API used by CI (publish, release) and the CLI (admin). Server tokens use the end-user MCP. */
 export function createApi(store: Store, options: RegistryAppOptions = {}): Hono<Env> {
   const api = new Hono<Env>();
 
@@ -46,17 +46,6 @@ export function createApi(store: Store, options: RegistryAppOptions = {}): Hono<
 
   const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
   const ws = (c: Context<Env>) => c.get("caller").workspaceId;
-
-  // SDK: what to serve for a channel, plus the workspace theme.
-  api.get("/catalog", auth("server"), (c) => c.json(store.catalog(ws(c), Channel.catch("stable").parse(c.req.query("channel")))));
-
-  // SDK: immutable bundle by content hash.
-  api.get("/bundles/:hash", auth("server"), (c) => {
-    const html = store.bundle(ws(c), String(c.req.param("hash")));
-    if (!html) return c.json({ error: "Bundle not found" }, 404);
-    c.header("cache-control", "private, max-age=31536000, immutable");
-    return c.html(html);
-  });
 
   api.get("/components", auth("server"), (c) => c.json({ components: store.listComponents(ws(c)) }));
 

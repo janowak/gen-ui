@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { builtInJsonSchemas, ChartSpec, FormSpec, Recipe, SubmitResult, getPath, inlineSeries, recipeForm, rowsToSeries, toOptions } from "./index.js";
+import { ChartSpec, FormSpec, Recipe, SubmitResult, getPath, inlineSeries, recipeForm, rowsToSeries, toOptions } from "./index.js";
 
 describe("getPath", () => {
   it("reads nested and indexed paths", () => {
@@ -83,15 +82,5 @@ describe("recipes", () => {
 
   it("rejects bad recipe names", () => {
     expect(Recipe.safeParse({ ...recipe, name: "Add Item" }).success).toBe(false);
-  });
-});
-
-describe("JSON schemas", () => {
-  it("are object schemas, and the files the build wrote are current", () => {
-    for (const [name, schema] of Object.entries(builtInJsonSchemas())) {
-      expect(schema.type).toBe("object");
-      const file = JSON.parse(readFileSync(new URL(`../schemas/${name}.json`, import.meta.url), "utf8"));
-      expect(file, `schemas/${name}.json is stale: run pnpm --filter @genui/format build`).toEqual(schema);
-    }
   });
 });
