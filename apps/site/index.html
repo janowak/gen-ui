@@ -6,7 +6,7 @@
     <title>genui: UI for MCP Apps, released like code</title>
     <meta
       name="description"
-      content="Forms, charts and your own components for your MCP server. They render inside Claude, ChatGPT and other MCP Apps hosts, call your tools, and ship through beta and stable channels."
+      content="Forms, charts and your own components for your MCP server. They render inside Claude, ChatGPT and other MCP Apps hosts, call your tools, and ship from your CI to staging and prod."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <script>
@@ -48,7 +48,7 @@
         <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
           <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
           <a class="btn btn-ghost text-muted-foreground" href="#features">What's included</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#releases">Releases</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#environments">Environments</a>
           <a class="btn btn-ghost text-muted-foreground" href="#data">Your data</a>
         </nav>
         <div class="ml-auto flex items-center gap-2 md:ml-0">
@@ -71,7 +71,7 @@
           </h1>
           <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
             genui adds forms, charts and your own components to your MCP server. They render inside Claude, ChatGPT and
-            other MCP Apps hosts, work with the tools you already have, and move from beta to stable when you say so.
+            other MCP Apps hosts, work with the tools you already have, and ship from your CI to staging and prod.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a class="btn btn-lg" href="#early-access">Get early access</a>
@@ -172,12 +172,14 @@
                 Mount the SDK in your server
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                One call adds forms, charts, your recipes and your custom components as tools, from the release channel
-                you pick.
+                One call adds forms, charts, your recipes and your custom components as tools. The URL picks the
+                environment.
               </p>
               <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
-  genui,
-  channel: <span class="s">"stable"</span>,
+  genui: connectGenUI({
+    url: <span class="s">"…/w/acme/staging/mcp"</span>,
+    token,
+  }),
 });</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
@@ -200,16 +202,17 @@
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
                 <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
-                Release from the registry
+                Publish to an environment
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Publish to beta from CI, try it in the chat, then promote to stable. Running servers switch over
-                without a restart.
+                CI publishes each build to an environment. Put a tested version in prod without rebuilding it. Running
+                servers switch over without a restart.
               </p>
-              <pre class="code"><code>$ <span class="k">genui publish .</span>
-# 1.3.0 is on beta
-$ <span class="k">genui promote order-summary</span>
-# 1.3.0 is on stable</code></pre>
+              <pre class="code"><code>$ <span class="k">genui publish --env staging</span>
+# staging serves rating 1.3.0
+$ <span class="k">genui publish rating@1.3.0 \
+    --env prod</span>
+# prod serves rating 1.3.0</code></pre>
             </li>
           </ol>
         </div>
@@ -261,7 +264,7 @@ $ <span class="k">genui promote order-summary</span>
               <dt class="font-medium">Theme</dt>
               <dd class="max-w-xl text-muted-foreground">
                 Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and
-                chart colors once for the workspace, with a live preview in the chat.
+                chart colors for each environment, with a live preview in the chat.
               </dd>
               <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
             </div>
@@ -277,49 +280,69 @@ $ <span class="k">genui promote order-summary</span>
         </div>
       </section>
 
-      <section class="scroll-mt-14 border-t" id="releases" aria-labelledby="releases-title">
+      <section class="scroll-mt-14 border-t" id="environments" aria-labelledby="environments-title">
         <div
           class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 md:py-28 lg:grid-cols-2 lg:gap-16"
         >
           <div class="max-w-xl">
-            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="releases-title">
-              Beta and stable channels for the chat
+            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="environments-title">
+              Staging next to prod, in the same chat
             </h2>
             <div class="mt-5 flex flex-col gap-4 text-muted-foreground">
               <p>
-                Every version is immutable, and removing a prop needs a major version. Give beta to your team or a few
-                customers, promote when it's ready, and roll back if it isn't.
+                Every workspace has prod, and you add the others you need. Each environment serves exactly what was
+                last published to it, with its own recipes and theme, so prod changes only when someone publishes or
+                saves to prod. To go back, publish the older version again.
               </p>
               <p>
-                Old messages keep rendering the version they were made with, so a release never breaks a conversation
-                that already happened.
+                Each environment has its own MCP URL, so in the chat it's its own connector. Outside prod, tools carry
+                the environment's name, like
+                <code class="font-mono text-[0.9em] text-foreground">render_form_staging</code>. Testers can keep
+                staging next to prod and always see which one ran.
               </p>
               <p>
-                The registry is an MCP server too. Admins promote, roll back and edit the theme from views inside
-                Claude or ChatGPT, and those buttons only run when a person clicks them.
+                The registry is an MCP server too. From views inside Claude or ChatGPT, admins see which version each
+                environment serves, switch the environment their previews show, and edit the theme and recipes.
               </p>
             </div>
           </div>
 
-          <div class="card px-5" id="lane" style="--stable: 2; --beta: 3">
+          <div class="card px-5">
             <div>
-              <p class="font-mono text-sm font-medium">order-summary</p>
+              <p class="font-mono text-sm font-medium">rating</p>
               <p class="text-xs text-muted-foreground">Custom component</p>
             </div>
-            <div class="lane-track" role="list" aria-label="Versions">
-              <span class="lane-ver" role="listitem">1.0.0</span>
-              <span class="lane-ver" role="listitem">1.1.0</span>
-              <span class="lane-ver" role="listitem">1.2.0</span>
-              <span class="lane-ver" role="listitem">1.3.0</span>
-              <span class="lane-pin lane-pin-beta" aria-hidden="true"><span class="badge badge-outline">beta</span></span>
-              <span class="lane-pin lane-pin-stable" aria-hidden="true"><span class="badge badge-default">stable</span></span>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <caption class="sr-only">The version of rating each environment serves</caption>
+                <thead class="border-b text-xs text-muted-foreground">
+                  <tr>
+                    <th class="py-2 pr-4 font-medium" scope="col">Environment</th>
+                    <th class="py-2 pr-4 font-medium" scope="col">Version</th>
+                    <th class="py-2 font-medium" scope="col">Tool in the chat</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  <tr>
+                    <th class="py-2.5 pr-4 font-medium" scope="row">prod</th>
+                    <td class="py-2.5 pr-4 font-mono">1.2.0</td>
+                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating</td>
+                  </tr>
+                  <tr>
+                    <th class="py-2.5 pr-4 font-medium" scope="row">staging</th>
+                    <td class="py-2.5 pr-4 font-mono">1.3.0</td>
+                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating_staging</td>
+                  </tr>
+                  <tr>
+                    <th class="py-2.5 pr-4 font-medium" scope="row">dev</th>
+                    <td class="py-2.5 pr-4 font-mono">1.3.0</td>
+                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating_dev</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <button class="btn" type="button" data-promote>Promote 1.3.0</button>
-              <button class="btn btn-outline" type="button" data-rollback>Roll back</button>
-            </div>
-            <p class="min-h-10 text-muted-foreground" aria-live="polite" data-log>
-              Stable is on 1.2.0. Beta testers see 1.3.0.
+            <p class="text-muted-foreground">
+              Testers on the staging connector see 1.3.0. Customers on prod see 1.2.0 until CI publishes 1.3.0 there.
             </p>
           </div>
         </div>
@@ -364,14 +387,14 @@ $ <span class="k">genui promote order-summary</span>
             <li>
               <h3 class="font-medium">Versions that never change</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                A published version is immutable. Breaking prop changes need a major version, and a bad release rolls
-                back in one click.
+                A published version is immutable and its bundle is kept, so old messages keep rendering the exact
+                version they were made with.
               </p>
             </li>
             <li>
               <h3 class="font-medium">People confirm, not the model</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Promote, roll back and theme changes are hidden from the model. They run only from a click in the view.
+                Theme and recipe saves are hidden from the model. They run only from a click in the view.
               </p>
             </li>
             <li>

@@ -2,9 +2,14 @@ import { z } from "zod";
 import type { Recipe } from "./recipe.js";
 import { Theme } from "./theme.js";
 
-export const CHANNELS = ["beta", "stable"] as const;
-export const Channel = z.enum(CHANNELS);
-export type Channel = z.infer<typeof Channel>;
+/** Every workspace has it, and the end-user MCP serves it at `/w/<workspace>/mcp`. Admins add the others. */
+export const DEFAULT_ENVIRONMENT = "prod";
+
+/**
+ * Outside prod, tool names end in `_<environment>`. Fifteen characters keep
+ * `render_<component>_<environment>` within the 64 characters some hosts allow.
+ */
+export const EnvironmentName = z.string().regex(/^[a-z][a-z0-9]{0,14}$/, "lowercase letters and digits, up to 15 characters");
 
 /** Built-in components own render_form / render_chart. */
 export const RESERVED_NAMES = ["form", "chart"];
@@ -41,12 +46,11 @@ export interface CatalogComponent {
   manifest: ComponentManifest;
 }
 
-/** What the SDK pulls from the registry for one channel. */
+/** What one environment serves: its components, theme and recipes. */
 export interface Catalog {
-  channel: Channel;
+  environment: string;
   theme: Theme | null;
   components: CatalogComponent[];
-  /** Workspace recipes (not channel-specific: saving one makes it live). */
   recipes: Recipe[];
 }
 

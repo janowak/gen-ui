@@ -24,7 +24,7 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
   // tokens / PKCE, never cookies, so CORS stays credential-less. Session endpoints get no CORS.
   const publicCors = cors({
     origin: "*",
-    allowHeaders: ["authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "x-genui-channel"],
+    allowHeaders: ["authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
     exposeHeaders: ["www-authenticate", "mcp-session-id"],
   });
   for (const path of ["/mcp", "/.well-known/*", "/api/auth/oauth2/token", "/api/auth/oauth2/register", "/api/auth/jwks"]) app.use(path, publicCors);
@@ -51,7 +51,13 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
 
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
-  const mcp = createMcpHandler((ctx) => createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member));
+  // A switch of environment changes the preview tools: open listen streams re-list.
+  const mcp = createMcpHandler((ctx) =>
+    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, () => {
+      mcp.notify.toolsChanged();
+      mcp.notify.resourcesChanged();
+    }),
+  );
 
   const protectedMcp = requireMcpAuth(
     auth,

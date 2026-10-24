@@ -103,5 +103,5 @@ export const PRESETS: Record<string, { tool: string; args: Record<string, unknow
   },
   "Registry: manage components": { tool: "manage_components", args: {} },
   "Registry: theme controller": { tool: "open_theme_controller", args: {} },
-  "Registry: preview rating (beta)": { tool: "preview_rating", args: { question: "Preview: how was it?" } },
+  "Registry: preview rating (active environment)": { tool: "preview_rating", args: { question: "Preview: how was it?" } },
 };

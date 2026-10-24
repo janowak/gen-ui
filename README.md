@@ -1,6 +1,6 @@
 # genui
 
-Forms, charts and custom components for MCP Apps, with built-in loading patterns, served by genui's MCP, forwarded from your MCP server through a thin SDK and released through a registry. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
+Forms, charts and custom components for MCP Apps, with built-in loading patterns, served by genui's MCP and forwarded from your MCP server through a thin SDK. A runtime registry keeps the versions, theme and recipes each environment (prod, staging, …) serves. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
 
 ## Packages
 
@@ -10,8 +10,8 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
 | `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
 | `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
-| `packages/cli` | `genui` CLI: publish (beta or stable) / promote / rollback / list / theme / token |
-| `apps/registry` | genui server: the registry (HTTP API on SQLite with workspaces, scoped tokens, immutable versions, beta/stable channels, theme), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` (the only genui runtime) |
+| `packages/cli` | `genui` CLI: publish (to an environment) / list / env / theme / recipe / token |
+| `apps/registry` | genui server: the registry (HTTP API on SQLite with workspaces, scoped tokens, immutable versions, environments with their own theme and recipes), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (the only genui runtime) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
 | `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@genui/ui/styles.css`): `pnpm --filter @genui/site dev` on http://localhost:5180 |
@@ -28,43 +28,48 @@ pnpm build
 pnpm --filter @genui/registry start     # http://localhost:4000; first start prints an admin token and the end-user MCP URL
 GENUI_URL=http://localhost:4000 GENUI_TOKEN=<admin> genui token server demo   # a server token for the demo
 pnpm --filter @genui/demo start         # MCP server on http://localhost:3001/mcp
-pnpm --filter @genui/playground dev     # host on http://localhost:5173 (?channel=beta for beta)
+pnpm --filter @genui/playground dev     # host on http://localhost:5173
 ```
 
-The demo reads `.env.local` (gitignored) for `GENUI_MCP_URL` (`http://localhost:4000/w/<workspace id>/mcp`) and `GENUI_MCP_TOKEN` (the server token). Without them it serves its company tools only.
+The demo reads `.env.local` (gitignored) for `GENUI_MCP_URL` (`http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment) and `GENUI_MCP_TOKEN` (the server token). Without them it serves its company tools only.
 
-## Registry and release flow
+## Registry and environments
+
+genui is a runtime registry, not a release manager. Each workspace has environments: `prod` always exists, and admins add the others. An environment serves exactly what was last published or saved to it (component versions, its theme, its recipes), and nothing moves between environments on its own. There is no promote or rollback: to go back, publish the older version again.
 
 ```bash
 export GENUI_URL=http://localhost:4000
-GENUI_TOKEN=<admin> genui token publish ci-preview    # CI: publish to beta only
-GENUI_TOKEN=<admin> genui token release ci-release    # CI: also publish to stable, promote, roll back
-GENUI_TOKEN=<admin> genui token server demo           # SDK: the end-user MCP with data tools
-GENUI_TOKEN=<publish> genui publish examples/rating                    # → beta
-GENUI_TOKEN=<release> genui publish examples/rating --channel stable   # → beta and stable
-GENUI_TOKEN=<release> genui promote rating --version 1.2.0             # stable → 1.2.0
-GENUI_TOKEN=<release> genui rollback rating                            # stable → previous version
-GENUI_TOKEN=<admin> genui theme theme.json                             # workspace theme
+GENUI_TOKEN=<admin> genui env add staging                              # prints staging's end-user MCP URL
+GENUI_TOKEN=<admin> genui token publish ci                             # CI: publish to any environment
+GENUI_TOKEN=<admin> genui token publish ci-preview --env staging       # CI: publish to staging only
+GENUI_TOKEN=<admin> genui token server demo                            # SDK: the end-user MCP with data tools
+GENUI_TOKEN=<publish> genui publish examples/rating --env staging      # → staging
+GENUI_TOKEN=<publish> genui publish rating@1.2.0 --env prod            # prod serves 1.2.0, no rebuild
+GENUI_TOKEN=<publish> genui publish examples/rating                    # → prod (the default)
+GENUI_TOKEN=<admin> genui theme theme.json --env staging               # staging's theme
+GENUI_TOKEN=<admin> genui recipe set recipe.json --env staging         # a recipe in staging
 ```
 
-- Versions are immutable and must increase. Removing a prop or adding a required prop needs a major version bump.
-- Re-publishing the same version with the same bundle and manifest is a no-op, so CI jobs can be re-run. Different content under an existing version is rejected.
-- Publishing never moves a channel back to an older version. `promote --version` and `rollback` do.
+- Versions are immutable: one version, one bundle. They don't have to increase.
+- Re-publishing the same version with the same bundle and manifest is a no-op, so CI jobs can be re-run. Different content under an existing version is rejected; publish `<name>@<version>` to serve an existing version in another environment.
+- A breaking props change (a removed prop or a newly required one) against what the environment served before is a warning, not an error.
 - `--json` prints the registry's response, for scripts.
 
-**From CI:** the CI setup picks the channel, not the code. Give each environment its own token and channel (`--channel` or `GENUI_CHANNEL`):
+**Each environment is its own connector.** Its end-user MCP lives at `/w/<workspace>/<environment>/mcp` (prod at `/w/<workspace>/mcp`). Outside prod, tool and prompt names end in the environment's name (`render_form_staging`, `render_rating_staging`, `/add_item_staging`), so a staging connector can sit next to prod's in the same chat and testers see which one ran.
+
+**From CI:** the CI setup picks the environment, not the code. Give each GitHub environment its own token and `GENUI_ENV`:
 
 ```yaml
-# .github/workflows/genui.yml: pushes to main go to beta, releases go to stable
+# .github/workflows/genui.yml: pushes to main go to staging, releases go to prod
 on:
   push: { branches: [main] }
   release: { types: [published] }
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Per GitHub environment: preview has a publish token and GENUI_CHANNEL=beta,
-    # production a release token and GENUI_CHANNEL=stable.
-    environment: ${{ github.event_name == 'release' && 'production' || 'preview' }}
+    # Per GitHub environment: staging has a publish token limited to staging and GENUI_ENV=staging,
+    # production a publish token and GENUI_ENV=prod.
+    environment: ${{ github.event_name == 'release' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -73,7 +78,7 @@ jobs:
         env:
           GENUI_URL: ${{ vars.GENUI_URL }}
           GENUI_TOKEN: ${{ secrets.GENUI_TOKEN }}
-          GENUI_CHANNEL: ${{ vars.GENUI_CHANNEL }}
+          GENUI_ENV: ${{ vars.GENUI_ENV }}
 ```
 - A published component is `genui.component.json` (name, version, description, JSON Schema `props`, `tools` it calls) plus a single-file HTML bundle. With `@genui/kit`, both are generated into `dist/`; a hand-written manifest next to the sources also works.
 
@@ -117,10 +122,11 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 | Tool | Who | What |
 |---|---|---|
-| `manage_components` | members, admins | Component list with beta/stable; admins get Promote / Roll back buttons |
-| `open_theme_controller` | members (read-only), admins | Theme editor with a live preview |
-| `preview_<name>` | members, admins | Renders the beta version of a component with sample props |
-| `component_promote`, `component_rollback`, `theme_save` | admins | App-only: run only when a person clicks in the views, never by the model |
+| `manage_components` | members, admins | The version each environment serves, with a picker for the active environment |
+| `use_environment` | members, admins | Switches what your previews, theme and recipes show (default prod). Saved per person; end users are unaffected |
+| `open_theme_controller`, `manage_recipes`, `draft_recipe` | members (read-only), admins | The active environment's theme and recipes |
+| `preview_<name>` | members, admins | Renders the version the active environment serves, with sample props |
+| `theme_save`, `recipe_save`, `recipe_delete` | admins | App-only: run only when a person clicks in the views, never by the model |
 
 **Sign-in options (env):**
 - Social login: `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
@@ -145,18 +151,20 @@ genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`
 ```ts
 import { connectGenUI, mountGenUI } from "@genui/sdk";
 
-// Once per process: lists genui's tools and prompts in the background.
-const genui = connectGenUI({ url: "https://<genui>/w/<workspace>/mcp", token: SERVER_TOKEN });
+// Once per process: lists genui's tools and prompts in the background. The URL picks the
+// environment: /w/<workspace>/mcp for prod, /w/<workspace>/<environment>/mcp for the others.
+const genui = connectGenUI({ url: process.env.GENUI_MCP_URL, token: SERVER_TOKEN });
 
 // Per server instance:
 await mountGenUI(server, {
   genui,
-  channel: userIsBetaTester ? "beta" : "stable",
-  watch: true, // long-lived servers: re-sync tools and send list_changed on promote/rollback
+  watch: true, // long-lived servers: re-sync tools and send list_changed after a publish or save
 });
 ```
 
-Python: `genui = connect_genui(url, token)`, then `mount_genui(server, genui, channel="stable")`. See [packages/sdk-python](packages/sdk-python/README.md).
+Each deployment of your server (dev, staging, prod) points `GENUI_MCP_URL` at its environment. To serve two environments from one process (staff on staging, say), connect twice and pass the right client per request.
+
+Python: `genui = connect_genui(url, token)`, then `mount_genui(server, genui)`. See [packages/sdk-python](packages/sdk-python/README.md).
 
 - **Fast, not offline.** `tools/list` is answered from memory, and `ui://` resources are content-hashed, so each is fetched once. Calls always go to genui. When genui is down, they return "genui is unavailable right now, try again shortly.", and the model tells the user.
 - **Cloud or self-hosted.** In genui's cloud, genui sees what the model passes to its tools (form specs, pre-filled values, inline chart rows), never your own tool calls or results. If that matters, run the genui server yourself: it's the same image.

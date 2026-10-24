@@ -133,7 +133,6 @@ def mount_genui(
     server: MCPServer,
     genui: GenUIClient,
     *,
-    channel: str = "stable",
     watch: bool = False,
     bus: SubscriptionBus | None = None,
 ) -> GenUIHandle:
@@ -142,9 +141,8 @@ def mount_genui(
 
     Args:
         server: The MCPServer that also serves your data and submit tools.
-        genui: From `connect_genui`, once per process.
-        channel: Channel this server serves, e.g. "beta" for beta testers.
-        watch: Re-sync when genui's tools change (a promote, a rollback, a new recipe) and notify clients (list_changed).
+        genui: From `connect_genui`, once per process. Its URL picks the environment this server serves.
+        watch: Re-sync when genui's tools change (on a publish or a recipe/theme save) and notify clients (list_changed).
         bus: The SubscriptionBus passed to MCPServer(subscriptions=...), used for watch notifications to
             2026-07-28 clients. Defaults to the server's own bus.
     """
@@ -160,7 +158,7 @@ def mount_genui(
         async def call(ctx: Context) -> CallToolResult:
             params = ctx.request_context.params or {}
             arguments = params.get("arguments")
-            return await genui.call_tool(channel, tool.name, dict(arguments) if isinstance(arguments, dict) else {})
+            return await genui.call_tool(tool.name, dict(arguments) if isinstance(arguments, dict) else {})
 
         server.add_tool(
             call,
@@ -178,7 +176,7 @@ def mount_genui(
     def add_prompt(prompt: Prompt) -> None:
         async def forward(**arguments: Any) -> list[dict[str, Any]]:
             values = {name: str(value) for name, value in arguments.items() if value is not None}
-            result = await genui.get_prompt(channel, prompt.name, values)
+            result = await genui.get_prompt(prompt.name, values)
             return [message.model_dump(mode="json", by_alias=True, exclude_none=True) for message in result.messages]
 
         server.add_prompt(
@@ -192,7 +190,7 @@ def mount_genui(
         )
 
     async def read(uri: str) -> str:
-        content = (await genui.read_resource(channel, uri)).contents[0]
+        content = (await genui.read_resource(uri)).contents[0]
         return getattr(content, "text", "")
 
     def add_resource(uri: str) -> None:
@@ -215,7 +213,7 @@ def mount_genui(
 
     def sync() -> tuple[bool, bool]:
         """Returns whether tools and prompts changed."""
-        snapshot = genui.snapshot(channel)
+        snapshot = genui.snapshot()
         if snapshot is None:
             return False, False
         tools_changed = _mirror(tools, snapshot.tools, add_tool, server.remove_tool)
@@ -235,9 +233,7 @@ def mount_genui(
         server.middleware.append(notifier.middleware)
         cleanup.append(lambda: server.middleware.remove(notifier.middleware))
 
-        def on_change(changed: str) -> None:
-            if changed != channel:
-                return
+        def on_change() -> None:
             with lock:
                 tools_changed, prompts_changed = sync()
             if tools_changed or prompts_changed:

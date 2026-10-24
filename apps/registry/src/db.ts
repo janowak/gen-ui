@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 /**
  * SQLite schema. Every row is scoped to a workspace: the cloud runs many,
- * a self-hosted install usually one. Versions are immutable; channels are pointers.
+ * a self-hosted install usually one. Versions are immutable; deployments point an environment at one.
  */
 const MIGRATIONS = [
   `
@@ -103,6 +103,59 @@ const MIGRATIONS = [
   `
   -- Signs requests to recipe validation webhooks. Kept in plain text: signing needs the secret itself.
   ALTER TABLE workspaces ADD COLUMN webhook_secret TEXT;
+  `,
+  `
+  -- Environments replace the beta/stable channels. Each serves exactly what was last published or
+  -- saved to it: component versions, its theme and its recipes. Every workspace has prod.
+  CREATE TABLE environments (
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    name TEXT NOT NULL,
+    theme TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, name)
+  );
+  INSERT INTO environments (workspace_id, name, theme, created_at) SELECT id, 'prod', theme, created_at FROM workspaces;
+  ALTER TABLE workspaces DROP COLUMN theme;
+
+  CREATE TABLE deployments (
+    component_id TEXT NOT NULL REFERENCES components(id),
+    environment TEXT NOT NULL,
+    version_id TEXT NOT NULL REFERENCES versions(id),
+    PRIMARY KEY (component_id, environment)
+  );
+  INSERT INTO deployments SELECT component_id, 'prod', version_id FROM channels WHERE channel = 'stable';
+  DROP TABLE channel_history;
+  DROP TABLE channels;
+
+  CREATE TABLE recipes_next (
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    environment TEXT NOT NULL,
+    name TEXT NOT NULL,
+    recipe TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, environment, name)
+  );
+  INSERT INTO recipes_next SELECT workspace_id, 'prod', name, recipe, updated_at FROM recipes;
+  DROP TABLE recipes;
+  ALTER TABLE recipes_next RENAME TO recipes;
+
+  -- No more release tokens. Publish tokens can be limited to environments (JSON list; null: all).
+  CREATE TABLE tokens_next (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    name TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('server', 'publish', 'admin')),
+    environments TEXT,
+    hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+  );
+  INSERT INTO tokens_next (id, workspace_id, name, scope, hash, created_at)
+    SELECT id, workspace_id, name, CASE scope WHEN 'release' THEN 'publish' ELSE scope END, hash, created_at FROM tokens;
+  DROP TABLE tokens;
+  ALTER TABLE tokens_next RENAME TO tokens;
+
+  -- The environment a member's previews, theme and recipes show in the management MCP. Null: prod.
+  ALTER TABLE members ADD COLUMN environment TEXT;
   `,
 ];
 

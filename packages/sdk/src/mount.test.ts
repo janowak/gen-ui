@@ -5,7 +5,7 @@ import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { connectGenUI, mountGenUI, type Channel, type GenUIClient } from "./index.js";
+import { connectGenUI, mountGenUI, type GenUIClient } from "./index.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const rating = (version: string) => ({
@@ -20,6 +20,7 @@ let registry: ServerType;
 let store: Store;
 let acme: string;
 let url: string;
+let stagingUrl: string;
 let token: string;
 /** Requests the adapter sent to genui. */
 let upstream = 0;
@@ -35,12 +36,12 @@ function listen(app: { fetch: (request: Request) => Response | Promise<Response>
 const port = (server: ServerType) => (server.address() as AddressInfo).port;
 
 /** The company's own server: its data tools plus genui's, as a host sees it. */
-async function companyServer(genui: GenUIClient, channel: Channel = "stable", watch = false) {
+async function companyServer(genui: GenUIClient, watch = false) {
   const server = new McpServer({ name: "acme", version: "1.0.0" });
   server.registerTool("search_customers", { description: "Search customers.", inputSchema: z.object({ query: z.string().optional() }) }, async () => ({
     content: [{ type: "text", text: "[]" }],
   }));
-  const handle = await mountGenUI(server, { genui, channel, watch });
+  const handle = await mountGenUI(server, { genui, watch });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "host", version: "1.0.0" });
   await Promise.all([server.connect(b), client.connect(a)]);
@@ -60,24 +61,25 @@ beforeAll(async () => {
   const created = createRegistryApp(openDatabase(":memory:"));
   store = created.store;
   acme = store.createWorkspace("Acme");
+  store.createEnvironment(acme, "staging");
   token = store.createToken(acme, "server", "acme-mcp");
   store.publish(acme, rating("1.0.0"), html("rating v1"));
-  store.promote(acme, "rating");
-  store.publish(acme, rating("1.1.0"), html("rating v1.1"));
-  store.setTheme(acme, { light: { primary: "#16a34a" } });
-  store.saveRecipe(acme, {
+  store.publish(acme, rating("1.1.0"), html("rating v1.1"), "staging");
+  store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
+  store.saveRecipe(acme, "prod", {
     name: "add_item",
     when: "The user wants to add an item.",
     form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
   });
   registry = await listen(created.app);
   url = `http://localhost:${port(registry)}/w/${acme}/mcp`;
+  stagingUrl = `http://localhost:${port(registry)}/w/${acme}/staging/mcp`;
 });
 
 afterAll(() => registry?.close());
 
 describe("mountGenUI", () => {
-  const connect = () => connectGenUI({ url, token, refreshSeconds: 0, fetch: counted, logger: { warn: () => {} } });
+  const connect = (to = url) => connectGenUI({ url: to, token, refreshSeconds: 0, fetch: counted, logger: { warn: () => {} } });
 
   it("puts genui's tools and recipe prompts next to the company's own tools", async () => {
     const { client, handle } = await companyServer(connect());
@@ -113,20 +115,24 @@ describe("mountGenUI", () => {
     expect(upstream).toBeGreaterThan(before);
   });
 
-  it("serves the channel the server instance is for", async () => {
-    const genui = connect();
-    expect(await resourceText((await companyServer(genui, "beta")).client, "render_rating")).toBe(html("rating v1.1"));
-    expect(await resourceText((await companyServer(genui, "stable")).client, "render_rating")).toBe(html("rating v1"));
+  it("serves the environment its client's URL points at", async () => {
+    expect(await resourceText((await companyServer(connect())).client, "render_rating")).toBe(html("rating v1"));
+    // Outside prod, genui suffixes the names; the SDK mirrors them as listed.
+    const staging = (await companyServer(connect(stagingUrl))).client;
+    expect((await staging.listTools()).tools.map((t) => t.name)).toEqual(
+      expect.arrayContaining(["search_customers", "render_form_staging", "render_chart_staging", "render_rating_staging"]),
+    );
+    expect(await resourceText(staging, "render_rating_staging")).toBe(html("rating v1.1"));
   });
 
   it("re-syncs long-lived servers and notifies the host when genui changes", async () => {
     const genui = connect();
-    const { client, handle } = await companyServer(genui, "stable", true);
+    const { client, handle } = await companyServer(genui, true);
     const notified = vi.fn();
     client.setNotificationHandler("notifications/tools/list_changed", notified);
     const before = await resourceUri(client, "render_rating");
 
-    store.promote(acme, "rating");
+    store.deployVersion(acme, "rating", "1.1.0", "prod");
     await genui.refresh();
     await vi.waitFor(() => expect(notified).toHaveBeenCalled());
     const after = await resourceUri(client, "render_rating");
@@ -136,7 +142,7 @@ describe("mountGenUI", () => {
     // An old message still renders: the earlier version is read from genui by its hash.
     expect(((await client.readResource({ uri: before })).contents[0] as { text?: string }).text).toBe(html("rating v1"));
     handle.close();
-    store.rollback(acme, "rating", "stable");
+    store.publish(acme, rating("1.0.0"), html("rating v1"));
   });
 
   it("returns a clear error when genui is unreachable", async () => {
@@ -166,6 +172,6 @@ describe("mountGenUI", () => {
     const genui = connectGenUI({ url, token: "gnu_server_nope", refreshSeconds: 0, logger: { warn } });
     const { client } = await companyServer(genui);
     expect((await client.listTools()).tools.map((t) => t.name)).toEqual(["search_customers"]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("could not list genui's stable tools"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("could not list genui's tools"));
   });
 });

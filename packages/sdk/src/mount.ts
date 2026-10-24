@@ -8,18 +8,16 @@ import {
   type RegisteredResource,
   type RegisteredTool,
 } from "@modelcontextprotocol/server";
-import { resourceUri, type Channel, type GenUIClient } from "./client.js";
+import { resourceUri, type GenUIClient } from "./client.js";
 
 const RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
 export interface GenUIOptions {
-  /** From `connectGenUI`, once per process. */
+  /** From `connectGenUI`, once per process and environment: its URL picks the environment this server serves. */
   genui: GenUIClient;
-  /** Channel this server instance serves, e.g. "beta" for beta testers. Default "stable". */
-  channel?: Channel;
   /**
-   * Long-lived (stateful) servers: re-sync when genui's tools change (a promote, a rollback, a new
-   * recipe) and notify the client with list_changed. Leave off for per-request servers.
+   * Long-lived (stateful) servers: re-sync when genui's tools change (a publish, a recipe or theme
+   * save) and notify the client with list_changed. Leave off for per-request servers.
    */
   watch?: boolean;
 }
@@ -57,7 +55,7 @@ function mirror<T extends { name: string }, H extends { remove(): void }>(mounte
  * `ui://` resources and the recipe prompts on your MCP server, next to your own tools. Calls are
  * forwarded to genui. genui's views call your tools through the host, so those never leave your server.
  */
-export async function mountGenUI(server: McpServer, { genui, channel = "stable", watch = false }: GenUIOptions): Promise<GenUIHandle> {
+export async function mountGenUI(server: McpServer, { genui, watch = false }: GenUIOptions): Promise<GenUIHandle> {
   await genui.ready();
   const tools: Mounted<RegisteredTool> = new Map();
   const prompts: Mounted<RegisteredPrompt> = new Map();
@@ -74,32 +72,32 @@ export async function mountGenUI(server: McpServer, { genui, channel = "stable",
         annotations: tool.annotations,
         _meta: tool._meta,
       },
-      (args) => genui.callTool(channel, tool.name, args as Record<string, unknown>),
+      (args) => genui.callTool(tool.name, args as Record<string, unknown>),
     );
 
   function registerPrompt(prompt: Prompt) {
     const args = prompt.arguments ?? [];
     const config = { title: prompt.title, description: prompt.description };
-    if (!args.length) return server.registerPrompt(prompt.name, config, () => genui.getPrompt(channel, prompt.name, {}));
+    if (!args.length) return server.registerPrompt(prompt.name, config, () => genui.getPrompt(prompt.name, {}));
     const argsSchema = fromJsonSchema<Record<string, string>>({
       type: "object",
       properties: Object.fromEntries(args.map((a) => [a.name, { type: "string", ...(a.description ? { description: a.description } : {}) }])),
       required: args.filter((a) => a.required).map((a) => a.name),
     });
-    return server.registerPrompt(prompt.name, { ...config, argsSchema }, (values) => genui.getPrompt(channel, prompt.name, values));
+    return server.registerPrompt(prompt.name, { ...config, argsSchema }, (values) => genui.getPrompt(prompt.name, values));
   }
 
   const registerResource = (uri: string) =>
-    server.registerResource(uri, uri, { mimeType: genui.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () => genui.readResource(channel, uri));
+    server.registerResource(uri, uri, { mimeType: genui.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () => genui.readResource(uri));
 
   // Earlier component versions, for old messages the host renders again: read from genui.
   server.registerResource("genui component version", new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }), { mimeType: RESOURCE_MIME_TYPE }, (uri) =>
-    genui.readResource(channel, uri.href),
+    genui.readResource(uri.href),
   );
 
   function sync() {
     const changed = { tools: false, resources: false, prompts: false };
-    const snapshot = genui.snapshot(channel);
+    const snapshot = genui.snapshot();
     if (!snapshot) return changed;
     changed.tools = mirror(tools, snapshot.tools, registerTool);
     changed.prompts = mirror(prompts, snapshot.prompts, registerPrompt);
@@ -120,8 +118,7 @@ export async function mountGenUI(server: McpServer, { genui, channel = "stable",
 
   sync();
   const unsubscribe = watch
-    ? genui.onChange((changedChannel) => {
-        if (changedChannel !== channel) return;
+    ? genui.onChange(() => {
         try {
           const changed = sync();
           if (changed.tools) server.sendToolListChanged();

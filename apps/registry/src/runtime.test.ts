@@ -66,6 +66,22 @@ describe("mountGenUI", () => {
     expect(result._meta?.[PREVIEW_META_KEY]).toBe(true);
   });
 
+  it("suffixes tool names and titles outside prod, so an environment's connector can sit next to prod's", async () => {
+    const server = new McpServer({ name: "staging", version: "1.0.0" });
+    await mountGenUI(server, { environment: "staging" });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const stagingClient = new Client({ name: "c", version: "1.0.0" });
+    await Promise.all([server.connect(b), stagingClient.connect(a)]);
+    const tools = (await stagingClient.listTools()).tools;
+    expect(tools.map((t) => [t.name, t.title])).toEqual([
+      ["render_form_staging", "Show form (staging)"],
+      ["render_chart_staging", "Show chart (staging)"],
+    ]);
+    // The views are the same bundles, so their ui:// URIs match prod's.
+    const prodUri = ((await client.listTools()).tools.find((t) => t.name === "render_form")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+    expect((tools[0]?._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe(prodUri);
+  });
+
   it("renders inline charts", async () => {
     const result = await client.callTool({
       name: "render_chart",

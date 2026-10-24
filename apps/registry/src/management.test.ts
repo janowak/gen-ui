@@ -92,9 +92,9 @@ beforeAll(async () => {
   store = created.store;
   const ws = store.createWorkspace("acme");
   workspaceId = ws;
+  store.createEnvironment(ws, "staging");
   store.publish(ws, rating("1.0.0"), html("v1"));
-  store.promote(ws, "rating");
-  store.publish(ws, rating("1.1.0"), html("v1.1"));
+  store.publish(ws, rating("1.1.0"), html("v1.1"), "staging");
 
   server = serve({ fetch: (req) => created.app.fetch(req), port: 0 });
   await new Promise((r) => server.once("listening", r));
@@ -132,35 +132,47 @@ describe("management MCP", () => {
     expect(as.client_id_metadata_document_supported).toBe(true);
   });
 
-  it("gives the first person admin tools; promote and rollback are app-only", async () => {
-    const admin = await mcpClient(await accessToken(await signUp("alice@acme.test")));
+  it("gives the first person admin tools; saves are app-only", async () => {
+    const token = await accessToken(await signUp("alice@acme.test"));
+    const admin = await mcpClient(token);
     const { tools } = await admin.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     expect(Object.keys(byName)).toEqual(
-      expect.arrayContaining(["manage_components", "open_theme_controller", "preview_form", "preview_chart", "preview_rating", "component_promote", "component_rollback", "theme_save"]),
+      expect.arrayContaining(["manage_components", "use_environment", "open_theme_controller", "preview_form", "preview_chart", "preview_rating", "theme_save"]),
     );
-    expect((byName.component_promote?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    expect(Object.keys(byName).filter((n) => n.startsWith("component_"))).toEqual([]);
+    expect((byName.theme_save?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    expect(byName.preview_rating?.title).toBe("Preview rating 1.0.0 (prod)");
 
     const listed = await admin.callTool({ name: "manage_components", arguments: {} });
-    expect(listed.structuredContent).toMatchObject({ role: "admin", components: [{ name: "rating", channels: { stable: "1.0.0", beta: "1.1.0" } }] });
+    expect(listed.structuredContent).toEqual({
+      role: "admin",
+      environment: "prod",
+      environments: ["prod", "staging"],
+      components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" }, versions: ["1.1.0", "1.0.0"] }],
+    });
 
-    const promoted = await admin.callTool({ name: "component_promote", arguments: { name: "rating" } });
-    expect(promoted.isError).toBeFalsy();
-    const after = await admin.callTool({ name: "manage_components", arguments: {} });
-    expect(after.structuredContent).toMatchObject({ components: [{ channels: { stable: "1.1.0" } }] });
+    // Switching changes only this person's previews, theme and recipes, and holds across connections.
+    expect((await admin.callTool({ name: "use_environment", arguments: { name: "qa" } })).isError).toBe(true);
+    const switched = await admin.callTool({ name: "use_environment", arguments: { name: "staging" } });
+    expect(switched.structuredContent).toMatchObject({ environment: "staging" });
+    const staging = await mcpClient(token);
+    expect((await staging.listTools()).tools.find((t) => t.name === "preview_rating")?.title).toBe("Preview rating 1.1.0 (staging)");
 
-    const saved = await admin.callTool({ name: "theme_save", arguments: { theme: { light: { primary: "#16a34a" } } } });
+    const saved = await staging.callTool({ name: "theme_save", arguments: { theme: { light: { primary: "#16a34a" } } } });
     expect(saved.isError).toBeFalsy();
-    const theme = await admin.callTool({ name: "open_theme_controller", arguments: {} });
-    expect(theme.structuredContent).toMatchObject({ role: "admin", theme: { light: { primary: "#16a34a" } } });
+    expect(store.getTheme(workspaceId, "staging")).toEqual({ light: { primary: "#16a34a" } });
+    expect(store.getTheme(workspaceId, "prod")).toBeNull();
+    const theme = await staging.callTool({ name: "open_theme_controller", arguments: {} });
+    expect(theme.structuredContent).toMatchObject({ role: "admin", environment: "staging", theme: { light: { primary: "#16a34a" } } });
 
-    // Built-in previews render inline data with the saved workspace theme.
-    const chart = await admin.callTool({ name: "preview_chart", arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } } });
+    // Built-in previews render inline data with the active environment's theme.
+    const chart = await staging.callTool({ name: "preview_chart", arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } } });
     expect(chart.isError).toBeFalsy();
     expect(chart._meta?.["genui/theme"]).toEqual({ light: { primary: "#16a34a" } });
 
     // Component previews get the same _meta contract as a customer server, with no tools approved.
-    const preview = await admin.callTool({ name: "preview_rating", arguments: { question: "How was it?" } });
+    const preview = await staging.callTool({ name: "preview_rating", arguments: { question: "How was it?" } });
     expect(preview._meta).toMatchObject({ "genui/preview": true, "genui/theme": { light: { primary: "#16a34a" } } });
     expect(preview._meta?.["genui/viewId"]).toEqual(expect.any(String));
   });
@@ -178,12 +190,17 @@ describe("management MCP", () => {
 
     const draft = await admin.callTool({ name: "draft_recipe", arguments: recipe });
     expect(draft.structuredContent).toMatchObject({ mode: "draft", replaces: false });
-    expect(store.listRecipes(workspaceId)).toEqual([]);
+    expect(store.listRecipes(workspaceId, "prod")).toEqual([]);
 
     const tools = (await admin.listTools()).tools;
     expect((tools.find((t) => t.name === "recipe_save")?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     expect((await admin.callTool({ name: "recipe_save", arguments: { recipe } })).isError).toBeFalsy();
-    expect(store.listRecipes(workspaceId).map((r) => r.name)).toEqual(["add_item"]);
+    expect(store.listRecipes(workspaceId, "prod").map((r) => r.name)).toEqual(["add_item"]);
+
+    // The view sends the environment it showed; a save lands there.
+    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "staging" } })).structuredContent).toMatchObject({ environment: "staging" });
+    expect(store.listRecipes(workspaceId, "staging").map((r) => r.name)).toEqual(["add_item"]);
+    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "qa" } })).isError).toBe(true);
 
     // A fresh session previews it with the workspace theme.
     const again = await mcpClient(await accessToken(await signUp("erin@acme.test")));
@@ -195,8 +212,8 @@ describe("management MCP", () => {
   it("gives later people member tools only", async () => {
     const member = await mcpClient(await accessToken(await signUp("bob@acme.test")));
     const names = (await member.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(["manage_components", "open_theme_controller", "preview_rating"]));
-    expect(names).not.toContain("component_promote");
+    expect(names).toEqual(expect.arrayContaining(["manage_components", "use_environment", "open_theme_controller", "preview_rating"]));
+    expect(names).not.toContain("recipe_save");
     expect(names).not.toContain("theme_save");
     const listed = await member.callTool({ name: "manage_components", arguments: {} });
     expect(listed.structuredContent).toMatchObject({ role: "member" });
@@ -208,13 +225,13 @@ describe("management MCP", () => {
 
     // Password sign-ups have unverified emails and must not claim invites.
     const mallory = await mcpClient(await accessToken(await signUp("mallory@acme.test")));
-    expect((await mallory.listTools()).tools.map((t) => t.name)).not.toContain("component_promote");
+    expect((await mallory.listTools()).tools.map((t) => t.name)).not.toContain("theme_save");
 
     // A verified email (as GitHub / Google / the company IdP provide) claims the invite.
     const cookie = await signUp("carol@acme.test");
     db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("carol@acme.test");
     const carol = await mcpClient(await accessToken(cookie));
-    expect((await carol.listTools()).tools.map((t) => t.name)).toContain("component_promote");
+    expect((await carol.listTools()).tools.map((t) => t.name)).toContain("theme_save");
   });
 
   it("rejects a token for another resource", async () => {

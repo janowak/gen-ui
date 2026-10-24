@@ -13,8 +13,6 @@ import { PRESETS } from "./presets";
 const callback = takeCallback();
 const params = new URLSearchParams(location.search);
 const SERVER_URL = params.get("server") ?? "http://localhost:3001/mcp";
-// ?channel=beta asks the demo server for the registry's beta channel.
-const CHANNEL = params.get("channel") ?? "stable";
 
 // Roughly Claude-like host variables, to check that views pick up host styling.
 const HOST_VARS = {
@@ -60,7 +58,7 @@ themeSelect.onchange = () => (document.body.dataset.theme = themeSelect.value);
 // Servers that require OAuth (the registry MCP) trigger the sign-in flow on 401, like Claude's connectors.
 const oauth = new PlaygroundOAuth(SERVER_URL);
 const transport = () =>
-  new StreamableHTTPClientTransport(new URL(SERVER_URL), { authProvider: oauth, requestInit: { headers: { "x-genui-channel": CHANNEL } } });
+  new StreamableHTTPClientTransport(new URL(SERVER_URL), { authProvider: oauth });
 if (callback) await transport().finishAuth(callback);
 $<HTMLButtonElement>("signout").onclick = () => {
   oauth.signOut();
@@ -70,7 +68,7 @@ $<HTMLButtonElement>("signout").onclick = () => {
 const client = new Client({ name: "genui-playground", version: "0.1.0" });
 await client.connect(transport());
 const { tools } = await client.listTools();
-write("connected", { server: SERVER_URL, channel: CHANNEL, tools: tools.map((t) => t.name) });
+write("connected", { server: SERVER_URL, tools: tools.map((t) => t.name) });
 
 function hostContext(): McpUiHostContext {
   const theme = themeSelect.value as "light" | "dark";

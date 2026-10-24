@@ -32,14 +32,14 @@ def close_clients() -> Any:
         clients.pop().close()
 
 
-def genui_client(fake: FakeGenUI, **extra: Any) -> GenUIClient:
-    client = connect_genui("https://genui.test/w/acme/mcp", "server-token", refresh_seconds=0, client_factory=fake.client, **extra)
+def genui_client(fake: FakeGenUI, url: str = "https://genui.test/w/acme/mcp", **extra: Any) -> GenUIClient:
+    client = connect_genui(url, "server-token", refresh_seconds=0, client_factory=fake.client, **extra)
     clients.append(client)
     return client
 
 
 @asynccontextmanager
-async def company_server(genui: GenUIClient, channel: str = "stable", watch: bool = False, mode: str = "legacy", **client: Any) -> AsyncIterator[tuple[Client, Any]]:
+async def company_server(genui: GenUIClient, watch: bool = False, mode: str = "legacy", **client: Any) -> AsyncIterator[tuple[Client, Any]]:
     """The company's own server: its data tools plus genui's, as a host sees it."""
     server = MCPServer("acme")
 
@@ -47,7 +47,7 @@ async def company_server(genui: GenUIClient, channel: str = "stable", watch: boo
     def search_customers(query: str | None = None) -> list[str]:
         return []
 
-    handle = mount_genui(server, genui, channel=channel, watch=watch)
+    handle = mount_genui(server, genui, watch=watch)
     async with Client(server, mode=mode, **client) as c:
         yield c, handle
 
@@ -100,11 +100,14 @@ async def test_answers_tools_list_and_resource_reads_from_memory(fake_genui: Fak
         assert fake_genui.sessions == before + 1
 
 
-async def test_serves_the_channel_the_server_is_for(fake_genui: FakeGenUI) -> None:
-    genui = genui_client(fake_genui)
-    async with company_server(genui, "stable") as (stable, _), company_server(genui, "beta") as (beta, _):
-        assert await text_of(stable, "render_rating") == html("rating v1.0.0")
-        assert await text_of(beta, "render_rating") == html("rating v1.1.0")
+async def test_serves_one_environment_per_client(fake_genui: FakeGenUI) -> None:
+    dev = FakeGenUI()
+    dev.publish("1.1.0")
+    prod_genui = genui_client(fake_genui)
+    dev_genui = genui_client(dev, "https://genui.test/w/acme/dev/mcp")
+    async with company_server(prod_genui) as (prod, _), company_server(dev_genui) as (dev_server, _):
+        assert await text_of(prod, "render_rating") == html("rating v1.0.0")
+        assert await text_of(dev_server, "render_rating") == html("rating v1.1.0")
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -115,9 +118,9 @@ async def test_resyncs_a_watching_server_and_notifies_the_host(fake_genui: FakeG
     async def on_message(message: Any) -> None:
         notifications.append(getattr(message, "method", type(message).__name__))
 
-    async with company_server(genui, "stable", watch=True, mode=mode, message_handler=on_message) as (client, handle):
+    async with company_server(genui, watch=True, mode=mode, message_handler=on_message) as (client, handle):
         before = await uri_of(client, "render_rating")
-        fake_genui.promote()
+        fake_genui.publish("1.1.0")
         genui.refresh()
         after = await uri_of(client, "render_rating")
         assert after != before
@@ -147,4 +150,4 @@ async def test_mounts_nothing_when_genui_was_never_reached(fake_genui: FakeGenUI
         async with company_server(genui_client(fake_genui)) as (client, handle):
             assert [t.name for t in (await client.list_tools()).tools] == ["search_customers"]
             assert handle.tools() == []
-    assert "could not list genui's stable tools" in caplog.text
+    assert "could not list genui's tools" in caplog.text

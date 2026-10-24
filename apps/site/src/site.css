@@ -110,54 +110,6 @@
   opacity: 0.5;
 }
 
-/* Release lane: pins slide between versions; --stable and --beta are version indexes. */
-.lane-track {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 36px 0;
-}
-
-.lane-track::before {
-  content: "";
-  position: absolute;
-  left: 12.5%;
-  right: 12.5%;
-  top: 50%;
-  height: 1px;
-  background: var(--border);
-}
-
-.lane-ver {
-  @apply relative justify-self-center rounded-md border bg-background px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors;
-}
-
-.lane-ver.is-beta {
-  @apply border-dashed border-foreground/50 text-foreground;
-}
-
-.lane-ver.is-stable {
-  @apply border-solid border-foreground font-medium text-foreground;
-}
-
-.lane-pin {
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  width: 25%;
-  transition: left 0.5s cubic-bezier(0.3, 0.7, 0.2, 1);
-}
-
-.lane-pin-beta {
-  top: 0;
-  left: calc(var(--beta) * 25%);
-}
-
-.lane-pin-stable {
-  bottom: 0;
-  left: calc(var(--stable) * 25%);
-}
-
 /* Data flow diagram */
 .flow {
   display: grid;

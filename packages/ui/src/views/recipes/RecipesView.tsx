@@ -10,18 +10,22 @@ import { callTool } from "@/runtime/tools";
 import { useView } from "@/runtime/useView";
 
 type Role = "member" | "admin";
+/** `environment`: where these recipes live; saves and deletes go there. */
 type State =
-  | { mode: "list"; role: Role; recipes: Recipe[] }
-  | { mode: "draft"; role: Role; recipe: Recipe; replaces: boolean; saved?: boolean };
+  | { mode: "list"; role: Role; environment: string; recipes: Recipe[] }
+  | { mode: "draft"; role: Role; environment: string; recipe: Recipe; replaces: boolean; saved?: boolean };
 
 function parseState(value: unknown): State | undefined {
-  const v = value as { mode?: string; role?: Role; recipes?: unknown[]; recipe?: unknown; replaces?: boolean; saved?: boolean } | undefined;
+  const v = value as
+    | { mode?: string; role?: Role; environment?: string; recipes?: unknown[]; recipe?: unknown; replaces?: boolean; saved?: boolean }
+    | undefined;
+  const base = { role: v?.role ?? "member", environment: v?.environment ?? "prod" };
   if (v?.mode === "list" && Array.isArray(v.recipes)) {
-    return { mode: "list", role: v.role ?? "member", recipes: v.recipes.flatMap((r) => (Recipe.safeParse(r).success ? [Recipe.parse(r)] : [])) };
+    return { mode: "list", ...base, recipes: v.recipes.flatMap((r) => (Recipe.safeParse(r).success ? [Recipe.parse(r)] : [])) };
   }
   if (v?.mode === "draft") {
     const recipe = Recipe.safeParse(v.recipe);
-    if (recipe.success) return { mode: "draft", role: v.role ?? "member", recipe: recipe.data, replaces: Boolean(v.replaces), saved: v.saved };
+    if (recipe.success) return { mode: "draft", ...base, recipe: recipe.data, replaces: Boolean(v.replaces), saved: v.saved };
   }
   return undefined;
 }
@@ -32,7 +36,7 @@ function fieldSummary(field: Recipe["form"]["fields"][number]): string {
   return field.type;
 }
 
-/** Workspace recipes: list (with delete) and draft review (with save). Changes run only on a click (app-only tools). */
+/** One environment's recipes: list (with delete) and draft review (with save). Changes run only on a click (app-only tools). */
 export function RecipesView() {
   const { app, connectError, result } = useView("recipes");
   const [state, setState] = useState<State>();
@@ -69,9 +73,12 @@ export function RecipesView() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            Recipe <code>/{recipe.name}</code>
-            {recipe.title && <span className="font-normal text-muted-foreground"> · {recipe.title}</span>}
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            <span>
+              Recipe <code>/{recipe.name}</code>
+              {recipe.title && <span className="font-normal text-muted-foreground"> · {recipe.title}</span>}
+            </span>
+            <Badge variant="outline">{state.environment}</Badge>
           </CardTitle>
           <CardDescription>{recipe.when}</CardDescription>
         </CardHeader>
@@ -99,13 +106,20 @@ export function RecipesView() {
             {recipe.form.submit ? <Badge variant="secondary">{recipe.form.submit.toolName}</Badge> : <span>values go back to the conversation</span>}
           </div>
           {recipe.notes && <p className="text-sm text-muted-foreground">Notes for the AI: {recipe.notes}</p>}
-          {state.replaces && !state.saved && <p className="text-sm text-muted-foreground">Saving replaces the existing /{recipe.name} recipe.</p>}
+          {state.replaces && !state.saved && (
+            <p className="text-sm text-muted-foreground">
+              Saving replaces the existing /{recipe.name} recipe in {state.environment}.
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex items-center gap-2">
           {isAdmin ? (
-            <Button disabled={busy !== null || state.saved} onClick={() => run("save", "recipe_save", { recipe }, "The user saved a recipe")}>
+            <Button
+              disabled={busy !== null || state.saved}
+              onClick={() => run("save", "recipe_save", { recipe, environment: state.environment }, "The user saved a recipe")}
+            >
               {busy === "save" ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-              {state.saved ? "Saved" : state.replaces ? "Replace recipe" : "Save recipe"}
+              {state.saved ? `Saved to ${state.environment}` : state.replaces ? `Replace in ${state.environment}` : `Save to ${state.environment}`}
             </Button>
           ) : (
             <span className="text-sm text-muted-foreground">Only admins can save recipes.</span>
@@ -119,7 +133,9 @@ export function RecipesView() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recipes</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          Recipes <Badge variant="outline">{state.environment}</Badge>
+        </CardTitle>
         <CardDescription>Ready-made forms the AI uses for matching requests. Each one is also a slash command.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -149,7 +165,11 @@ export function RecipesView() {
                         size="sm"
                         variant={confirm === r.name ? "destructive" : "outline"}
                         disabled={busy !== null}
-                        onClick={() => (confirm === r.name ? run(r.name, "recipe_delete", { name: r.name }, "The user deleted a recipe") : setConfirm(r.name))}
+                        onClick={() =>
+                          confirm === r.name
+                            ? run(r.name, "recipe_delete", { name: r.name, environment: state.environment }, "The user deleted a recipe")
+                            : setConfirm(r.name)
+                        }
                       >
                         {busy === r.name ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
                         {confirm === r.name ? "Confirm delete" : "Delete"}

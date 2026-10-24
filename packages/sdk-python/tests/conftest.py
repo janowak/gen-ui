@@ -23,32 +23,26 @@ def html(label: str) -> str:
 
 
 class FakeGenUI:
-    """genui's end-user MCP, served in-process: built per request like apps/registry, one server per channel.
+    """One environment of genui's end-user MCP, served in-process: built per request like apps/registry.
 
-    Publishing moves beta, promote copies beta to stable, rollback restores stable's previous version.
+    Publishing a rating version makes it the current one.
     """
 
     def __init__(self) -> None:
-        self.rating: dict[str, list[str]] = {"beta": [], "stable": []}
+        self.rating: str | None = None  # current version
         self.versions: dict[str, str] = {}  # version -> html
         self.down = False
         self.sessions = 0
 
     def publish(self, version: str) -> None:
         self.versions[version] = html(f"rating v{version}")
-        self.rating["beta"].append(version)
-
-    def promote(self) -> None:
-        self.rating["stable"].append(self.rating["beta"][-1])
-
-    def rollback(self) -> None:
-        self.rating["stable"].pop()
+        self.rating = version
 
     @staticmethod
     def uri(version: str) -> str:
         return f"ui://genui/c/rating/{version.replace('.', '')}"
 
-    def build(self, channel: str) -> MCPServer:
+    def build(self) -> MCPServer:
         server = MCPServer("Acme")
 
         def result(text: str) -> CallToolResult:
@@ -62,7 +56,8 @@ class FakeGenUI:
 
         server.add_resource(TextResource(uri="ui://genui/form/aaaa", name="genui form", mime_type=MIME, text=html("form")))
 
-        version = self.rating[channel][-1]
+        version = self.rating
+        assert version is not None
 
         @server.tool(name="render_rating", description="Ask for a rating.", meta={"ui": {"resourceUri": self.uri(version)}})
         def render_rating(question: str) -> CallToolResult:
@@ -80,17 +75,15 @@ class FakeGenUI:
 
         return server
 
-    def client(self, channel: str, mode: str = "legacy") -> Client:
+    def client(self, mode: str = "legacy") -> Client:
         if self.down:
             raise ConnectionError("genui is down")
         self.sessions += 1
-        return Client(self.build(channel), mode=mode)
+        return Client(self.build(), mode=mode)
 
 
 @pytest.fixture
 def fake_genui() -> FakeGenUI:
     fake = FakeGenUI()
     fake.publish("1.0.0")
-    fake.promote()
-    fake.publish("1.1.0")
     return fake

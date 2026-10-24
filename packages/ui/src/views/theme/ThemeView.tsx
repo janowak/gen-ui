@@ -1,6 +1,7 @@
 import { Theme, type ThemeTokens } from "@genui/format";
 import { Loader2Icon, Maximize2Icon, RotateCcwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,19 +55,21 @@ function ColorField({ id, label, value, disabled, onChange }: { id: string; labe
   );
 }
 
-/** Workspace theme editor with a live preview. Saving uses the app-only theme_save tool (admins). */
+/** One environment's theme editor with a live preview. Saving uses the app-only theme_save tool (admins). */
 export function ThemeView() {
   const { app, connectError, result, hostContext } = useView("theme");
   const [saved, setSaved] = useState<Theme>({});
   const [draft, setDraft] = useState<Theme>({});
   const [mode, setMode] = useState<Mode>("light");
   const [role, setRole] = useState<"member" | "admin">("member");
+  const [environment, setEnvironment] = useState("prod");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
   useEffect(() => {
-    const data = result?.structured as { role?: "member" | "admin"; theme?: unknown } | undefined;
+    const data = result?.structured as { role?: "member" | "admin"; environment?: string; theme?: unknown } | undefined;
     if (!data) return;
+    setEnvironment(data.environment ?? "prod");
     const theme = Theme.safeParse(data.theme ?? {});
     setSaved(theme.success ? theme.data : {});
     setDraft(theme.success ? theme.data : {});
@@ -100,12 +103,12 @@ export function ThemeView() {
     if (!app) return;
     setSaving(true);
     setMessage(null);
-    const outcome = await callTool(app, "theme_save", { theme: draft });
+    const outcome = await callTool(app, "theme_save", { theme: draft, environment });
     setSaving(false);
     setMessage({ text: outcome.text, error: outcome.isError });
     if (!outcome.isError) {
       setSaved(draft);
-      await app.updateModelContext({ content: [{ type: "text", text: `The user saved the workspace theme: ${JSON.stringify(draft)}` }] }).catch(() => {});
+      await app.updateModelContext({ content: [{ type: "text", text: `The user saved the ${environment} theme: ${JSON.stringify(draft)}` }] }).catch(() => {});
     }
   }
 
@@ -113,7 +116,9 @@ export function ThemeView() {
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div className="flex flex-col gap-1.5">
-          <CardTitle>Theme</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Theme <Badge variant="outline">{environment}</Badge>
+          </CardTitle>
           <CardDescription>{canEdit ? "Unset values follow the host (Claude, ChatGPT…)." : "Read-only: ask an admin to change the theme."}</CardDescription>
         </div>
         {canFullscreen && app && (
@@ -186,7 +191,7 @@ export function ThemeView() {
         <CardFooter className="flex items-center gap-2">
           <Button onClick={save} disabled={!dirty || saving}>
             {saving && <Loader2Icon className="animate-spin" />}
-            Save theme
+            Save to {environment}
           </Button>
           <Button variant="ghost" onClick={() => setDraft(saved)} disabled={!dirty || saving}>
             <RotateCcwIcon /> Reset

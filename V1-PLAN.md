@@ -8,6 +8,7 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
   - **M2:** registry (SQLite, scoped tokens, beta/stable, rollback, theme), SDK registry client, `genui` CLI, example custom component.
   - **M3:** separate registry MCP at `/mcp` with better-auth OAuth (`@better-auth/mcp` + CIMD, GitHub/Google/OIDC/password), role-filtered tools, component manager + theme controller views, invites.
   - **One runtime (2026-10-23):** the genui runtime lives only in the registry's end-user MCP (`/w/<workspace>/mcp`). `@genui/sdk` and the Python `genui-sdk` are thin adapters: they mirror genui's tools onto the company's server and forward calls with a server token. This replaced the Python port of the runtime.
+  - **Environments (2026-10-24):** beta/stable, promote and rollback are gone. Workspaces define environments (`prod` plus their own); each serves what was last published or saved to it, at its own end-user MCP URL, with suffixed tool names outside prod. See [ENVIRONMENTS-PLAN.md](ENVIRONMENTS-PLAN.md).
 - Next:
   - **M0 spike:** real-host test via a tunnel.
   - **M4:** packaging (Docker, self-host docs).
@@ -128,7 +129,7 @@ One tool, three ways to pass data. **The same mapping (`x`, `series`) applies to
 
 ### Tool access
 
-genui is a UI registry and release pipeline, not a permissions layer. Views may call any tool the server exposes to apps. Which calls run is left to the host (`visibility`, its approval settings) and to the server's own auth. Registry previews flag their results (`genui/preview`), so views render there without calling tools.
+genui is a runtime UI registry, not a permissions layer or a release manager. Views may call any tool the server exposes to apps. Which calls run is left to the host (`visibility`, its approval settings) and to the server's own auth. Registry previews flag their results (`genui/preview`), so views render there without calling tools.
 
 ### Loading patterns built into the views
 
@@ -147,10 +148,10 @@ genui is a UI registry and release pipeline, not a permissions layer. Views may 
 |---|---|---|
 | Can the SDK register `ui://` resources dynamically? | Content comes from `resources/read`. `_meta.ui` (CSP etc.) may be set per read. | **Yes.** genui's end-user MCP serves bundle HTML; the SDK caches it by URI. |
 | Do hosts cache? | "Host MAY prefetch and cache UI resource content." | **Never change content behind a URI.** Use content-hashed URIs: `ui://genui/form/<hash>`. |
-| How does a new version reach tools? | The tool's `_meta.ui.resourceUri` points at the resource. Tool changes are signalled via `notifications/tools/list_changed`. | On promote, genui repoints `resourceUri`; the SDK re-lists and emits `list_changed`. Hosts that don't refresh mid-session pick it up in the next conversation. |
+| How does a new version reach tools? | The tool's `_meta.ui.resourceUri` points at the resource. Tool changes are signalled via `notifications/tools/list_changed`. | On a publish to the environment, genui repoints `resourceUri`; the SDK re-lists and emits `list_changed`. Hosts that don't refresh mid-session pick it up in the next conversation. |
 | Old messages? | The host re-renders old tool results from their stored URI. | **Keep previous versions resolvable.** Immutable retention, never delete recent hashes. |
 | View calling tools (options, submit)? | App→server `tools/call` works for tools whose `visibility` includes `"app"`, **on the same server connection only**. | This confirms the architecture: `resource_select` and `render_chart` with a source need the SDK inside the customer's server. A hosted trial MCP can do static forms and charts only. |
-| App-only tools | `visibility: ["app"]` hides the tool from the model; the host rejects app calls to tools without `"app"`. | Use it for internal view helpers and for admin actions (promote/rollback). The default `["model","app"]` covers customers' existing tools. |
+| App-only tools | `visibility: ["app"]` hides the tool from the model; the host rejects app calls to tools without `"app"`. | Use it for internal view helpers and for admin actions (theme and recipe saves). The default `["model","app"]` covers customers' existing tools. |
 | CSP | Default: `script-src 'self' 'unsafe-inline'`, no eval, `connect-src 'none'`. | Use single-file inline bundles. Never load code at runtime via eval. |
 | Theming | `HostContext.styles.variables` has standard vars (`--color-background-primary`, `--color-text-primary`, …). | Map them to shadcn tokens, then apply workspace overrides on top. |
 | Display modes | inline / fullscreen / pip, negotiated per host. | The theme controller requests fullscreen where available. |
@@ -178,16 +179,16 @@ genui is a UI registry and release pipeline, not a permissions layer. Views may 
 
 ### Tools
 
-- **Model-visible:** `open_theme_controller`, `list_components`, `show_component_versions`.
-- **App-only** (human click inside the view): `theme_save_draft`, `theme_publish`, `component_promote`, `component_rollback`.
+- **Model-visible:** `manage_components` (the version each environment serves), `use_environment` (what this person's previews, theme and recipes show), `open_theme_controller`, `manage_recipes`, `draft_recipe`, `preview_*`.
+- **App-only** (human click inside the view): `theme_save`, `recipe_save`, `recipe_delete`, each for one environment.
 - **Roles:**
-  - members: browse, preview, publish to beta (via CI);
-  - admins: also theme publish, promote, rollback.
+  - members: browse, preview, switch their active environment;
+  - admins: also save themes and recipes. Publishing is CI's job (publish tokens).
 
 ### Auth
 
 - Registry MCP uses OAuth with GitHub or Google as the identity provider, implemented with an off-the-shelf MCP auth server library (e.g. better-auth for self-host, WorkOS AuthKit for cloud). No web UI of ours beyond the identity provider's pages.
-- SDK → genui's end-user MCP: workspace server token (`genui token server <name>`), sent as a bearer token with `x-genui-channel`.
+- SDK → genui's end-user MCP: workspace server token (`genui token server <name>`), sent as a bearer token. The URL picks the environment.
 
 ---
 
@@ -195,19 +196,19 @@ genui is a UI registry and release pipeline, not a permissions layer. Views may 
 
 ```yaml
 # .github/workflows/genui.yml
-- run: npx genui publish --channel beta
-  env: { GENUI_TOKEN: ${{ secrets.GENUI_TOKEN }} }   # token can publish to beta only
+- run: npx genui publish --env staging
+  env: { GENUI_TOKEN: ${{ secrets.GENUI_TOKEN }} }   # publish token limited to staging
 ```
 
 - **Manifest:** name, version, props schema, sources used, supported hosts, CSP domains.
 - **Build output:** a single-file HTML.
 - **Publish checks:**
   - manifest schema;
-  - breaking props change requires a major version;
+  - versions are immutable (a breaking props change is a warning);
   - size limit;
   - declared CSP domains.
 - **Registration:** genui's end-user MCP serves each custom component as a model-visible `render_<name>` tool plus its `ui://` resource; the SDK mirrors both onto the customer's server.
-- **Promotion:** beta → stable only via the registry MCP (app-only button, admin).
+- **Environments:** CI publishes to an environment (`--env`); `genui publish <name>@<version> --env prod` serves an existing version elsewhere without rebuilding. No promotion step.
 
 ---
 
@@ -244,7 +245,7 @@ The hosted version is the M4 self-host image with `GENUI_MODE=hosted`: one artif
 | Landing (`apps/site`), docs | Cloudflare Pages | `<domain>` |
 | Playground (`apps/playground`) | Cloudflare Pages | `play.<domain>` |
 | Registry: `/v1` API, management MCP `/mcp`, OAuth `/api/auth/*`, sign-in | VPS, `registry` container | `registry.<domain>` (`GENUI_PUBLIC_URL`) |
-| End-user MCP: `/w/<workspace>/mcp`, `/w/<workspace>/beta/mcp` | VPS, same container for now | `mcp.<domain>` |
+| End-user MCP: `/w/<workspace>/mcp`, `/w/<workspace>/<environment>/mcp` | VPS, same container for now | `mcp.<domain>` |
 | Demo server (`apps/demo`) | VPS, `demo` container | `demo.<domain>/mcp` |
 | SQLite backups | Cloudflare R2, via Litestream | |
 | SDKs, kit, CLI | npm (`@genui/*`), PyPI (`genui-sdk`) | |
@@ -281,7 +282,7 @@ What follows:
 - **Own hostname from day one.** Connector URLs pasted into Claude/ChatGPT settings must never change. `mcp.<domain>` lets the end-user MCP move to its own container, then to the edge, without customers noticing.
   - Needs a `GENUI_HOSTED_URL` setting, so `/v1/hosting` and the manager show full URLs on that host (they return paths today).
   - The tunnel forwards only `^/w/` on that host.
-- **Per-request cost.** `hosted.ts` builds a server and reads the catalog from SQLite on every request; only bundles are cached. Fine for the POC. Next step: cache the snapshot per workspace and channel, invalidated by a workspace revision that publish, promote, rollback, theme and recipe saves bump.
+- **Per-request cost.** `hosted.ts` builds a server and reads the catalog from SQLite on every request; only bundles are cached. Fine for the POC. Next step: cache the snapshot per workspace and environment, invalidated by a revision that publishes, theme and recipe saves bump.
 - **Drop recipe validation webhooks.** Remove the `validate` path the end-user MCP uses today: `webhook.ts`, `genui_validate`, the recipe `validate` field and `/v1/hosting/webhook-secret`.
 - **Abuse.** Public mode is unauthenticated; SDK traffic carries a server token. A Cloudflare rate limit per IP on `mcp.<domain>` now, per-workspace request quotas later.
 - **Privacy.**
@@ -306,12 +307,12 @@ What follows:
 
 ### Scaling
 
-Writes (publish, promote, theme, sign-in) stay rare. Reads (SDK tool listings, `ui://` reads, renders) carry the volume, are read-only and are versioned. So keep one write server as long as possible and move reads to Cloudflare's edge.
+Writes (publish, theme, recipes, sign-in) stay rare. Reads (SDK tool listings, `ui://` reads, renders) carry the volume, are read-only and are versioned. So keep one write server as long as possible and move reads to Cloudflare's edge.
 
 | Stage | When | Change |
 |---|---|---|
 | **0. POC** | Now | Setup above. |
-| **1. Design partners** | First external workspace in production | <ul><li>Uptime checks, Sentry, staging.</li><li>End-user MCP in its own container: same image, `/w/*` only, SQLite read-only. A flood can't starve sign-in.</li><li>Snapshot cache per workspace and channel.</li><li>Bundles move from SQLite to R2.</li></ul> |
+| **1. Design partners** | First external workspace in production | <ul><li>Uptime checks, Sentry, staging.</li><li>End-user MCP in its own container: same image, `/w/*` only, SQLite read-only. A flood can't starve sign-in.</li><li>Snapshot cache per workspace and environment.</li><li>Bundles move from SQLite to R2.</li></ul> |
 | **2. Edge data plane** | First cloud workspace with real end-user traffic, or an uptime promise | <ul><li>On every change, the registry writes the workspace snapshot (catalog, bundles, recipes, theme, server-token hashes) to R2/KV.</li><li>A Worker serves the end-user MCP from it. The snapshot holds no plaintext secrets, so the Worker needs nothing else.</li><li>The VPS keeps writes, the management MCP and OAuth. Its outages no longer reach end users.</li><li>Prerequisite: the genui runtime (`apps/registry/src/runtime.ts`) runs on Workers (`nodejs_compat`). Check early.</li></ul> |
 | **3. Redundant write plane** | A contractual SLA on management and releases (late) | Managed Postgres plus two app instances behind Cloudflare Load Balancing, or Workers + D1. Either way the store becomes async. The MCP handlers are built per request, so no sticky sessions. |
 | **Enterprise** | Data residency, compliance | A dedicated instance (same image, its own VPS) or self-host. |

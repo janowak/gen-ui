@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   ChartSpec,
   COMPONENT_CONTRACT,
+  DEFAULT_ENVIRONMENT,
   FORM_META_KEY,
   FormSpec,
   PREVIEW_META_KEY,
@@ -12,7 +13,6 @@ import {
   VIEW_ID_META_KEY,
   type Catalog,
   type CatalogComponent,
-  type Channel,
   type Recipe,
   type Theme,
 } from "@genui/format";
@@ -21,7 +21,7 @@ import { fromJsonSchema, type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { loadBuiltInViews, type ViewBundle, type ViewName } from "./views.js";
 
-/** A channel's catalog plus every bundle it references. */
+/** An environment's catalog plus every bundle it references. */
 export interface Snapshot {
   catalog: Catalog;
   bundles: Record<string, string>;
@@ -29,7 +29,7 @@ export interface Snapshot {
 
 /** Where custom components, recipes and the theme come from: the registry's own store. */
 export interface CatalogSource {
-  snapshot(channel: Channel): Snapshot | undefined;
+  snapshot(environment: string): Snapshot | undefined;
 }
 
 export interface GenUIOptions {
@@ -39,8 +39,11 @@ export interface GenUIOptions {
   views?: Record<ViewName, ViewBundle>;
   /** Custom components, recipes and the theme. */
   registry?: CatalogSource;
-  /** Channel this server serves, e.g. "beta" for beta testers. Default "stable". */
-  channel?: Channel;
+  /**
+   * Environment this server serves. Default prod. Elsewhere, tool and prompt names end in
+   * `_<environment>` (`render_form_staging`), so an environment's connector can sit next to prod's.
+   */
+  environment?: string;
   /**
    * Admin previews (the registry's management MCP): tools are named preview_form / preview_chart,
    * so they never collide with a customer server's render_* tools when both connectors are on.
@@ -90,13 +93,20 @@ function noDataTools(uses: string[], tool: string) {
 /** Registers `render_form`, `render_chart` and registry components (tools + `ui://` resources) on an MCP server. */
 export async function mountGenUI(server: McpServer, options: GenUIOptions = {}): Promise<void> {
   const views = options.views ?? (await loadBuiltInViews());
-  const channel = options.channel ?? "stable";
+  const environment = options.environment ?? DEFAULT_ENVIRONMENT;
   const dataTools = options.dataTools ?? true;
   const registry = options.registry;
+  // Previews live on the registry's own MCP and keep their preview_* names.
+  const suffix = options.preview || environment === DEFAULT_ENVIRONMENT ? "" : `_${environment}`;
+  const label = suffix ? ` (${environment})` : "";
+  const formTool = options.preview ? "preview_form" : `render_form${suffix}`;
+  const chartTool = options.preview ? "preview_chart" : `render_chart${suffix}`;
+  const recipeTool = options.preview ? "preview_recipe" : `use_recipe${suffix}`;
+  const validateTool = `${VALIDATE_TOOL}${suffix}`;
 
   async function theme(): Promise<Theme | undefined> {
     if (options.theme) return typeof options.theme === "function" ? options.theme() : options.theme;
-    return registry?.snapshot(channel)?.catalog.theme ?? undefined;
+    return registry?.snapshot(environment)?.catalog.theme ?? undefined;
   }
 
   async function meta() {
@@ -120,9 +130,9 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
 
   registerAppTool(
     server,
-    options.preview ? "preview_form" : "render_form",
+    formTool,
     {
-      title: options.preview ? "Preview form" : "Show form",
+      title: options.preview ? "Preview form" : `Show form${label}`,
       description:
         preview +
         "Show an interactive form to the user inside the chat. Use it to collect structured input instead of asking question by question. " +
@@ -139,7 +149,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     },
     async (spec) => {
       const uses = dataTools ? [] : toolUses(spec);
-      if (uses.length) return noDataTools(uses, options.preview ? "preview_form" : "render_form");
+      if (uses.length) return noDataTools(uses, formTool);
       const fields = `${spec.fields.length} field${spec.fields.length === 1 ? "" : "s"}`;
       const then = spec.submit
         ? `When the user submits, the form calls ${spec.submit.toolName} and you receive the submitted values and result in context.`
@@ -153,9 +163,9 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
 
   registerAppTool(
     server,
-    options.preview ? "preview_chart" : "render_chart",
+    chartTool,
     {
-      title: options.preview ? "Preview chart" : "Show chart",
+      title: options.preview ? "Preview chart" : `Show chart${label}`,
       description:
         preview +
         "Show a chart (line, bar, area, pie, donut) inside the chat. " +
@@ -173,7 +183,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     },
     async (spec) => {
       const uses = dataTools ? [] : toolUses(spec);
-      if (uses.length) return noDataTools(uses, options.preview ? "preview_chart" : "render_chart");
+      if (uses.length) return noDataTools(uses, chartTool);
       const what = "source" in spec.data ? `data from ${spec.data.source.toolName}` : "the provided data";
       return {
         content: [{ type: "text", text: `Showing ${spec.type} chart${spec.title ? ` "${spec.title}"` : ""} with ${what}.` }],
@@ -191,9 +201,9 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     }));
     registerAppTool(
       server,
-      `render_${manifest.name}`,
+      `render_${manifest.name}${suffix}`,
       {
-        title: manifest.title ?? manifest.name,
+        title: `${manifest.title ?? manifest.name}${label}`,
         description: manifest.description,
         inputSchema: fromJsonSchema(manifest.props as Parameters<typeof fromJsonSchema>[0]),
         _meta: { ui: { resourceUri: uri } },
@@ -205,7 +215,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     );
   }
 
-  const snapshot = registry?.snapshot(channel);
+  const snapshot = registry?.snapshot(environment);
   for (const component of snapshot?.catalog.components ?? []) {
     // Built with a newer @genui/kit than this server serves: it would render without data it expects.
     if ((component.manifest.contract ?? 0) > COMPONENT_CONTRACT) {
@@ -223,7 +233,6 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
 
   // Recipes: one use_recipe tool (the server builds the form; the model picks and pre-fills)
   // plus one prompt per recipe, which hosts show as a slash command.
-  const recipeTool = options.preview ? "preview_recipe" : "use_recipe";
   const recipes = options.recipes ?? snapshot?.catalog.recipes ?? [];
   if (recipes.length) {
     const names = recipes.map((r) => r.name) as [string, ...string[]];
@@ -232,10 +241,10 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
       server,
       recipeTool,
       {
-        title: options.preview ? "Preview recipe" : "Use recipe",
+        title: options.preview ? "Preview recipe" : `Use recipe${label}`,
         description:
           preview +
-          "Show one of this workspace's ready-made forms. Prefer it over render_form whenever a recipe matches what the user wants. " +
+          `Show one of this workspace's ready-made forms. Prefer it over ${formTool} whenever a recipe matches what the user wants. ` +
           "Pick the recipe and pre-fill the fields you already know from the conversation; the fields, validation and submit action are fixed. " +
           "Do not call the submit tool yourself.\nRecipes:\n" +
           list,
@@ -250,7 +259,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
         const form = recipeForm(recipe, prefill);
         if (options.validate && recipe.validate) {
           // Checked by genui_validate first, then sent to the model like a form without a submit tool.
-          form.submit = { toolName: VALIDATE_TOOL, params: { [RECIPE_PARAM]: recipe.name }, label: form.submit?.label };
+          form.submit = { toolName: validateTool, params: { [RECIPE_PARAM]: recipe.name }, label: form.submit?.label };
         } else if (!dataTools) {
           // No submit tool to call on this server: the values come back to the conversation instead.
           delete form.submit;
@@ -265,7 +274,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     const validated = options.validate ? recipes.filter((r) => r.validate) : [];
     if (validated.length) {
       server.registerTool(
-        VALIDATE_TOOL,
+        validateTool,
         {
           title: "Check form values",
           description: "Checks a recipe form's values before they reach the model. Called by the form, never by the model.",
@@ -284,9 +293,9 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     if (!options.preview) {
       for (const recipe of recipes) {
         server.registerPrompt(
-          recipe.name,
+          `${recipe.name}${suffix}`,
           {
-            title: recipe.title ?? recipe.name,
+            title: `${recipe.title ?? recipe.name}${label}`,
             description: recipe.when,
             argsSchema: z.object({ details: z.string().optional().describe("Anything to pre-fill, in plain words.") }),
           },

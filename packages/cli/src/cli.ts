@@ -4,34 +4,36 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { Channel, CHANNELS, ComponentManifest, Recipe, Theme } from "@genui/format";
+import { ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, Recipe, Theme } from "@genui/format";
 
 const USAGE = `genui <command> [options]
 
 Commands:
-  dev [dir] [--port n]          Develop the component in dir (default .) in a local host; no registry needed
-  publish [dir]                 Publish the component in dir (default .) to beta
-          [--channel stable]    ...or straight to stable (env GENUI_CHANNEL)       release
-  promote <name> [--version v]  Point stable at beta (or a specific version)       release
-  rollback <name> [--channel c] Move a channel (default stable) back one version   release
-  list                          Components and their channels
-  theme <file.json> | --clear   Set or clear the workspace theme                   admin
-  token <scope> <name>          Create a token (scope: server | publish | release | admin)  admin
-  invite <email> [--role r]     Let someone manage the workspace in chat (member|admin)  admin
-  recipe list                   List recipes
-  recipe set <file.json>        Create or replace a recipe from a JSON file        admin
-  recipe rm <name>              Delete a recipe                                    admin
+  dev [dir] [--port n]              Develop the component in dir (default .) in a local host; no registry needed
+  publish [dir]                     Publish the component in dir (default .) to an environment      publish
+  publish <name>@<version>          Serve an already published version in an environment, no rebuild  publish
+  list                              Components and the version each environment serves
+  env list                          Environments and their end-user MCP URLs
+  env add <name> | rm <name>        Create or delete an environment (prod always exists)             admin
+  theme <file.json> | --clear       Set or clear an environment's theme                              admin
+  token <scope> <name> [--env a,b]  Create a token (scope: server | publish | admin)                 admin
+  invite <email> [--role r]         Let someone manage the workspace in chat (member|admin)          admin
+  recipe list                       List an environment's recipes
+  recipe set <file.json>            Create or replace a recipe from a JSON file                      admin
+  recipe rm <name>                  Delete a recipe                                                  admin
 
 Options:
   --url <url>      Registry URL     (env GENUI_URL)
   --token <token>  Registry token   (env GENUI_TOKEN)
-  --json           Print the registry's response as JSON (publish, promote, rollback, list)
+  --env <name>     Environment for publish, theme and recipe (env GENUI_ENV, default prod)
+  --json           Print the registry's response as JSON (publish, list, env list)
 
-Token scopes: server reads (SDK); publish publishes to beta (CI); release also publishes to
-stable, promotes and rolls back (CI); admin does everything.
+Token scopes: server reads (SDK); publish publishes to any environment, or with --env only to
+those (CI); admin does everything.
 
-Re-publishing the same version with the same bundle is a no-op, so CI jobs can be re-run.
-Publishing never moves a channel back; promote --version and rollback do.
+An environment serves exactly what was last published to it, so publishing an older version
+moves it back. Re-publishing the same version with the same bundle is a no-op, so CI jobs can be
+re-run. A version never changes: to serve it in another environment, publish <name>@<version>.
 
 A component dir contains a manifest (genui.component.json) and the built single-file HTML.
 Built with @genui/kit/vite, both are generated into dist/. A hand-written manifest sits next to
@@ -42,8 +44,7 @@ const { values, positionals } = parseArgs({
   options: {
     url: { type: "string" },
     token: { type: "string" },
-    version: { type: "string" },
-    channel: { type: "string" },
+    env: { type: "string" },
     role: { type: "string" },
     clear: { type: "boolean" },
     json: { type: "boolean" },
@@ -87,10 +88,44 @@ function print(result: unknown, text: string) {
   console.log(values.json ? JSON.stringify(result, null, 2) : text);
 }
 
-async function publish(dir: string) {
-  // An unset CI variable often arrives as "", which means the default.
-  const channel = Channel.safeParse(values.channel ?? (process.env.GENUI_CHANNEL || "beta"));
-  if (!channel.success) fail(`--channel must be one of: ${CHANNELS.join(", ")}`);
+/** --env, else GENUI_ENV, else prod. An unset CI variable often arrives as "", which means the default. */
+function environment(): string {
+  const name = values.env ?? (process.env.GENUI_ENV || DEFAULT_ENVIRONMENT);
+  if (!EnvironmentName.safeParse(name).success) fail(`--env must be lowercase letters and digits, up to 15 characters (got "${name}")`);
+  return name;
+}
+
+interface Published {
+  version: string;
+  hash: string;
+  created: boolean;
+  environment: string;
+  environments: Record<string, string>;
+  warnings: string[];
+}
+
+function printPublished(result: Published, what: string) {
+  const pointers = Object.entries(result.environments)
+    .map(([env, version]) => `${env}=${version}`)
+    .join(" ");
+  const lines = [`${what}. Now ${pointers}`, ...result.warnings.map((w) => `warning: breaking props change: ${w}`)];
+  print(result, lines.join("\n"));
+}
+
+/** `rating@1.2.0`: a version that's already published. */
+const REF = /^([a-z][a-z0-9_]{1,40})@(\d+\.\d+\.\d+)$/;
+
+async function deploy(name: string, version: string) {
+  const env = environment();
+  const result = await api<Published>("PUT", `/v1/components/${name}/environments/${env}`, { version });
+  printPublished(result, `${env} serves ${name}@${version} (hash ${result.hash})`);
+}
+
+async function publish(target: string) {
+  const ref = REF.exec(target);
+  if (ref) return deploy(ref[1]!, ref[2]!);
+  const dir = target;
+  const env = environment();
   // A hand-written manifest next to the sources, else the one @genui/kit/vite generates into dist/.
   const manifests = [resolve(dir, "genui.component.json"), resolve(dir, "dist/genui.component.json")];
   let manifestPath = "";
@@ -107,16 +142,9 @@ async function publish(dir: string) {
   const bundlePath = resolve(dirname(manifestPath), typeof raw.bundle === "string" ? raw.bundle : "dist/index.html");
   const html = await readFile(bundlePath, "utf8").catch(() => fail(`bundle not found at ${bundlePath}; build it first`));
   const { name } = parsed.data;
-  const result = await api<{ version: string; hash: string; created: boolean; channels: Partial<Record<Channel, string>> }>("POST", "/v1/components", {
-    manifest: parsed.data,
-    html,
-    channel: channel.data,
-  });
-  const pointers = CHANNELS.map((c) => `${c}=${result.channels[c] ?? "-"}`).join(" ");
-  const what = result.created ? `Published ${name}@${result.version}` : `${name}@${result.version} was already published with this bundle`;
-  const lines = [`${what} (hash ${result.hash}). Now ${pointers}`];
-  if (result.channels.stable !== result.version) lines.push(`Promote with: genui promote ${name} --version ${result.version}`);
-  print(result, lines.join("\n"));
+  const result = await api<Published>("POST", "/v1/components", { manifest: parsed.data, html, environment: env });
+  const what = result.created ? `Published ${name}@${result.version} to ${env}` : `${name}@${result.version} was already published with this bundle; ${env} serves it`;
+  printPublished(result, `${what} (hash ${result.hash})`);
 }
 
 /** Runs the component's dev server with the local host from @genui/kit, resolved from the component. */
@@ -145,35 +173,45 @@ switch (command) {
   case "publish":
     await publish(args[0] ?? ".");
     break;
-  case "promote": {
-    const name = args[0] ?? fail("usage: genui promote <name> [--version v]");
-    const result = await api<{ version: string }>("POST", `/v1/components/${name}/promote`, { version: values.version });
-    print(result, `${name}: stable → ${result.version}`);
-    break;
-  }
-  case "rollback": {
-    const name = args[0] ?? fail("usage: genui rollback <name> [--channel beta|stable]");
-    const channel = values.channel ?? "stable";
-    const result = await api<{ version: string }>("POST", `/v1/components/${name}/rollback`, { channel });
-    print(result, `${name}: ${channel} → ${result.version}`);
-    break;
-  }
   case "list": {
-    const result = await api<{ components: { name: string; channels: Record<string, string>; versions: string[] }[] }>("GET", "/v1/components");
-    const lines = result.components.map((c) => `${c.name}  stable=${c.channels.stable ?? "-"}  beta=${c.channels.beta ?? "-"}  (${c.versions.length} versions)`);
-    print(result, lines.length ? lines.join("\n") : "No components yet.");
+    const [{ components }, { environments }] = await Promise.all([
+      api<{ components: { name: string; environments: Record<string, string>; versions: string[] }[] }>("GET", "/v1/components"),
+      api<{ environments: { name: string }[] }>("GET", "/v1/environments"),
+    ]);
+    const lines = components.map((c) => {
+      const served = environments.filter((e) => c.environments[e.name]).map((e) => `${e.name}=${c.environments[e.name]}`);
+      return `${c.name}  ${served.length ? served.join("  ") : "(not served)"}  (${c.versions.length} versions)`;
+    });
+    print({ components }, lines.length ? lines.join("\n") : "No components yet.");
+    break;
+  }
+  case "env": {
+    const [action = "list", name] = args;
+    if (action === "list") {
+      const result = await api<{ environments: { name: string; path: string }[] }>("GET", "/v1/environments");
+      print(result, result.environments.map((e) => `${e.name}  ${registry().url}${e.path}`).join("\n"));
+    } else if (action === "add") {
+      const created = await api<{ name: string; path: string }>("POST", "/v1/environments", { name: name ?? fail("usage: genui env add <name>") });
+      print(created, `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`);
+    } else if (action === "rm") {
+      await api("DELETE", `/v1/environments/${name ?? fail("usage: genui env rm <name>")}`);
+      console.log(`Deleted ${name} with what it served: versions, theme and recipes.`);
+    } else fail("usage: genui env list | add <name> | rm <name>");
     break;
   }
   case "theme": {
     const theme = values.clear ? null : Theme.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui theme <file.json> | --clear"), "utf8")));
-    await api("PUT", "/v1/theme", { theme });
-    console.log(theme ? "Theme updated." : "Theme cleared.");
+    const env = environment();
+    await api("PUT", `/v1/theme?environment=${env}`, { theme });
+    console.log(theme ? `Theme updated in ${env}.` : `Theme cleared in ${env}.`);
     break;
   }
   case "token": {
     const [scope, name] = args;
-    if (!scope || !name) fail("usage: genui token <server|publish|release|admin> <name>");
-    const result = await api<{ token: string }>("POST", "/v1/tokens", { scope, name });
+    if (!scope || !name) fail("usage: genui token <server|publish|admin> <name> [--env a,b]");
+    // Only an explicit --env limits a token; GENUI_ENV is for publishing.
+    const environments = values.env?.split(",").map((e) => e.trim()).filter(Boolean);
+    const result = await api<{ token: string }>("POST", "/v1/tokens", { scope, name, environments });
     console.log(result.token);
     break;
   }
@@ -185,21 +223,23 @@ switch (command) {
   }
   case "recipe": {
     const [action, arg] = args;
+    const env = environment();
+    const query = `?environment=${env}`;
     if (action === "list") {
-      const { recipes } = await api<{ recipes: { name: string; when: string; form: { fields: unknown[] } }[] }>("GET", "/v1/recipes");
-      if (!recipes.length) console.log("No recipes yet.");
+      const { recipes } = await api<{ recipes: { name: string; when: string; form: { fields: unknown[] } }[] }>("GET", `/v1/recipes${query}`);
+      if (!recipes.length) console.log(`No recipes in ${env} yet.`);
       for (const r of recipes) console.log(`/${r.name}  (${r.form.fields.length} fields)  ${r.when}`);
     } else if (action === "set") {
-      const file = arg ?? fail("usage: genui recipe set <file.json>");
+      const file = arg ?? fail("usage: genui recipe set <file.json> [--env e]");
       const parsed = Recipe.safeParse(JSON.parse(await readFile(file, "utf8")));
       if (!parsed.success) fail(`invalid recipe:\n${parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n")}`);
       const { name, ...rest } = parsed.data;
-      const result = await api<{ replaced: boolean }>("PUT", `/v1/recipes/${name}`, rest);
-      console.log(`${result.replaced ? "Updated" : "Created"} recipe /${name}.`);
+      const result = await api<{ replaced: boolean }>("PUT", `/v1/recipes/${name}${query}`, rest);
+      console.log(`${result.replaced ? "Updated" : "Created"} recipe /${name} in ${env}.`);
     } else if (action === "rm") {
-      await api("DELETE", `/v1/recipes/${arg ?? fail("usage: genui recipe rm <name>")}`);
-      console.log(`Deleted recipe /${arg}.`);
-    } else fail("usage: genui recipe list | set <file.json> | rm <name>");
+      await api("DELETE", `/v1/recipes/${arg ?? fail("usage: genui recipe rm <name> [--env e]")}${query}`);
+      console.log(`Deleted recipe /${arg} from ${env}.`);
+    } else fail("usage: genui recipe list | set <file.json> | rm <name> [--env e]");
     break;
   }
   default:

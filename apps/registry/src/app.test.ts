@@ -13,9 +13,10 @@ const manifest = (version: string, props: Record<string, unknown> = { type: "obj
 
 let server: ServerType;
 let base: string;
+let workspace: string;
 let admin: string;
 let publisher: string;
-let releaser: string;
+let previewer: string;
 let reader: string;
 let otherReader: string;
 
@@ -35,13 +36,20 @@ async function call(method: string, path: string, token: string, body?: unknown)
   return { status: res.status, body: json };
 }
 
+const publish = (token: string, version: string, html: string, environment?: string, props?: Record<string, unknown>) =>
+  call("POST", "/v1/components", token, { manifest: manifest(version, props), html: HTML(html), environment });
+const deploy = (token: string, name: string, version: string, environment: string) =>
+  call("PUT", `/v1/components/${name}/environments/${environment}`, token, { version });
+const environments = async () => (await call("GET", "/v1/components", reader)).body.components[0].environments;
+
 beforeAll(async () => {
   const { app, store } = createRegistryApp(openDatabase(":memory:"));
-  const ws = store.createWorkspace("acme");
-  admin = store.createToken(ws, "admin", "test");
-  publisher = store.createToken(ws, "publish", "ci");
-  releaser = store.createToken(ws, "release", "ci-release");
-  reader = store.createToken(ws, "server", "sdk");
+  workspace = store.createWorkspace("acme");
+  store.createEnvironment(workspace, "staging");
+  admin = store.createToken(workspace, "admin", "test");
+  publisher = store.createToken(workspace, "publish", "ci");
+  previewer = store.createToken(workspace, "publish", "ci-preview", ["staging"]);
+  reader = store.createToken(workspace, "server", "sdk");
   otherReader = store.createToken(store.createWorkspace("other"), "server", "sdk");
   server = serve({ fetch: app.fetch, port: 0 });
   await new Promise((r) => server.once("listening", r));
@@ -50,58 +58,123 @@ beforeAll(async () => {
 
 afterAll(() => server.close());
 
-describe("registry", () => {
+describe("publishing to environments", () => {
   it("rejects missing and under-scoped tokens", async () => {
     expect((await call("GET", "/v1/components", "nope")).status).toBe(401);
-    expect((await call("POST", "/v1/components", reader, { manifest: manifest("1.0.0"), html: HTML("v1") })).status).toBe(403);
-    expect((await call("POST", "/v1/components/rating/promote", publisher, {})).status).toBe(403);
+    expect((await publish(reader, "1.0.0", "v1")).status).toBe(403);
+    expect((await deploy(reader, "rating", "1.0.0", "prod")).status).toBe(403);
   });
 
-  it("publishes to beta and promotes to stable", async () => {
-    const published = await call("POST", "/v1/components", publisher, { manifest: manifest("1.0.0"), html: HTML("v1") });
+  it("publishes to prod by default", async () => {
+    const published = await publish(publisher, "1.0.0", "v1");
     expect(published.status).toBe(201);
-    expect(published.body).toMatchObject({ version: "1.0.0", channel: "beta", hash: expect.stringMatching(/^[0-9a-f]{16}$/) });
-    expect((await call("GET", "/v1/components", reader)).body.components[0].channels).toEqual({ beta: "1.0.0" });
-
-    expect((await call("POST", "/v1/components/rating/promote", admin, {})).body.version).toBe("1.0.0");
-    expect((await call("GET", "/v1/components", reader)).body.components[0].channels).toEqual({ beta: "1.0.0", stable: "1.0.0" });
+    expect(published.body).toEqual({
+      version: "1.0.0",
+      hash: expect.stringMatching(/^[0-9a-f]{16}$/),
+      created: true,
+      environment: "prod",
+      environments: { prod: "1.0.0" },
+      warnings: [],
+    });
   });
 
-  it("keeps versions immutable and increasing", async () => {
-    expect((await call("POST", "/v1/components", publisher, { manifest: manifest("1.0.0"), html: HTML("again") })).status).toBe(409);
-    expect((await call("POST", "/v1/components", publisher, { manifest: manifest("0.9.0"), html: HTML("older") })).status).toBe(409);
+  it("publishes to another environment without touching prod", async () => {
+    const published = await publish(publisher, "1.1.0", "v1.1", "staging");
+    expect(published.body).toMatchObject({ environment: "staging", environments: { prod: "1.0.0", staging: "1.1.0" } });
   });
 
-  it("requires a major bump for breaking props changes", async () => {
-    const breaking = manifest("1.1.0", { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] });
-    const rejected = await call("POST", "/v1/components", publisher, { manifest: breaking, html: HTML("v1.1") });
-    expect(rejected.status).toBe(409);
-    expect(rejected.body.error).toContain('removed prop "question"');
-
-    const major = await call("POST", "/v1/components", publisher, { manifest: { ...breaking, version: "2.0.0" }, html: HTML("v2") });
-    expect(major.status).toBe(201);
+  it("fails for an environment that doesn't exist, saying how to create it", async () => {
+    const typo = await publish(publisher, "1.1.0", "v1.1", "stagng");
+    expect(typo.status).toBe(404);
+    expect(typo.body.error).toContain("genui env add stagng");
   });
 
-  it("rolls stable back to the previous version", async () => {
-    expect((await call("POST", "/v1/components/rating/promote", admin, {})).body.version).toBe("2.0.0");
-    const rolled = await call("POST", "/v1/components/rating/rollback", admin, { channel: "stable" });
-    expect(rolled.body.version).toBe("1.0.0");
-    expect((await call("GET", "/v1/components", reader)).body.components[0].channels.stable).toBe("1.0.0");
-    expect((await call("POST", "/v1/components/rating/rollback", admin, { channel: "stable" })).status).toBe(409);
+  it("treats re-publishing the same version and content as a no-op", async () => {
+    expect(await publish(publisher, "1.1.0", "v1.1", "staging")).toMatchObject({ status: 200, body: { created: false, environments: { staging: "1.1.0" } } });
+    const changed = await publish(publisher, "1.1.0", "v1.1 rebuilt", "prod");
+    expect(changed.status).toBe(409);
+    expect(changed.body.error).toContain("genui publish rating@1.1.0 --env prod");
+    expect((await call("POST", "/v1/components", publisher, { manifest: { ...manifest("1.1.0"), description: "Changed." }, html: HTML("v1.1") })).status).toBe(409);
   });
 
-  it("stores the theme and isolates workspaces", async () => {
-    const theme = { light: { primary: "#4f46e5" } };
-    expect((await call("PUT", "/v1/theme", admin, { theme })).status).toBe(200);
-    expect((await call("GET", "/v1/theme", reader)).body.theme).toEqual(theme);
+  it("serves exactly what was last published, older versions included", async () => {
+    expect((await publish(publisher, "0.9.0", "v0.9")).body.environments).toEqual({ prod: "0.9.0", staging: "1.1.0" });
+    // Going back is publishing the version again.
+    expect((await publish(publisher, "1.0.0", "v1")).body.environments).toEqual({ prod: "1.0.0", staging: "1.1.0" });
+  });
 
-    expect((await call("GET", "/v1/theme", otherReader)).body.theme).toBeNull();
+  it("deploys a published version to another environment without the bundle", async () => {
+    const deployed = await deploy(publisher, "rating", "1.1.0", "prod");
+    expect(deployed).toMatchObject({ status: 200, body: { version: "1.1.0", created: false, environment: "prod", environments: { prod: "1.1.0", staging: "1.1.0" } } });
+    expect((await deploy(publisher, "rating", "3.0.0", "prod")).status).toBe(404);
+    expect((await deploy(publisher, "nope", "1.0.0", "prod")).status).toBe(404);
+    expect((await deploy(publisher, "rating", "1.1.0", "stagng")).status).toBe(404);
+  });
+
+  it("warns about breaking props changes instead of rejecting them", async () => {
+    const breaking = { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] };
+    const published = await publish(publisher, "1.2.0", "v1.2", "staging", breaking);
+    expect(published.status).toBe(201);
+    expect(published.body.warnings).toEqual(['removed prop "question" (staging served 1.1.0)', 'newly required prop "prompt" (staging served 1.1.0)']);
+  });
+
+  it("limits publish tokens to their environments", async () => {
+    expect((await publish(previewer, "1.3.0", "v1.3", "staging")).status).toBe(201);
+    expect(await publish(previewer, "1.3.0", "v1.3", "prod")).toEqual({ status: 403, body: { error: "This token can't publish to prod (allowed: staging)" } });
+    expect((await deploy(previewer, "rating", "1.3.0", "prod")).status).toBe(403);
+    expect(await environments()).toEqual({ prod: "1.1.0", staging: "1.3.0" });
+  });
+
+  it("lists components with every environment's version", async () => {
+    const list = await call("GET", "/v1/components", reader);
+    expect(list.body.components).toEqual([
+      { name: "rating", environments: { prod: "1.1.0", staging: "1.3.0" }, versions: ["1.3.0", "1.2.0", "1.1.0", "1.0.0", "0.9.0"] },
+    ]);
     expect((await call("GET", "/v1/components", otherReader)).body.components).toEqual([]);
   });
+});
 
-  it("lists components with their channels", async () => {
-    const list = await call("GET", "/v1/components", reader);
-    expect(list.body.components).toEqual([{ name: "rating", channels: { beta: "2.0.0", stable: "1.0.0" }, versions: ["2.0.0", "1.0.0"] }]);
+describe("environments", () => {
+  it("lists them, prod first, with their end-user MCP paths", async () => {
+    expect((await call("GET", "/v1/environments", reader)).body.environments).toEqual([
+      { name: "prod", path: `/w/${workspace}/mcp` },
+      { name: "staging", path: `/w/${workspace}/staging/mcp` },
+    ]);
+  });
+
+  it("lets admins create and delete them; prod stays", async () => {
+    expect((await call("POST", "/v1/environments", publisher, { name: "dev" })).status).toBe(403);
+    expect((await call("POST", "/v1/environments", admin, { name: "Dev!" })).status).toBe(400);
+    expect((await call("POST", "/v1/environments", admin, { name: "dev" })).body).toEqual({ name: "dev", path: `/w/${workspace}/dev/mcp` });
+    expect((await call("POST", "/v1/environments", admin, { name: "dev" })).status).toBe(409);
+
+    expect((await publish(publisher, "1.3.0", "v1.3", "dev")).status).toBe(200);
+    expect((await call("DELETE", "/v1/environments/dev", admin)).status).toBe(200);
+    expect(await environments()).toEqual({ prod: "1.1.0", staging: "1.3.0" });
+    expect((await call("DELETE", "/v1/environments/prod", admin)).status).toBe(400);
+    expect((await call("DELETE", "/v1/environments/dev", admin)).status).toBe(404);
+  });
+});
+
+describe("tokens", () => {
+  it("limits only publish tokens, and only to environments that exist", async () => {
+    const limited = await call("POST", "/v1/tokens", admin, { scope: "publish", name: "ci-staging", environments: ["staging"] });
+    expect(limited).toMatchObject({ status: 201, body: { scope: "publish", environments: ["staging"] } });
+    expect((await call("POST", "/v1/tokens", admin, { scope: "server", name: "sdk", environments: ["staging"] })).status).toBe(400);
+    expect((await call("POST", "/v1/tokens", admin, { scope: "publish", name: "ci", environments: ["qa"] })).status).toBe(404);
+    expect((await call("POST", "/v1/tokens", publisher, { scope: "admin", name: "escalate" })).status).toBe(403);
+  });
+});
+
+describe("theme", () => {
+  it("is saved per environment and isolated per workspace", async () => {
+    const theme = { light: { primary: "#4f46e5" } };
+    expect((await call("PUT", "/v1/theme", publisher, { theme: null })).status).toBe(403);
+    expect((await call("PUT", "/v1/theme?environment=staging", admin, { theme })).body).toEqual({ environment: "staging", theme });
+    expect((await call("GET", "/v1/theme?environment=staging", reader)).body.theme).toEqual(theme);
+    expect((await call("GET", "/v1/theme", reader)).body.theme).toBeNull();
+    expect((await call("GET", "/v1/theme?environment=qa", reader)).status).toBe(404);
+    expect((await call("GET", "/v1/theme?environment=staging", otherReader)).status).toBe(404);
   });
 });
 
@@ -122,7 +195,11 @@ describe("recipes", () => {
   it("saves, lists, replaces and deletes recipes", async () => {
     expect((await call("PUT", "/v1/recipes/add_item", publisher, recipe)).status).toBe(403);
     expect((await call("PUT", "/v1/recipes/add_item", admin, recipe)).status).toBe(201);
-    expect((await call("PUT", "/v1/recipes/add_item", admin, { ...recipe, notes: "Pre-fill the name." })).body).toEqual({ name: "add_item", replaced: true });
+    expect((await call("PUT", "/v1/recipes/add_item", admin, { ...recipe, notes: "Pre-fill the name." })).body).toEqual({
+      name: "add_item",
+      environment: "prod",
+      replaced: true,
+    });
     expect((await call("PUT", "/v1/recipes/Bad Name", admin, recipe)).status).toBe(400);
 
     const listed = await call("GET", "/v1/recipes", reader);
@@ -132,6 +209,14 @@ describe("recipes", () => {
     expect((await call("DELETE", "/v1/recipes/add_item", admin)).status).toBe(404);
   });
 
+  it("keeps each environment's recipes apart", async () => {
+    expect((await call("PUT", "/v1/recipes/add_item?environment=staging", admin, recipe)).body).toMatchObject({ environment: "staging" });
+    expect((await call("GET", "/v1/recipes?environment=staging", reader)).body.recipes.map((r: { name: string }) => r.name)).toEqual(["add_item"]);
+    expect((await call("GET", "/v1/recipes", reader)).body.recipes).toEqual([]);
+    expect((await call("PUT", "/v1/recipes/add_item?environment=qa", admin, recipe)).status).toBe(404);
+    expect((await call("DELETE", "/v1/recipes/add_item?environment=staging", admin)).status).toBe(200);
+  });
+
   it("accepts only public https validation webhooks", async () => {
     const internal = await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "https://169.254.169.254/latest" } });
     expect(internal.status).toBe(400);
@@ -139,48 +224,5 @@ describe("recipes", () => {
     expect((await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "http://hooks.acme.com/validate" } })).status).toBe(400);
     expect((await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "https://hooks.acme.com/validate" } })).status).toBe(201);
     expect((await call("DELETE", "/v1/recipes/quote", admin)).status).toBe(200);
-  });
-});
-
-describe("CI releases", () => {
-  const nps = (version: string) => ({ ...manifest(version), name: "nps" });
-  const publish = (token: string, version: string, html: string, channel?: string) =>
-    call("POST", "/v1/components", token, { manifest: nps(version), html: HTML(html), channel });
-
-  it("lets only release and admin tokens publish to stable", async () => {
-    expect(await publish(publisher, "1.0.0", "nps", "stable")).toEqual({ status: 403, body: { error: "Requires a release token (got publish)" } });
-    expect((await call("POST", "/v1/tokens", releaser, { scope: "admin", name: "escalate" })).status).toBe(403);
-    expect((await call("PUT", "/v1/theme", releaser, { theme: null })).status).toBe(403);
-  });
-
-  it("publishes straight to stable, moving beta along", async () => {
-    expect(await publish(releaser, "1.0.0", "nps", "stable")).toMatchObject({
-      status: 201,
-      body: { version: "1.0.0", created: true, channel: "stable", channels: { beta: "1.0.0", stable: "1.0.0" } },
-    });
-  });
-
-  it("treats re-publishing the same version and content as a no-op", async () => {
-    const first = await publish(publisher, "1.1.0", "nps 1.1");
-    expect(first.status).toBe(201);
-    expect(await publish(publisher, "1.1.0", "nps 1.1")).toMatchObject({
-      status: 200,
-      body: { created: false, hash: first.body.hash, channels: { beta: "1.1.0", stable: "1.0.0" } },
-    });
-    expect((await publish(publisher, "1.1.0", "nps 1.1 changed")).status).toBe(409);
-    const manifestChanged = await call("POST", "/v1/components", publisher, { manifest: { ...nps("1.1.0"), description: "Changed." }, html: HTML("nps 1.1") });
-    expect(manifestChanged.status).toBe(409);
-  });
-
-  it("releases an already published version without moving any channel back", async () => {
-    expect((await publish(publisher, "1.2.0", "nps 1.2")).status).toBe(201);
-    expect((await publish(releaser, "1.1.0", "nps 1.1", "stable")).body).toMatchObject({ created: false, channels: { beta: "1.2.0", stable: "1.1.0" } });
-    // Re-running an older release job leaves stable where it is.
-    expect((await publish(releaser, "1.0.0", "nps", "stable")).body.channels).toEqual({ beta: "1.2.0", stable: "1.1.0" });
-  });
-
-  it("promotes and rolls back with a release token", async () => {
-    expect((await call("POST", "/v1/components/nps/promote", releaser, { version: "1.2.0" })).body.version).toBe("1.2.0");
-    expect((await call("POST", "/v1/components/nps/rollback", releaser, { channel: "stable" })).body.version).toBe("1.1.0");
   });
 });

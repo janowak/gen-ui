@@ -60,17 +60,17 @@ beforeAll(async () => {
   const created = createRegistryApp(openDatabase(":memory:"), { allowPrivateWebhooks: true });
   store = created.store;
   acme = store.createWorkspace("Acme");
+  store.createEnvironment(acme, "staging");
   admin = store.createToken(acme, "admin", "test");
   store.publish(acme, component("rating", "1.0.0"), html("rating v1"));
-  store.promote(acme, "rating");
-  store.publish(acme, component("rating", "1.1.0"), html("rating v1.1"));
-  store.setTheme(acme, { light: { primary: "#16a34a" } });
-  store.saveRecipe(acme, {
+  store.publish(acme, component("rating", "1.1.0"), html("rating v1.1"), "staging");
+  store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
+  store.saveRecipe(acme, "prod", {
     name: "add_item",
     when: "The user wants to add an item.",
     form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
   });
-  store.saveRecipe(acme, {
+  store.saveRecipe(acme, "prod", {
     name: "quote",
     when: "The user wants a quote.",
     form: { fields: [{ name: "email", label: "Email", type: "email", required: true }] },
@@ -78,7 +78,7 @@ beforeAll(async () => {
   });
 
   other = store.createWorkspace("Other");
-  store.publish(other, component("survey", "1.0.0"), html("survey"), "stable");
+  store.publish(other, component("survey", "1.0.0"), html("survey"));
   store.setHosted(other, true);
 
   server = serve({ fetch: created.app.fetch, port: 0 });
@@ -98,7 +98,7 @@ describe("hosted end-user MCP", () => {
     expect((await post("/w/no-such-workspace/mcp")).status).toBe(404);
 
     const off = await fetch(`${base}/v1/hosting`, { headers: { authorization: `Bearer ${admin}` } });
-    expect(await off.json()).toEqual({ hosted: false, paths: { stable: `/w/${acme}/mcp`, beta: `/w/${acme}/beta/mcp` } });
+    expect(await off.json()).toEqual({ hosted: false, paths: { prod: `/w/${acme}/mcp`, staging: `/w/${acme}/staging/mcp` } });
 
     const on = await fetch(`${base}/v1/hosting`, {
       method: "PUT",
@@ -117,16 +117,37 @@ describe("hosted end-user MCP", () => {
     expect(names).not.toContain("render_survey");
     expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item", "quote"]);
 
-    // Stable serves the promoted version, with the workspace theme and no preview flag.
+    // Prod serves what was published to prod, with prod's theme and no preview flag.
     expect(await resourceText(client, "render_rating")).toBe(html("rating v1"));
     const rendered = await client.callTool({ name: "render_rating", arguments: { question: "How was it?" } });
     expect(rendered._meta).toMatchObject({ "genui/theme": { light: { primary: "#16a34a" } } });
     expect(rendered._meta).not.toHaveProperty("genui/preview");
   });
 
-  it("serves the beta channel at its own address", async () => {
-    const client = await mcpClient(`/w/${acme}/beta/mcp`);
-    expect(await resourceText(client, "render_rating")).toBe(html("rating v1.1"));
+  it("serves another environment at its own address, with suffixed names and its own recipes", async () => {
+    const client = await mcpClient(`/w/${acme}/staging/mcp`);
+    expect(client.getServerVersion()?.name).toBe("Acme (staging)");
+    const tools = (await client.listTools()).tools;
+    expect(tools.map((t) => t.name).sort()).toEqual(["render_chart_staging", "render_form_staging", "render_rating_staging"]);
+    expect(tools.find((t) => t.name === "render_form_staging")?.title).toBe("Show form (staging)");
+    expect(await resourceText(client, "render_rating_staging")).toBe(html("rating v1.1"));
+    // Staging has no recipes or theme of its own yet: prod's don't leak in.
+    expect(client.getServerCapabilities()?.prompts).toBeUndefined();
+    const rendered = await client.callTool({ name: "render_rating_staging", arguments: { question: "How was it?" } });
+    expect(rendered._meta).not.toHaveProperty("genui/theme");
+
+    store.saveRecipe(acme, "staging", { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" }] } });
+    const again = await mcpClient(`/w/${acme}/staging/mcp`);
+    expect((await again.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item_staging"]);
+    const recipeTool = (await again.listTools()).tools.find((t) => t.name === "use_recipe_staging");
+    expect(recipeTool?.description).toContain("Prefer it over render_form_staging");
+    expect((await again.getPrompt({ name: "add_item_staging", arguments: {} })).messages[0]?.content).toMatchObject({ text: expect.stringContaining("call use_recipe_staging") });
+  });
+
+  it("answers 404 for an environment that doesn't exist", async () => {
+    const res = await fetch(`${base}/w/${acme}/stagng/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'No environment "stagng" in this workspace.' });
   });
 
   it("renders inline data only; recipe values go back to the conversation", async () => {
@@ -187,7 +208,7 @@ describe("hosted end-user MCP", () => {
 });
 
 describe("upstream for a company's own server (server token)", () => {
-  const bearer = (token: string, channel?: string) => ({ authorization: `Bearer ${token}`, ...(channel ? { "x-genui-channel": channel } : {}) });
+  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
   it("turns data tools on: tool-backed fields, submit tools and recipe submits work", async () => {
     const client = await mcpClient(`/w/${acme}/mcp`, bearer(store.createToken(acme, "server", "acme-mcp")));
@@ -205,7 +226,7 @@ describe("upstream for a company's own server (server token)", () => {
 
   it("serves workspaces without hosting turned on", async () => {
     const solo = store.createWorkspace("Solo");
-    store.publish(solo, component("poll", "1.0.0"), html("poll v1"), "stable");
+    store.publish(solo, component("poll", "1.0.0"), html("poll v1"));
     expect((await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(404);
 
     const client = await mcpClient(`/w/${solo}/mcp`, bearer(store.createToken(solo, "server", "solo-mcp")));
@@ -213,21 +234,24 @@ describe("upstream for a company's own server (server token)", () => {
     expect(await resourceText(client, "render_poll")).toBe(html("poll v1"));
   });
 
-  it("picks the channel from x-genui-channel", async () => {
-    const token = store.createToken(acme, "server", "channels");
+  it("picks the environment from the URL only", async () => {
+    const token = store.createToken(acme, "server", "environments");
     expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
-    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, bearer(token, "beta")), "render_rating")).toBe(html("rating v1.1"));
+    expect(await resourceText(await mcpClient(`/w/${acme}/prod/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
+    expect(await resourceText(await mcpClient(`/w/${acme}/staging/mcp`, bearer(token)), "render_rating_staging")).toBe(html("rating v1.1"));
+    // The old channel header does nothing.
+    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, { ...bearer(token), "x-genui-channel": "staging" }), "render_rating")).toBe(html("rating v1"));
   });
 
   it("keeps every component version readable for old messages", async () => {
     const token = store.createToken(acme, "server", "versions");
-    const beta = await mcpClient(`/w/${acme}/mcp`, bearer(token, "beta"));
-    const betaUri = ((await beta.listTools()).tools.find((t) => t.name === "render_rating")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+    const staging = await mcpClient(`/w/${acme}/staging/mcp`, bearer(token));
+    const stagingUri = ((await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
 
-    // Stable points at 1.0.0, yet still reads the 1.1.0 bundle by its hash.
-    const stable = await mcpClient(`/w/${acme}/mcp`, bearer(token));
-    expect(((await stable.readResource({ uri: betaUri })).contents[0] as { text?: string }).text).toBe(html("rating v1.1"));
-    await expect(stable.readResource({ uri: "ui://genui/c/rating/0000000000000000" })).rejects.toThrow();
+    // Prod serves 1.0.0, yet still reads the 1.1.0 bundle by its hash.
+    const prod = await mcpClient(`/w/${acme}/mcp`, bearer(token));
+    expect(((await prod.readResource({ uri: stagingUri })).contents[0] as { text?: string }).text).toBe(html("rating v1.1"));
+    await expect(prod.readResource({ uri: "ui://genui/c/rating/0000000000000000" })).rejects.toThrow();
   });
 
   it("rejects bad tokens, other workspaces' tokens and non-server scopes", async () => {

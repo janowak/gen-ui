@@ -65,7 +65,7 @@ export class PlaygroundOAuth implements OAuthClientProvider {
     return this.read<string>("verifier") ?? "";
   }
   redirectToAuthorization(url: URL) {
-    // Remember which server and channel the redirect belongs to.
+    // Remember which server the redirect belongs to.
     sessionStorage.setItem("genui-playground:return", location.search);
     location.href = url.toString();
   }

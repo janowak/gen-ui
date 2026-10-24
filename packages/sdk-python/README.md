@@ -18,7 +18,7 @@ async def search_customers(query: str | None = None) -> dict: ...
 @server.tool(description="Create an order. Returns { ok, message } or { ok: false, fieldErrors }.")
 async def create_order(customer: str, notes: str | None = None) -> dict: ...
 
-mount_genui(server, genui, channel="stable")
+mount_genui(server, genui)
 server.run("streamable-http")
 ```
 
@@ -30,17 +30,18 @@ The model can now call `render_form` with a field whose options come from `searc
 
 | Option | |
 |---|---|
-| `url` | The workspace's end-user MCP: `<genui>/w/<workspace id>/mcp`. |
+| `url` | The workspace's end-user MCP. The URL picks the environment: `<genui>/w/<workspace id>/mcp` for prod, `<genui>/w/<workspace id>/<environment>/mcp` for another environment (dev, staging, ...). |
 | `token` | A workspace server token: `genui token server <name>`. |
 | `refresh_seconds` | How often to re-list genui's tools and prompts. `0` disables polling. |
 | `timeout` | Per-request timeout in seconds. |
 
-`mount_genui(server, genui, channel="stable", watch=False, bus=None)`:
+One client serves one environment. A process that serves two environments calls `connect_genui` twice.
+
+`mount_genui(server, genui, watch=False, bus=None)`:
 
 | Option | |
 |---|---|
-| `channel` | `"stable"` (default) or `"beta"`. Sent to genui as `x-genui-channel`. |
-| `watch` | For long-lived servers: re-sync when genui's tools change (a promote, a rollback, a new recipe), and tell clients with `list_changed`. |
+| `watch` | For long-lived servers: re-sync when genui's tools change (a publish, a recipe or theme save), and tell clients with `list_changed`. |
 | `bus` | The `SubscriptionBus` you passed to `MCPServer(subscriptions=...)`, used for `watch` notifications to 2026-07-28 clients. |
 
 `mount_genui` is synchronous. It waits for the first listing, so call it before `server.run()`.
@@ -70,4 +71,4 @@ The tests mirror `packages/sdk/src/mount.test.ts`. They run against an in-proces
 GENUI_MCP_URL=http://localhost:4000/w/<workspace id>/mcp GENUI_MCP_TOKEN=<server token> uv run python examples/demo_server.py
 ```
 
-Open the playground against it at `http://localhost:5173/?server=http://localhost:3002/mcp`. Set `GENUI_CHANNEL=beta` for the beta channel.
+Open the playground against it at `http://localhost:5173/?server=http://localhost:3002/mcp`. For another environment, point `GENUI_MCP_URL` at `http://localhost:4000/w/<workspace id>/<environment>/mcp`.

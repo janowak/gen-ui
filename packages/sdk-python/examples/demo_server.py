@@ -4,7 +4,8 @@ genui's tools come from the registry's end-user MCP (a server token: `genui toke
 
     GENUI_MCP_URL=http://localhost:4000/w/<workspace>/mcp GENUI_MCP_TOKEN=... uv run python examples/demo_server.py
 
-Set GENUI_CHANNEL=beta for the beta channel. Then open the playground against it:
+The URL picks the environment: /w/<workspace>/<environment>/mcp for one other than prod. Then open the
+playground against it:
 http://localhost:5173/?server=http://localhost:3002/mcp
 """
 
@@ -119,7 +120,7 @@ def main() -> None:
     if url:
         genui = connect_genui(url, os.environ.get("GENUI_MCP_TOKEN", ""), refresh_seconds=10)
         # This server is long-lived, so it can follow genui releases and tell clients about them.
-        mount_genui(server, genui, channel=os.environ.get("GENUI_CHANNEL", "stable"), watch=True)
+        mount_genui(server, genui, watch=True)
     else:
         print("GENUI_MCP_URL is not set: serving the company tools only.")
 

@@ -1,4 +1,4 @@
-import { Channel } from "@genui/format";
+import { DEFAULT_ENVIRONMENT } from "@genui/format";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { createMcpHandler, McpServer, ResourceNotFoundError, ResourceTemplate } from "@modelcontextprotocol/server";
 import type { Context, Hono } from "hono";
@@ -14,7 +14,7 @@ import { validateWithWebhook } from "./webhook.js";
  * with no data tools. Upstream: a company's own MCP server, forwarding genui's tools through
  * @genui/sdk with a server token; views call the company's data tools on that server.
  */
-type Hosted = { workspace: { id: string; name: string }; channel: Channel; dataTools: boolean };
+type Hosted = { workspace: { id: string; name: string }; environment: string; dataTools: boolean };
 type BundleLookup = (hash: string) => string | undefined;
 
 /**
@@ -48,8 +48,8 @@ function bundleCache(store: Store, maxBytes = 64 * 1024 * 1024) {
 /** The workspace's catalog and bundles, read from the registry's own database. */
 export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLookup): CatalogSource {
   return {
-    snapshot(channel) {
-      const catalog = store.catalog(workspaceId, channel);
+    snapshot(environment) {
+      const catalog = store.catalog(workspaceId, environment);
       const bundles: Record<string, string> = {};
       for (const { hash } of catalog.components) {
         const html = bundle(hash);
@@ -61,15 +61,16 @@ export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLo
 }
 
 /**
- * The workspace's end-user MCP: genui's forms, charts, recipes and components. Recipes with
+ * One environment's end-user MCP: genui's forms, charts, recipes and components. Recipes with
  * `validate` are checked by their webhook before the values reach the model.
  */
-export async function createHostedMcp(store: Store, { workspace, channel, dataTools }: Hosted, bundle?: BundleLookup, options: RegistryAppOptions = {}): Promise<McpServer> {
+export async function createHostedMcp(store: Store, { workspace, environment, dataTools }: Hosted, bundle?: BundleLookup, options: RegistryAppOptions = {}): Promise<McpServer> {
   const lookup = bundle ?? ((hash: string) => store.bundle(workspace.id, hash));
-  const server = new McpServer({ name: workspace.name, version: "0.1.0" });
+  const name = environment === DEFAULT_ENVIRONMENT ? workspace.name : `${workspace.name} (${environment})`;
+  const server = new McpServer({ name, version: "0.1.0" });
   await mountGenUI(server, {
     registry: storeCatalog(store, workspace.id, lookup),
-    channel,
+    environment,
     dataTools,
     validate: (recipe, values) =>
       validateWithWebhook({ recipe, values, workspaceId: workspace.id, secret: store.webhookSecret(workspace.id), allowPrivate: options.allowPrivateWebhooks }),
@@ -90,9 +91,9 @@ export async function createHostedMcp(store: Store, { workspace, channel, dataTo
 }
 
 /**
- * End-user MCP at /w/<workspace>/mcp (stable) and /w/<workspace>/beta/mcp.
+ * End-user MCP at /w/<workspace>/mcp (prod) and /w/<workspace>/<environment>/mcp. The URL alone picks
+ * the environment, so what a connector serves never depends on who switched what.
  * - With a server token: upstream for the company's own MCP server (@genui/sdk), data tools on.
- *   The channel comes from x-genui-channel, so one URL serves both.
  * - Without: public, for workspaces that turned hosting on. Anyone with the URL can render the
  *   workspace's forms, charts and components; form values go back to the conversation.
  */
@@ -104,7 +105,7 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
     "/w/*",
     cors({
       origin: "*",
-      allowHeaders: ["authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "x-genui-channel"],
+      allowHeaders: ["authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
       exposeHeaders: ["mcp-session-id"],
     }),
   );
@@ -115,25 +116,29 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
     return createHostedMcp(store, hosted, (hash) => bundles(hosted.workspace.id, hash), options);
   });
 
-  function resolve(c: Context, workspaceId: string, pathChannel: Channel): Hosted | Response {
+  function resolve(c: Context, workspaceId: string, environment: string): Hosted | Response {
     const header = c.req.header("authorization");
+    let hosted: Hosted;
     if (header) {
       const caller = store.resolveToken(header.replace(/^Bearer\s+/i, ""));
       if (!caller) return c.json({ error: "Invalid token" }, 401);
       const workspace = caller.workspaceId === workspaceId ? store.workspace(workspaceId) : undefined;
       if (!workspace || !ALLOWED.server.includes(caller.scope)) return c.json({ error: "This token can't use this workspace's genui MCP." }, 403);
-      return { workspace, channel: Channel.catch(pathChannel).parse(c.req.header("x-genui-channel")), dataTools: true };
+      hosted = { workspace, environment, dataTools: true };
+    } else {
+      const workspace = store.hostedWorkspace(workspaceId);
+      if (!workspace) return c.json({ error: "No hosted genui MCP at this address." }, 404);
+      hosted = { workspace, environment, dataTools: false };
     }
-    const workspace = store.hostedWorkspace(workspaceId);
-    if (!workspace) return c.json({ error: "No hosted genui MCP at this address." }, 404);
-    return { workspace, channel: pathChannel, dataTools: false };
+    if (!store.hasEnvironment(workspaceId, environment)) return c.json({ error: `No environment "${environment}" in this workspace.` }, 404);
+    return hosted;
   }
 
-  const serve = (channel: Channel) => (c: Context) => {
-    const hosted = resolve(c, String(c.req.param("workspace")), channel);
+  const serve = (c: Context) => {
+    const hosted = resolve(c, String(c.req.param("workspace")), c.req.param("environment") ?? DEFAULT_ENVIRONMENT);
     if (hosted instanceof Response) return hosted;
     return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "", scopes: [], extra: hosted } });
   };
-  app.all("/w/:workspace/mcp", serve("stable"));
-  app.all("/w/:workspace/beta/mcp", serve("beta"));
+  app.all("/w/:workspace/mcp", serve);
+  app.all("/w/:workspace/:environment/mcp", serve);
 }
