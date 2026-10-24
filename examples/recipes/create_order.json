@@ -35,6 +35,6 @@
       { "name": "delivery_date", "label": "Delivery date", "type": "date" },
       { "name": "notes", "label": "Notes", "type": "textarea", "maxLength": 500 }
     ],
-    "submit": { "toolName": "create_order", "label": "Create order" }
+    "submit": { "toolName": "create_order", "idempotencyParam": "request_id", "label": "Create order" }
   }
 }

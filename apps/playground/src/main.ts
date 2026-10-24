@@ -95,14 +95,20 @@ function* partials(args: Record<string, unknown>): Generator<Record<string, unkn
   }
 }
 
-let current: { bridge: AppBridge; iframe: HTMLIFrameElement } | undefined;
+type ToolResult = Parameters<AppBridge["sendToolResult"]>[0];
 
-$<HTMLButtonElement>("run").onclick = async () => {
+let current: { bridge: AppBridge; iframe: HTMLIFrameElement } | undefined;
+/** The last call and its result, so Replay can render it again like a host re-rendering a stored message. */
+let last: { tool: string; args: Record<string, unknown>; result: ToolResult } | undefined;
+
+async function show(replay: boolean) {
   const preset = PRESETS[presetSelect.value]!;
-  const args = JSON.parse(argsInput.value) as Record<string, unknown>;
-  const tool = tools.find((t) => t.name === preset.tool);
+  if (replay && !last) return write("error", "Nothing to replay yet: call a tool first.");
+  const call = replay ? last! : { tool: preset.tool, args: JSON.parse(argsInput.value) as Record<string, unknown> };
+  const args = call.args;
+  const tool = tools.find((t) => t.name === call.tool);
   const uri = (tool?._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri;
-  if (!uri) return write("error", `${preset.tool} has no ui resource`);
+  if (!uri) return write("error", `${call.tool} has no ui resource`);
 
   if (current) {
     await current.bridge.teardownResource({}).catch(() => {});
@@ -115,7 +121,9 @@ $<HTMLButtonElement>("run").onclick = async () => {
 
   const t0 = performance.now();
   const iframe = document.createElement("iframe");
-  iframe.sandbox.add("allow-scripts", "allow-forms");
+  // Like real hosts (the MCP Apps spec requires allow-same-origin), so views can keep state in localStorage.
+  // Here that origin is the playground's own; real hosts give views a separate one.
+  iframe.sandbox.add("allow-scripts", "allow-same-origin", "allow-forms");
   iframe.srcdoc = html;
   stage.replaceChildren(iframe);
 
@@ -151,7 +159,7 @@ $<HTMLButtonElement>("run").onclick = async () => {
   bridge.oninitialized = async () => {
     write("view initialized", `${Math.round(performance.now() - t0)} ms after iframe creation`);
     try {
-      if (streamInput.checked) {
+      if (streamInput.checked && !replay) {
         let n = 0;
         for (const partial of partials(args)) {
           await bridge.sendToolInputPartial({ arguments: partial });
@@ -161,13 +169,17 @@ $<HTMLButtonElement>("run").onclick = async () => {
         write("streamed partial inputs", n);
       }
       await bridge.sendToolInput({ arguments: args });
-      const result = await client.callTool({ name: preset.tool, arguments: args });
-      write(`${preset.tool} result`, result);
-      await bridge.sendToolResult(result as Parameters<AppBridge["sendToolResult"]>[0]);
+      const result = replay ? last!.result : ((await client.callTool({ name: call.tool, arguments: args })) as ToolResult);
+      write(`${call.tool} result${replay ? " (replayed)" : ""}`, result);
+      if (!replay) last = { tool: call.tool, args, result };
+      await bridge.sendToolResult(result);
     } catch (error) {
       write("host error", String(error));
     }
   };
 
   await bridge.connect(new PostMessageTransport(iframe.contentWindow!, iframe.contentWindow!));
-};
+}
+
+$<HTMLButtonElement>("run").onclick = () => void show(false);
+$<HTMLButtonElement>("replay").onclick = () => void show(true);

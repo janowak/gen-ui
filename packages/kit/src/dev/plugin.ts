@@ -4,7 +4,7 @@ import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { loadManifest } from "../load.js";
-import { harnessPage } from "./page.js";
+import { harnessPage, VIEW_SHIM } from "./page.js";
 
 /** The browser host (src/harness), bundled into dist/harness.js by `build:harness`. */
 const HARNESS = fileURLToPath(new URL("../../dist/harness.js", import.meta.url));
@@ -66,6 +66,11 @@ export function devPlugin(options: { component: string }): Plugin {
             return next();
         }
       });
+    },
+    // The view (served by Vite as index.html) gets the host page's saved-state shim before its modules run.
+    transformIndexHtml(_html, ctx) {
+      if (!ctx.originalUrl?.includes(VIEW_PARAM)) return;
+      return [{ tag: "script", children: VIEW_SHIM, injectTo: "head-prepend" }];
     },
     // The host page re-renders the view itself (fresh iframe, same props), so Vite's own HMR and
     // full reloads are off: they would reload the iframe behind the host's back and drop the session.

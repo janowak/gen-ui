@@ -40,6 +40,7 @@ genui is a runtime registry, not a release manager. Each workspace has environme
 ```bash
 export GENUI_URL=http://localhost:4000
 GENUI_TOKEN=<admin> genui env add staging                              # prints staging's end-user MCP URL
+GENUI_TOKEN=<admin> genui env set prod --refresh-url https://mcp.acme.com/genui/refresh  # your server, called on every change
 GENUI_TOKEN=<admin> genui token publish ci                             # CI: publish to any environment
 GENUI_TOKEN=<admin> genui token publish ci-preview --env staging       # CI: publish to staging only
 GENUI_TOKEN=<admin> genui token server demo                            # SDK: the end-user MCP with data tools
@@ -104,16 +105,25 @@ Render it with `mount(component, render)`. `render` gets the same live context o
 | `props` / `partial` | Validated props once ready; incomplete arguments while the model streams (preview only) |
 | `tools.call(name, args)` | Waits for the render result; returns `{ ok, data }`, or `{ ok: false, unavailable: true }` without calling in registry previews (no data tools there) |
 | `model.update(text)` / `model.send(text)` | Add context for the model's next turn / post a message as the user |
-| `state.get()` / `state.set(value)` | Per-render state: a re-rendered message comes back as the user left it |
+| `useState(initial, key?)` | `useState`-style state kept per render: `[value, setValue, { restored, persistence, flush }]`. A re-rendered message comes back as the user left it |
+| `viewId` | The render id, once the result arrived. Pass it to submit tools as an idempotency key |
 | `theme`, `display`, `app` | Host color scheme, display modes (fullscreen), and the raw MCP Apps `App` |
+
+**Saved state.** Components never deal with storage or ids. The kit takes the render id from the result (`structuredContent.genui.id`, also in `_meta` for now) and saves state where the host allows:
+- ChatGPT: its widget state (`privateContent`, which the model doesn't see), stored with the message.
+- Claude and other MCP Apps hosts: `localStorage` in the view's sandbox, this browser only, swept after ~30 days.
+- Storage blocked: memory, until the host renders the message again.
+
+`persistence` says which applies. Which of these hold on each real host is checked in the M0 spike ([VIEW-STATE-PLAN.md](VIEW-STATE-PLAN.md) §7–8). Data that must hold (answered once, across devices) belongs in your own tool, keyed by `viewId`. React views use the same state through `useViewState` from `@genui/kit/react`.
 
 Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--genui-primary`, `--genui-accent`, `--genui-radius`, `--genui-chart-1..5`) are applied to the document for you. In `vite.config.ts`, `plugins: [genui()]` from `@genui/kit/vite` inlines everything into one HTML file, checks the bundle size and generates the manifest. Then `genui publish .`.
 
 **Develop locally** with `genui dev` (or plain `vite`) in the component directory. No registry, server or chat needed. It opens a local MCP Apps host:
-- **Props:** a form generated from the props schema (or raw JSON), optionally streamed in like a model writes them. **Render** starts a new view; **Replay** keeps the view id, so saved `state` comes back.
+- **Props:** a form generated from the props schema (or raw JSON), optionally streamed in like a model writes them. **Render** starts a new view; **Replay** keeps the view id, so saved state comes back.
 - **Host:** light/dark, chat width, host style variables on/off, a workspace primary color, and registry preview mode (tools don't run).
+- **Saved state:** where `useState` saves, like a real host: `localStorage`, ChatGPT widget state (a `window.openai` stand-in), or none (memory only). **Clear** forgets it.
 - **Mock tools:** per declared tool, return data or return an error.
-- **Log:** tool calls, model context updates and chat messages from the component.
+- **Log:** tool calls, model context updates, chat messages and saved state from the component.
 - **Live reload:** saving any file re-renders the view with the same props and view id.
 
 ## Management in Claude / ChatGPT
@@ -164,10 +174,26 @@ await mountGenUI(server, {
 
 Each deployment of your server (dev, staging, prod) points `GENUI_MCP_URL` at its environment. To serve two environments from one process (staff on staging, say), connect twice and pass the right client per request.
 
+**Picking up changes.** Every publish, theme or recipe change bumps the environment's revision. When genui's tools are used and the SDK's copy is older than `refreshSeconds` (default 60), it checks the revision in the background and re-lists only if it changed; a host never waits on it. To serve changes right away, mount the SDK's refresh endpoint and register its URL. genui then calls it on every change:
+
+```ts
+import { refreshHandler } from "@genui/sdk";
+
+app.post("/genui/refresh", (c) => refreshHandler(genui)(c.req.raw)); // Hono; any (Request) => Response framework
+// Express: app.post("/genui/refresh", (req, res) => { void genui.refresh(req.body?.revision); res.sendStatus(202); });
+```
+
+```bash
+genui env set prod --refresh-url https://mcp.acme.com/genui/refresh   # "" clears it; genui env list shows the last call
+```
+
+The call carries only the environment and its revision, and reaches one instance behind your load balancer; the others catch up at their next check. In genui's cloud the URL must be public https.
+
 Python: `genui = connect_genui(url, token)`, then `mount_genui(server, genui)`. See [packages/sdk-python](packages/sdk-python/README.md).
 
 - **Fast, not offline.** `tools/list` is answered from memory, and `ui://` resources are content-hashed, so each is fetched once. Calls always go to genui. When genui is down, they return "genui is unavailable right now, try again shortly.", and the model tells the user.
 - **Cloud or self-hosted.** In genui's cloud, genui sees what the model passes to its tools (form specs, pre-filled values, inline chart rows), never your own tool calls or results. If that matters, run the genui server yourself: it's the same image.
 
 - **Submit tools** return `{ ok: true, message?, result? }` or `{ ok: false, fieldErrors?, formError? }` in `structuredContent`.
+- **Answered once:** give a submit tool an idempotency-key parameter (e.g. `request_id`) and name it in `submit.idempotencyParam`. Forms pass one id per rendered form, so a repeated submit (another device, a view closed mid-submit) can return the first result. Forms keep their draft and their submitted state per render; `persistDraft: false` keeps answers out of storage for sensitive forms.
 - **Source tools** return any JSON. The model maps it with `itemsPath` / `idPath` / `labelPath` (selects) or `x` / `series` (charts).

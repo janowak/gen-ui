@@ -1,3 +1,23 @@
+/**
+ * Runs in the view before its modules (a classic inline script), for the host page's "Saved state"
+ * setting (`genui-host` in the view URL): `chatgpt` stands in for ChatGPT's `window.openai` widget
+ * state, kept by the host page per view id; `none` blocks localStorage like an opaque sandbox.
+ */
+export const VIEW_SHIM = `(() => {
+  const mode = new URLSearchParams(location.search).get("genui-host");
+  const dev = window.parent !== window ? window.parent.__genuiDev : undefined;
+  if (mode === "chatgpt" && dev) {
+    window.openai = {
+      get widgetState() { return dev.widgetState(); },
+      setWidgetState(state) { dev.setWidgetState(state); },
+    };
+  } else if (mode === "none") {
+    Object.defineProperty(window, "localStorage", {
+      get() { throw new DOMException("Storage is blocked in this sandbox.", "SecurityError"); },
+    });
+  }
+})();`;
+
 /** The host page shell. The UI itself is built by dist/harness.js (src/harness). */
 export function harnessPage(viewParam: string): string {
   return `<!doctype html>
@@ -67,6 +87,7 @@ main { display: grid; grid-template-rows: 1fr minmax(140px, 32%); min-height: 0;
 #log .entry b { font-weight: 600; }
 #log .entry.model b, #log .entry.message b { color: #7c3aed; }
 #log .entry.tool b { color: var(--accent); }
+#log .entry.state b { color: #0f766e; }
 #log .entry.warn b { color: var(--bad); }
 #log .entry pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 `;

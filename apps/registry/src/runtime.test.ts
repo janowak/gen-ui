@@ -1,4 +1,4 @@
-import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -42,7 +42,7 @@ describe("mountGenUI", () => {
     expect(content.text).toContain("<html");
   });
 
-  it("returns theme and a view id in _meta", async () => {
+  it("returns the theme in _meta and a fresh render id in structuredContent and _meta", async () => {
     const result = await client.callTool({ name: "render_form", arguments: form });
     expect(result.isError).toBeFalsy();
     expect(result._meta).not.toHaveProperty(PREVIEW_META_KEY);
@@ -51,6 +51,7 @@ describe("mountGenUI", () => {
     const again = await client.callTool({ name: "render_form", arguments: form });
     expect(result._meta?.[VIEW_ID_META_KEY]).toMatch(/^[0-9a-f-]{36}$/);
     expect(again._meta?.[VIEW_ID_META_KEY]).not.toBe(result._meta?.[VIEW_ID_META_KEY]);
+    expect(result.structuredContent).toEqual({ [VIEW_CONTENT_KEY]: { id: result._meta?.[VIEW_ID_META_KEY] } });
   });
 
   it("names tools preview_* in preview mode and flags their results as previews", async () => {
@@ -168,13 +169,13 @@ describe("recipes", () => {
       form: { fields: [{ name: "email", label: "Email", type: "email" }] },
       validate: { url: "https://example.com/validate" },
     };
-    const calls: { recipe: string; values: Record<string, unknown> }[] = [];
+    const calls: { recipe: string; values: Record<string, unknown>; viewId?: string }[] = [];
     const server = new McpServer({ name: "validated", version: "1.0.0" });
     await mountGenUI(server, {
       recipes: [quote as never, wipe as never],
       dataTools: false,
-      validate: async (recipe, values) => {
-        calls.push({ recipe: recipe.name, values });
+      validate: async (recipe, values, viewId) => {
+        calls.push({ recipe: recipe.name, values, viewId });
         return values.email === "taken@example.com" ? { ok: false, fieldErrors: { email: "Already a customer." } } : { ok: true };
       },
     });
@@ -186,19 +187,20 @@ describe("recipes", () => {
     expect((tool?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
 
     const shown = await c.callTool({ name: "use_recipe", arguments: { recipe: "quote" } });
-    const submit = (shown._meta?.["genui/form"] as { submit?: { toolName: string; params: Record<string, unknown> } }).submit;
-    expect(submit).toMatchObject({ toolName: "genui_validate", params: { genui_recipe: "quote" } });
+    const submit = (shown._meta?.["genui/form"] as { submit?: { toolName: string; params: Record<string, unknown>; idempotencyParam: string } }).submit;
+    expect(submit).toMatchObject({ toolName: "genui_validate", params: { genui_recipe: "quote" }, idempotencyParam: "genui_view" });
     // Recipes without `validate` keep sending their values straight to the conversation.
     expect((await c.callTool({ name: "use_recipe", arguments: { recipe: "wipe" } }))._meta?.["genui/form"]).not.toHaveProperty("submit");
 
-    // What the form sends: the fixed params with the field values merged in.
-    const rejected = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "taken@example.com" } });
+    // What the form sends: the fixed params with the field values and its render id merged in.
+    const view = { [submit!.idempotencyParam]: "view-1" };
+    const rejected = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "taken@example.com", ...view } });
     expect(rejected.structuredContent).toEqual({ ok: false, fieldErrors: { email: "Already a customer." } });
-    const accepted = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "new@example.com" } });
+    const accepted = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "new@example.com", ...view } });
     expect(accepted.structuredContent).toEqual({ ok: true });
     expect(calls).toEqual([
-      { recipe: "quote", values: { email: "taken@example.com" } },
-      { recipe: "quote", values: { email: "new@example.com" } },
+      { recipe: "quote", values: { email: "taken@example.com" }, viewId: "view-1" },
+      { recipe: "quote", values: { email: "new@example.com" }, viewId: "view-1" },
     ]);
   });
 

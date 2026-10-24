@@ -18,7 +18,8 @@ function fakeFetch(status: number, body: unknown) {
   return { doFetch, sent };
 }
 
-const call = (doFetch: typeof fetch) => validateWithWebhook({ recipe, values: { email: "a@b.co" }, workspaceId: "ws-1", secret: "whsec_test", fetch: doFetch });
+const call = (doFetch: typeof fetch) =>
+  validateWithWebhook({ recipe, values: { email: "a@b.co" }, viewId: "view-1", workspaceId: "ws-1", secret: "whsec_test", fetch: doFetch });
 
 describe("webhook URLs", () => {
   it("allows public https only", () => {
@@ -43,7 +44,7 @@ describe("validateWithWebhook", () => {
     const { url, init } = sent[0]!;
     expect(url).toBe("https://hooks.acme.test/validate");
     expect(init.redirect).toBe("manual");
-    expect(JSON.parse(String(init.body))).toEqual({ type: "recipe.validate", workspace: "ws-1", recipe: "quote", values: { email: "a@b.co" } });
+    expect(JSON.parse(String(init.body))).toEqual({ type: "recipe.validate", workspace: "ws-1", recipe: "quote", viewId: "view-1", values: { email: "a@b.co" } });
     const header = (init.headers as Record<string, string>)["x-genui-signature"]!;
     const [, t, v1] = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(header)!;
     expect(v1).toBe(signature("whsec_test", Number(t), String(init.body)));

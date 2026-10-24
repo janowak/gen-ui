@@ -1,4 +1,4 @@
-import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_ID_META_KEY, type ComponentManifest, type Theme } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY, type ComponentManifest, type Theme } from "@genui/format";
 import type { McpUiDisplayMode, McpUiHostContext, McpUiStyles } from "@modelcontextprotocol/ext-apps";
 import { AppBridge, PostMessageTransport } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { fieldsOf, partials, starterProps, type Field } from "./props.js";
@@ -10,6 +10,17 @@ import { fieldsOf, partials, starterProps, type Field } from "./props.js";
  */
 
 type Mode = "light" | "dark";
+/**
+ * Where the view's saved state goes, like on a real host: localStorage (Claude and most hosts),
+ * ChatGPT's widget state (a `window.openai` shim the dev page injects, kept here per view id),
+ * or nowhere (storage blocked, so the view keeps state in memory).
+ */
+type HostState = "browser" | "chatgpt" | "none";
+const HOST_STATES: [HostState, string][] = [
+  ["browser", "localStorage"],
+  ["chatgpt", "ChatGPT widget state"],
+  ["none", "None (memory)"],
+];
 interface Mock {
   mode: "data" | "error";
   data: string;
@@ -24,6 +35,7 @@ interface Settings {
   width: number;
   workspace: { on: boolean; light: string; dark: string };
   preview: boolean;
+  hostState: HostState;
   mocks: Record<string, Mock>;
 }
 
@@ -117,6 +129,7 @@ function loadSettings(): Settings {
     width: saved.width ?? 640,
     workspace: saved.workspace ?? { on: false, light: "#2563eb", dark: "#60a5fa" },
     preview: saved.preview ?? false,
+    hostState: saved.hostState ?? "browser",
     mocks: saved.mocks ?? {},
   };
 }
@@ -157,7 +170,7 @@ function layout() {
   );
 }
 
-type LogKind = "render" | "tool" | "model" | "message" | "info" | "warn";
+type LogKind = "render" | "tool" | "model" | "message" | "state" | "info" | "warn";
 
 function write(kind: LogKind, label: string, data?: unknown) {
   const text = data === undefined ? "" : typeof data === "string" ? data : JSON.stringify(data);
@@ -419,7 +432,58 @@ function renderHostSection() {
         "Registry preview",
       ),
     ),
+    h(
+      "div",
+      { className: "row" },
+      h(
+        "label",
+        { title: "Where the view's ctx.useState values are saved. Replay keeps the view id, so they come back." },
+        "Saved state ",
+        select(
+          HOST_STATES.map(([value]) => value),
+          settings.hostState,
+          (v) => {
+            settings.hostState = v as HostState;
+            save();
+            void render({ replay: true });
+          },
+          HOST_STATES.map(([, label]) => label),
+        ),
+      ),
+      h("button", { className: "secondary", title: "Forget every view's saved state", onclick: clearSavedState }, "Clear"),
+    ),
   );
+}
+
+// ── Saved state ────────────────────────────────────────────────────────────────
+
+/** ChatGPT's widget state per view id: what the host stores with each message. */
+const widgetStates = new Map<string, unknown>();
+
+// The dev page's `window.openai` shim (genui:dev) reads and writes through this, same origin.
+(window as { __genuiDev?: unknown }).__genuiDev = {
+  widgetState: () => (viewId ? (widgetStates.get(viewId) ?? null) : null),
+  setWidgetState(state: unknown) {
+    if (!viewId) return;
+    widgetStates.set(viewId, structuredClone(state));
+    write("state", "→ widget state", state);
+  },
+};
+
+// The view writes localStorage from its own window, so this one hears about it.
+addEventListener("storage", ({ key, newValue }) => {
+  if (!key?.startsWith("genui:") || key === "genui:probe" || newValue === null) return;
+  try {
+    write("state", "→ saved state", { key, ...(JSON.parse(newValue) as object) });
+  } catch {
+    write("state", "→ saved state", { key, value: newValue });
+  }
+});
+
+function clearSavedState() {
+  widgetStates.clear();
+  for (const key of Object.keys(localStorage)) if (key.startsWith("genui:")) localStorage.removeItem(key);
+  write("info", "saved state cleared");
 }
 
 // ── Mock tools ─────────────────────────────────────────────────────────────────
@@ -551,6 +615,7 @@ function renderResult() {
     : undefined;
   return {
     content: [{ type: "text" as const, text: `Showing ${manifest.title ?? manifest.name}.` }],
+    structuredContent: { [VIEW_CONTENT_KEY]: { id: viewId } },
     _meta: {
       [VIEW_ID_META_KEY]: viewId,
       ...(settings.preview ? { [PREVIEW_META_KEY]: true } : {}),
@@ -580,12 +645,13 @@ async function render({ replay = false } = {}) {
   displayMode = "inline";
   chat.classList.remove("fullscreen");
   const props = structuredClone(settings.props);
-  bubble.textContent = `render_${manifest.name} · view ${viewId.slice(0, 8)}${replay ? " · replay" : ""}`;
+  const where = HOST_STATES.find(([value]) => value === settings.hostState)?.[1] ?? settings.hostState;
+  bubble.textContent = `render_${manifest.name} · view ${viewId.slice(0, 8)}${replay ? " · replay" : ""} · state: ${where}`;
 
   const iframe = h("iframe", { title: manifest.title ?? manifest.name });
   // Same origin as the dev server so Vite can serve modules; real hosts also give each server its own origin.
   iframe.sandbox.add("allow-scripts", "allow-same-origin", "allow-forms");
-  iframe.src = viewUrl;
+  iframe.src = `${viewUrl}&genui-host=${settings.hostState}`;
   frame.replaceChildren(iframe);
 
   const next = new AppBridge(

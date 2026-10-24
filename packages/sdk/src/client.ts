@@ -18,7 +18,10 @@ export interface GenUIClientOptions {
   url: string;
   /** Workspace server token (scope: server). */
   token: string;
-  /** How often to re-list genui's tools and prompts. Default 30s; 0 disables polling. */
+  /**
+   * When genui's tools are used and the copy is older than this, a check runs in the background:
+   * one small request, and a re-list only if genui changed. Default 60s; 0 checks only on refresh().
+   */
   refreshSeconds?: number;
   /** Timeout for a forwarded call. Default 10s. */
   timeoutSeconds?: number;
@@ -43,7 +46,13 @@ export interface GenUIClient {
   /** Forwards a call to genui. When genui can't be reached, returns an error result the model can relay. */
   callTool(name: string, args: Record<string, unknown>): Promise<CallToolResult>;
   getPrompt(name: string, args: Record<string, string>): Promise<GetPromptResult>;
-  refresh(): Promise<void>;
+  /** The environment revision the current tools come from, or undefined before the first load. */
+  revision(): number | undefined;
+  /**
+   * Checks genui's revision and re-lists its tools if it changed. With `atLeast`, does nothing when
+   * this client already has that revision. Concurrent calls share one check.
+   */
+  refresh(atLeast?: number): Promise<void>;
   /** Called when the tools or prompts change. Returns an unsubscribe function. */
   onChange(listener: () => void): () => void;
   close(): void;
@@ -60,16 +69,21 @@ export function resourceUri(tool: Tool): string | undefined {
 /**
  * Connects to genui's end-user MCP. Tools and prompts are listed in the background and kept in
  * memory, so listing them on your server costs no round trip; `ui://` resources are fetched once.
- * Calls always go to genui.
+ * Calls always go to genui. The copy is checked in the background when it's used and older than
+ * `refreshSeconds`, and right away when genui calls your refresh endpoint (`refreshHandler`).
  */
 export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   const logger = options.logger ?? console;
   const timeout = (options.timeoutSeconds ?? 10) * 1000;
+  const maxAge = (options.refreshSeconds ?? 60) * 1000;
+  // The environment's revision sits next to its MCP: .../mcp → .../revision.
+  const revisionUrl = /\/mcp\/?$/.test(options.url) ? options.url.replace(/\/mcp\/?$/, "/revision") : undefined;
   let snapshot: Snapshot | undefined;
+  let revision: number | undefined;
+  let checkedAt = 0;
   const resources = new Map<string, ReadResourceResult>();
   let connection: Promise<Client> | undefined;
   const listeners = new Set<() => void>();
-  let timer: ReturnType<typeof setInterval> | undefined;
 
   function connect(): Promise<Client> {
     if (connection) return connection;
@@ -120,32 +134,72 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
     for (const listener of listeners) listener();
   }
 
-  async function refresh(): Promise<void> {
+  /** genui's current revision of this environment; undefined when the URL has no `/revision` next to it. */
+  async function latestRevision(): Promise<number | undefined> {
+    if (!revisionUrl) return undefined;
+    const res = await (options.fetch ?? fetch)(revisionUrl, { headers: { authorization: `Bearer ${options.token}` }, signal: AbortSignal.timeout(timeout) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${revisionUrl}`);
+    return ((await res.json()) as { revision: number }).revision;
+  }
+
+  async function check(): Promise<void> {
+    checkedAt = Date.now();
     try {
+      const latest = await latestRevision();
+      if (snapshot && latest !== undefined && latest === revision) return;
       await load();
+      revision = latest;
     } catch (error) {
       logger.warn(`[genui] could not list genui's tools, keeping the current ones: ${error}`);
     }
     // Keep only the resources current tools point at; old ones are read from genui when asked for.
     const wanted = new Set(snapshot?.tools.map(resourceUri));
     for (const uri of resources.keys()) if (!wanted.has(uri)) resources.delete(uri);
+    // Never loaded (genui down or a bad token at start): no genui tool is mounted to be used, so retry on a timer.
+    if (!snapshot && maxAge > 0 && !closed) {
+      retry = setTimeout(() => void refresh(), maxAge);
+      retry.unref?.();
+    }
+  }
+
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+  let running: Promise<void> | undefined;
+  let queued: Promise<void> | undefined;
+
+  function refresh(atLeast?: number): Promise<void> {
+    if (atLeast !== undefined && revision !== undefined && revision >= atLeast) return Promise.resolve();
+    if (!running) {
+      running = check().finally(() => {
+        running = undefined;
+      });
+      return running;
+    }
+    // The running check may have read the revision before this change: one more check follows it.
+    queued ??= running.then(() => {
+      queued = undefined;
+      return refresh();
+    });
+    return queued;
+  }
+
+  /** A host is using genui's tools: an old copy is checked in the background, never delaying the caller. */
+  function used(): void {
+    if (maxAge > 0 && !running && Date.now() - checkedAt > maxAge) void refresh();
   }
 
   const initial = refresh();
-  const interval = options.refreshSeconds ?? 30;
-  if (interval > 0) {
-    timer = setInterval(() => void refresh(), interval * 1000);
-    timer.unref?.();
-  }
 
   return {
     ready: () => initial,
     snapshot: () => snapshot,
     resource: (uri) => resources.get(uri),
     async readResource(uri) {
+      used();
       return resources.get(uri) ?? request((client) => client.readResource({ uri }, { timeout }));
     },
     async callTool(name, args) {
+      used();
       try {
         return await request((client) => client.callTool({ name, arguments: args }, { timeout }));
       } catch (error) {
@@ -156,6 +210,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
       }
     },
     async getPrompt(name, args) {
+      used();
       try {
         return await request((client) => client.getPrompt({ name, arguments: args }, { timeout }));
       } catch (error) {
@@ -164,13 +219,15 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
         throw new Error(UNAVAILABLE_TEXT);
       }
     },
+    revision: () => revision,
     refresh,
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     close() {
-      if (timer) clearInterval(timer);
+      closed = true;
+      clearTimeout(retry);
       listeners.clear();
       connection?.then((c) => c.close()).catch(() => {});
       connection = undefined;

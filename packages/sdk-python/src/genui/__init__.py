@@ -10,5 +10,6 @@
 
 from .client import GenUIClient, Snapshot, connect_genui
 from .mount import GenUIHandle, mount_genui
+from .refresh import refresh_endpoint
 
-__all__ = ["GenUIClient", "GenUIHandle", "Snapshot", "connect_genui", "mount_genui"]
+__all__ = ["GenUIClient", "GenUIHandle", "Snapshot", "connect_genui", "mount_genui", "refresh_endpoint"]

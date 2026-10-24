@@ -26,13 +26,13 @@ The model can now call `render_form` with a field whose options come from `searc
 
 ## Options
 
-`connect_genui(url, token, refresh_seconds=30, timeout=10)`:
+`connect_genui(url, token, refresh_seconds=60, timeout=10)`:
 
 | Option | |
 |---|---|
 | `url` | The workspace's end-user MCP. The URL picks the environment: `<genui>/w/<workspace id>/mcp` for prod, `<genui>/w/<workspace id>/<environment>/mcp` for another environment (dev, staging, ...). |
 | `token` | A workspace server token: `genui token server <name>`. |
-| `refresh_seconds` | How often to re-list genui's tools and prompts. `0` disables polling. |
+| `refresh_seconds` | When genui's tools are used and the copy is older than this, the revision is checked in the background, and the tools re-listed only if it changed. `0` checks only on `refresh()`. |
 | `timeout` | Per-request timeout in seconds. |
 
 One client serves one environment. A process that serves two environments calls `connect_genui` twice.
@@ -46,9 +46,20 @@ One client serves one environment. A process that serves two environments calls 
 
 `mount_genui` is synchronous. It waits for the first listing, so call it before `server.run()`.
 
+`refresh_endpoint(genui)`: a Starlette endpoint genui calls after every publish, theme or recipe change, so your server serves it right away instead of at its next check. It answers 202 and refreshes in the background.
+
+```python
+from genui import refresh_endpoint
+
+server.custom_route("/genui/refresh", methods=["POST"])(refresh_endpoint(genui))
+```
+
+Register its URL: `genui env set prod --refresh-url https://mcp.acme.com/genui/refresh`.
+
 ## How it works
 
 - **Listing:** genui's tools and prompts are listed on a daemon thread and kept in memory, so `tools/list` on your server costs no round trip to genui. `ui://` resources are content-hashed, so each one is fetched once.
+- **Changes:** every change to what an environment serves bumps its revision. A check is one small request to `.../revision` next to the MCP URL; the tools are re-listed only when it changed. Checks run in the background when genui's tools are used (at most every `refresh_seconds`) and when genui calls your refresh endpoint.
 - **Calls:** every call goes to genui. When genui is down, a call returns "genui is unavailable right now, try again shortly." There is no cache file: nothing renders while genui is down.
 - **Schemas:** tools keep genui's JSON Schemas. `MCPServer` has no public way to give `add_tool` a JSON Schema, so `mount_genui` registers each tool with `add_tool` and then sets the registered tool's `parameters`, through `server._tool_manager`. genui validates the arguments.
 - **Old messages:** `MCPServer` has no `remove_resource`, so replaced `ui://` resources stay listed. They and any earlier component version (`ui://genui/c/<name>/<hash>`) are read from genui.

@@ -9,6 +9,20 @@
       content="Forms, charts and your own components for your MCP server. They render inside Claude, ChatGPT and other MCP Apps hosts, call your tools, and ship from your CI to staging and prod."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://app-mcp.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="genui" />
+    <meta property="og:url" content="https://app-mcp.com/" />
+    <meta property="og:title" content="genui: UI for MCP Apps, released like code" />
+    <meta
+      property="og:description"
+      content="Forms, charts and your own components for your MCP server, rendered inside Claude, ChatGPT and other MCP Apps hosts."
+    />
+    <meta property="og:image" content="https://app-mcp.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="genui: UI for MCP Apps, released like code. A New order form rendered in a chat." />
+    <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Before first paint: apply the saved theme or the system's (shadcn's .dark class), and animate the
       // hero demo only when motion is welcome so it doesn't flash its finished state.
@@ -418,8 +432,15 @@ $ <span class="k">genui publish rating@1.3.0 \
               We're working with a small group of teams that run MCP servers for their own customers. Tell us what you
               want people to do in the chat, and we'll help you ship the first view.
             </p>
-            <!-- TODO: point this at the early access form or contact address. -->
-            <a class="btn btn-lg mt-8" href="mailto:?subject=genui%20early%20access">Get early access</a>
+            <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+              <a class="btn btn-lg" href="mailto:hello@app-mcp.com?subject=genui%20early%20access">Get early access</a>
+              <span class="text-sm text-muted-foreground">
+                or write to
+                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="mailto:hello@app-mcp.com"
+                  >hello@app-mcp.com</a
+                >
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -433,5 +454,9 @@ $ <span class="k">genui publish rating@1.3.0 \
         <span>Forms, charts and components for MCP Apps.</span>
       </div>
     </footer>
+
+    <!-- Cloudflare Web Analytics: uncomment and paste the site's token from the dashboard (LANDING-DEPLOY-PLAN.md §5.6).
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "<token>"}'></script>
+    -->
   </body>
 </html>

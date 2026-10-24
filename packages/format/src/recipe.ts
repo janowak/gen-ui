@@ -19,7 +19,9 @@ export const Recipe = z.object({
     .object({
       url: z
         .url({ protocol: /^https?$/ })
-        .describe("Webhook that receives { recipe, values } (signed) and replies { ok, fieldErrors?, formError?, message? }."),
+        .describe(
+          "Webhook that receives { recipe, viewId, values } (signed; viewId is the same for every submit of one rendered form) and replies { ok, fieldErrors?, formError?, message? }.",
+        ),
     })
     .optional()
     .describe("Hosted MCP: check the values with the company's webhook before they reach the model."),

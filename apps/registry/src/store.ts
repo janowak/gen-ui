@@ -33,6 +33,14 @@ export class RegistryError extends Error {
 const now = () => new Date().toISOString();
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
+type EnvironmentRow = { name: string; revision: number; refresh_url: string | null; last_refresh: string | null };
+const environmentInfo = (row: EnvironmentRow): EnvironmentInfo => ({
+  name: row.name,
+  revision: row.revision,
+  refreshUrl: row.refresh_url,
+  lastRefresh: row.last_refresh ? (JSON.parse(row.last_refresh) as LastRefresh) : null,
+});
+
 export interface ComponentSummary {
   name: string;
   /** The version each environment serves. */
@@ -51,20 +59,73 @@ export interface PublishResult {
   warnings: string[];
 }
 
+/** What genui last got back from an environment's refresh URL. */
+export interface LastRefresh {
+  at: string;
+  ok: boolean;
+  status?: number;
+  error?: string;
+}
+
+export interface EnvironmentInfo {
+  name: string;
+  /** Bumped by every change to what the environment serves. */
+  revision: number;
+  /** The company's server endpoint genui calls on each change (@genui/sdk's refresh handler). */
+  refreshUrl: string | null;
+  lastRefresh: LastRefresh | null;
+}
+
+/** A committed change to what an environment serves: versions, theme or recipes. */
+export interface EnvironmentChange {
+  workspaceId: string;
+  environment: string;
+  revision: number;
+}
+
 /** All registry data access. Every query is scoped to a workspace. */
 export class Store {
+  private readonly listeners = new Set<(change: EnvironmentChange) => void>();
+  /** Changes made inside the open transaction, announced once it commits. */
+  private pending: EnvironmentChange[] | undefined;
+
   constructor(private readonly db: DatabaseSync) {}
 
   private transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN");
+    this.pending = [];
     try {
       const result = fn();
       this.db.exec("COMMIT");
+      const changes = this.pending;
+      this.pending = undefined;
+      for (const change of changes) this.announce(change);
       return result;
     } catch (error) {
       this.db.exec("ROLLBACK");
+      this.pending = undefined;
       throw error;
     }
+  }
+
+  /** Calls `listener` after every committed change to what an environment serves. Returns an unsubscribe function. */
+  onChange(listener: (change: EnvironmentChange) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private announce(change: EnvironmentChange): void {
+    for (const listener of this.listeners) listener(change);
+  }
+
+  /** Bumps the environment's revision; listeners hear about it once the change is committed. */
+  private changed(workspaceId: string, environment: string): void {
+    const { revision } = this.db
+      .prepare("UPDATE environments SET revision = revision + 1 WHERE workspace_id = ? AND name = ? RETURNING revision")
+      .get(workspaceId, environment) as { revision: number };
+    const change = { workspaceId, environment, revision };
+    if (this.pending) this.pending.push(change);
+    else this.announce(change);
   }
 
   // Workspaces and tokens
@@ -150,6 +211,31 @@ export class Store {
   createEnvironment(workspaceId: string, name: string): void {
     if (this.hasEnvironment(workspaceId, name)) throw new RegistryError(409, `Environment "${name}" already exists`);
     this.db.prepare("INSERT INTO environments (workspace_id, name, created_at) VALUES (?, ?, ?)").run(workspaceId, name, now());
+  }
+
+  environment(workspaceId: string, name: string): EnvironmentInfo | undefined {
+    const row = this.db.prepare("SELECT name, revision, refresh_url, last_refresh FROM environments WHERE workspace_id = ? AND name = ?").get(workspaceId, name) as
+      | EnvironmentRow
+      | undefined;
+    return row && environmentInfo(row);
+  }
+
+  /** The workspace's environments with their refresh settings, prod first. */
+  listEnvironmentInfo(workspaceId: string): EnvironmentInfo[] {
+    const rows = this.db
+      .prepare("SELECT name, revision, refresh_url, last_refresh FROM environments WHERE workspace_id = ? ORDER BY name != ?, name")
+      .all(workspaceId, DEFAULT_ENVIRONMENT) as EnvironmentRow[];
+    return rows.map(environmentInfo);
+  }
+
+  /** Sets or clears (null) the URL genui calls when what the environment serves changes. */
+  setRefreshUrl(workspaceId: string, name: string, url: string | null): void {
+    this.requireEnvironment(workspaceId, name);
+    this.db.prepare("UPDATE environments SET refresh_url = ?, last_refresh = NULL WHERE workspace_id = ? AND name = ?").run(url, workspaceId, name);
+  }
+
+  setLastRefresh(workspaceId: string, name: string, result: LastRefresh): void {
+    this.db.prepare("UPDATE environments SET last_refresh = ? WHERE workspace_id = ? AND name = ?").run(JSON.stringify(result), workspaceId, name);
   }
 
   /** Deletes an environment with what it serves: its deployments, theme and recipes. */
@@ -266,12 +352,14 @@ export class Store {
         "INSERT INTO recipes (workspace_id, environment, name, recipe, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, environment, name) DO UPDATE SET recipe = excluded.recipe, updated_at = excluded.updated_at",
       )
       .run(workspaceId, environment, recipe.name, JSON.stringify(recipe), now());
+    this.changed(workspaceId, environment);
     return existed;
   }
 
   deleteRecipe(workspaceId: string, environment: string, name: string): void {
     const result = this.db.prepare("DELETE FROM recipes WHERE workspace_id = ? AND environment = ? AND name = ?").run(workspaceId, environment, name);
     if (!result.changes) throw new RegistryError(404, `Recipe "${name}" not found in ${environment}`);
+    this.changed(workspaceId, environment);
   }
 
   // Theme: per environment.
@@ -286,6 +374,7 @@ export class Store {
   setTheme(workspaceId: string, environment: string, theme: Theme | null): void {
     this.requireEnvironment(workspaceId, environment);
     this.db.prepare("UPDATE environments SET theme = ? WHERE workspace_id = ? AND name = ?").run(theme ? JSON.stringify(theme) : null, workspaceId, environment);
+    this.changed(workspaceId, environment);
   }
 
   // Components
@@ -302,20 +391,30 @@ export class Store {
   }
 
   /** Points an environment at a version and reports what changed. */
-  private deploy(componentId: string, environment: string, versionId: string, result: Pick<PublishResult, "version" | "hash" | "created">): PublishResult {
+  private deploy(
+    workspaceId: string,
+    componentId: string,
+    environment: string,
+    versionId: string,
+    result: Pick<PublishResult, "version" | "hash" | "created">,
+  ): PublishResult {
     const manifest = JSON.parse((this.db.prepare("SELECT manifest FROM versions WHERE id = ?").get(versionId) as { manifest: string }).manifest) as ComponentManifest;
     const current = this.db
-      .prepare("SELECT v.version, v.manifest FROM deployments d JOIN versions v ON v.id = d.version_id WHERE d.component_id = ? AND d.environment = ?")
-      .get(componentId, environment) as { version: string; manifest: string } | undefined;
+      .prepare("SELECT d.version_id, v.version, v.manifest FROM deployments d JOIN versions v ON v.id = d.version_id WHERE d.component_id = ? AND d.environment = ?")
+      .get(componentId, environment) as { version_id: string; version: string; manifest: string } | undefined;
     // Breaking props only warn: which version an environment serves is the publisher's call.
     const warnings = current
       ? breakingChanges((JSON.parse(current.manifest) as ComponentManifest).props, manifest.props).map((issue) => `${issue} (${environment} served ${current.version})`)
       : [];
-    this.db
-      .prepare(
-        "INSERT INTO deployments (component_id, environment, version_id) VALUES (?, ?, ?) ON CONFLICT (component_id, environment) DO UPDATE SET version_id = excluded.version_id",
-      )
-      .run(componentId, environment, versionId);
+    // A re-run CI job points the environment at what it already serves: nothing changes.
+    if (current?.version_id !== versionId) {
+      this.db
+        .prepare(
+          "INSERT INTO deployments (component_id, environment, version_id) VALUES (?, ?, ?) ON CONFLICT (component_id, environment) DO UPDATE SET version_id = excluded.version_id",
+        )
+        .run(componentId, environment, versionId);
+      this.changed(workspaceId, environment);
+    }
     return { ...result, environment, environments: this.deployedVersions(componentId), warnings };
   }
 
@@ -350,14 +449,14 @@ export class Store {
             `${manifest.name}@${manifest.version} already exists with different content; versions are immutable. To serve it here without rebuilding: genui publish ${manifest.name}@${manifest.version} --env ${environment}`,
           );
         }
-        return this.deploy(componentId, environment, same.id, { version: manifest.version, hash, created: false });
+        return this.deploy(workspaceId, componentId, environment, same.id, { version: manifest.version, hash, created: false });
       }
 
       const versionId = randomUUID();
       this.db
         .prepare("INSERT INTO versions (id, component_id, version, hash, manifest, html, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .run(versionId, componentId, manifest.version, hash, JSON.stringify(manifest), html, now());
-      return this.deploy(componentId, environment, versionId, { version: manifest.version, hash, created: true });
+      return this.deploy(workspaceId, componentId, environment, versionId, { version: manifest.version, hash, created: true });
     });
   }
 
@@ -370,7 +469,7 @@ export class Store {
         | { id: string; hash: string }
         | undefined;
       if (!row) throw new RegistryError(404, `${name}@${version} isn't published`);
-      return this.deploy(componentId, environment, row.id, { version, hash: row.hash, created: false });
+      return this.deploy(workspaceId, componentId, environment, row.id, { version, hash: row.hash, created: false });
     });
   }
 

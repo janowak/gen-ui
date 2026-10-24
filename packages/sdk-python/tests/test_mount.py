@@ -87,6 +87,7 @@ async def test_forwards_calls_and_returns_genuis_result(fake_genui: FakeGenUI, m
         assert not result.is_error
         assert result.meta["genui/theme"] == THEME
         assert re.fullmatch(r"[0-9a-f-]{36}", result.meta["genui/viewId"])
+        assert result.structured_content == {"genui": {"id": result.meta["genui/viewId"]}}
 
 
 async def test_answers_tools_list_and_resource_reads_from_memory(fake_genui: FakeGenUI) -> None:

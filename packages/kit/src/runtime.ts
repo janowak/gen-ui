@@ -1,8 +1,8 @@
-import { PREVIEW_META_KEY, Theme, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, Theme, THEME_META_KEY } from "@genui/format";
 import type { App, McpUiDisplayMode } from "@modelcontextprotocol/ext-apps";
 import { z } from "zod";
 import type { ComponentDefinition } from "./define.js";
-import { createViewState, type StateStorage, type ViewState } from "./state.js";
+import { pageViewStore, setterOf, valueOf, type SetState, type StateInfo, type ViewStore } from "./state.js";
 import { readToolResult, unavailable, type ToolOutcome } from "./tools.js";
 
 /**
@@ -65,8 +65,14 @@ export interface ComponentContext<P, T extends string> {
   readonly theme: "light" | "dark";
   readonly tools: ComponentTools<T>;
   readonly model: ModelBridge;
-  /** State kept per render, so a re-rendered message comes back as the user left it. */
-  readonly state: ViewState;
+  /**
+   * State kept per render, like React's `useState`: a re-rendered message comes back as the user
+   * left it. Call it in `render`, which runs again on every change. `key` tells several states in
+   * one view apart. Where it's kept (host, browser, memory) is picked per host.
+   */
+  useState<S>(initial: S | (() => S), key?: string): [S, SetState<S>, StateInfo];
+  /** The render id, once the render result arrived. Pass it to submit tools as an idempotency key. */
+  readonly viewId: string | undefined;
   readonly display: Display;
   /** Escape hatch: the underlying MCP Apps `App`. */
   readonly app: App;
@@ -83,8 +89,8 @@ export interface Runtime<P, T extends string> {
 }
 
 export interface RuntimeOptions {
-  /** Where per-render state is saved. Defaults to localStorage where the host allows it, else memory. */
-  storage?: StateStorage;
+  /** Per-render state. Defaults to the page's store: host state (ChatGPT), else localStorage, else memory. */
+  state?: ViewStore;
 }
 
 /**
@@ -107,7 +113,9 @@ export function createRuntime<P extends z.ZodObject, T extends string>(
   let settle!: () => void;
   const settled = new Promise<void>((resolve) => (settle = resolve));
   const teardown = new AbortController();
-  const views = createViewState(component.name, onChange, options.storage);
+  const store = options.state ?? pageViewStore();
+  store.attach(app, component.name);
+  store.subscribe(onChange);
 
   const model: ModelBridge = {
     async update(text) {
@@ -180,7 +188,13 @@ export function createRuntime<P extends z.ZodObject, T extends string>(
     },
     tools,
     model,
-    state: views.state,
+    useState<S>(initial: S | (() => S), key = "state"): [S, SetState<S>, StateInfo] {
+      const first = () => (typeof initial === "function" ? (initial as () => S)() : initial);
+      return [valueOf(store, key, first), setterOf(store, key, first), store.info];
+    },
+    get viewId() {
+      return store.viewId;
+    },
     display,
     app,
   };
@@ -211,8 +225,6 @@ export function createRuntime<P extends z.ZodObject, T extends string>(
     const meta = (result._meta ?? {}) as Record<string, unknown>;
     const theme = Theme.safeParse(meta[THEME_META_KEY]);
     workspace = theme.success ? theme.data : undefined;
-    const viewId = meta[VIEW_ID_META_KEY];
-    if (typeof viewId === "string") views.load(viewId);
     if (result.isError === true && status !== "error") {
       status = "error";
       error = readToolResult(`render_${component.name}`, result).text || "The server could not render this component.";
@@ -234,6 +246,7 @@ export function createRuntime<P extends z.ZodObject, T extends string>(
 
   app.onteardown = async () => {
     teardown.abort();
+    await store.info.flush();
     return {};
   };
 

@@ -4,7 +4,7 @@ import rating from "./component";
 /**
  * A registry component built with @genui/kit and no UI framework. The kit validates props,
  * applies host styles and the workspace theme (`--genui-*`), only calls tools the server
- * approved, and keeps the rating per render so a re-rendered message stays rated.
+ * approved, and keeps the rating per render (`ctx.useState`) so a re-rendered message stays rated.
  */
 
 const questionEl = document.getElementById("question")!;
@@ -24,9 +24,9 @@ function render(ctx: Context) {
     return;
   }
 
-  const saved = ctx.state.get<number>();
+  const [saved, , state] = ctx.useState<number | undefined>(undefined);
   const selected = saved ?? saving;
-  const locked = ctx.status !== "ready" || saved !== undefined || saving > 0;
+  const locked = ctx.status !== "ready" || !state.restored || saved !== undefined || saving > 0;
   const max = ctx.props?.max ?? 5;
   starsEl.replaceChildren(
     ...Array.from({ length: max }, (_, i) => i + 1).map((n) => {
@@ -51,7 +51,8 @@ async function rate(ctx: Context, stars: number) {
   render(ctx);
 
   const summary = `The user rated "${question}" ${stars}/${max}.`;
-  const result = await ctx.tools.call("save_rating", { stars, question, subject });
+  // The render id makes a repeated save (the view closed mid-save, then the user rated again) a no-op.
+  const result = await ctx.tools.call("save_rating", { stars, question, subject, request_id: ctx.viewId });
   saving = 0;
   if (result.ok) {
     await ctx.model.update(`${summary} It was saved.`);
@@ -62,7 +63,8 @@ async function rate(ctx: Context, stars: number) {
     message = "Could not save. Try again.";
     return render(ctx);
   }
-  ctx.state.set(stars); // re-renders
+  const [, setSaved] = ctx.useState<number | undefined>(undefined);
+  setSaved(stars); // re-renders
 }
 
 mount(rating, render);

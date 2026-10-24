@@ -2,6 +2,7 @@
 @import "@genui/ui/styles.css";
 
 @source "../index.html";
+@source "../404.html";
 @source "./";
 
 @theme inline {

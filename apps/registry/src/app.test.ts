@@ -135,10 +135,10 @@ describe("publishing to environments", () => {
 });
 
 describe("environments", () => {
-  it("lists them, prod first, with their end-user MCP paths", async () => {
+  it("lists them, prod first, with their end-user MCP paths and refresh settings", async () => {
     expect((await call("GET", "/v1/environments", reader)).body.environments).toEqual([
-      { name: "prod", path: `/w/${workspace}/mcp` },
-      { name: "staging", path: `/w/${workspace}/staging/mcp` },
+      { name: "prod", path: `/w/${workspace}/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null },
+      { name: "staging", path: `/w/${workspace}/staging/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null },
     ]);
   });
 

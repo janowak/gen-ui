@@ -175,6 +175,7 @@ describe("management MCP", () => {
     const preview = await staging.callTool({ name: "preview_rating", arguments: { question: "How was it?" } });
     expect(preview._meta).toMatchObject({ "genui/preview": true, "genui/theme": { light: { primary: "#16a34a" } } });
     expect(preview._meta?.["genui/viewId"]).toEqual(expect.any(String));
+    expect(preview.structuredContent).toEqual({ genui: { id: preview._meta?.["genui/viewId"] } });
   });
 
   it("drafts recipes for review; only an admin click saves them", async () => {

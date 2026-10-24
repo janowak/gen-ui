@@ -10,6 +10,7 @@ import {
   recipeForm,
   type SubmitResult,
   THEME_META_KEY,
+  VIEW_CONTENT_KEY,
   VIEW_ID_META_KEY,
   type Catalog,
   type CatalogComponent,
@@ -60,16 +61,19 @@ export interface GenUIOptions {
   dataTools?: boolean;
   /**
    * Checks a recipe's values before they reach the model, for recipes with `validate` set. Their
-   * forms submit to the app-only genui_validate tool, which calls this. The end-user MCP posts the
+   * forms submit to the app-only genui_validate tool, which calls this with the form's render id
+   * (one per rendered form, so a repeated submit can be recognised). The end-user MCP posts the
    * values to the recipe's webhook.
    */
-  validate?: (recipe: Recipe, values: Record<string, unknown>) => Promise<SubmitResult>;
+  validate?: (recipe: Recipe, values: Record<string, unknown>, viewId: string | undefined) => Promise<SubmitResult>;
 }
 
 /** App-only tool that recipe forms with `validate` submit to. */
 const VALIDATE_TOOL = "genui_validate";
 /** Fixed submit param naming the recipe; the field values are merged next to it. */
 const RECIPE_PARAM = "genui_recipe";
+/** Submit param the form fills with its render id (`idempotencyParam`). */
+const VIEW_PARAM = "genui_view";
 
 /** Components already reported as too new, so per-request servers warn once per process. */
 const tooNew = new Set<string>();
@@ -109,12 +113,18 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     return registry?.snapshot(environment)?.catalog.theme ?? undefined;
   }
 
-  async function meta() {
+  /** What every render result carries: a fresh render id (views key their saved state by it), the theme and the preview flag. */
+  async function rendered(extra: Record<string, unknown> = {}) {
     const current = await theme();
+    const id = randomUUID();
     return {
-      [VIEW_ID_META_KEY]: randomUUID(),
-      ...(options.preview ? { [PREVIEW_META_KEY]: true } : {}),
-      ...(current ? { [THEME_META_KEY]: current } : {}),
+      structuredContent: { [VIEW_CONTENT_KEY]: { id } },
+      _meta: {
+        [VIEW_ID_META_KEY]: id,
+        ...(options.preview ? { [PREVIEW_META_KEY]: true } : {}),
+        ...(current ? { [THEME_META_KEY]: current } : {}),
+        ...extra,
+      },
     };
   }
 
@@ -141,6 +151,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
             "resource_select / resource_multiselect load options by calling a tool (source.toolName) with source.params (fill the tool's required parameters) " +
             "and send the user's search text in source.searchParam; map results with itemsPath, idPath, labelPath. " +
             "With `submit`, the form calls submit.toolName with the field values (keyed by field name) merged into submit.params; field names must match that tool's parameters. " +
+            "If that tool takes an idempotency key (e.g. request_id), set submit.idempotencyParam to its name: the form passes one id per rendered form, so a repeated submit is ignored. " +
             "Without `submit`, the values are sent back to the conversation. Do not call the submit tool yourself."
           : "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect. " +
             "This server has no data tools: give options inline and leave out `submit`. The values are sent back to the conversation, where you can act on them."),
@@ -156,7 +167,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
         : "When the user submits, the values arrive as a message.";
       return {
         content: [{ type: "text", text: `Showing form${spec.title ? ` "${spec.title}"` : ""} (${fields}). ${then}` }],
-        _meta: await meta(),
+        ...(await rendered()),
       };
     },
   );
@@ -187,7 +198,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
       const what = "source" in spec.data ? `data from ${spec.data.source.toolName}` : "the provided data";
       return {
         content: [{ type: "text", text: `Showing ${spec.type} chart${spec.title ? ` "${spec.title}"` : ""} with ${what}.` }],
-        _meta: await meta(),
+        ...(await rendered()),
       };
     },
   );
@@ -210,7 +221,7 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
       },
       async () => ({
         content: [{ type: "text" as const, text: `Showing ${manifest.title ?? manifest.name}.` }],
-        _meta: await meta(),
+        ...(await rendered()),
       }),
     );
   }
@@ -259,14 +270,14 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
         const form = recipeForm(recipe, prefill);
         if (options.validate && recipe.validate) {
           // Checked by genui_validate first, then sent to the model like a form without a submit tool.
-          form.submit = { toolName: validateTool, params: { [RECIPE_PARAM]: recipe.name }, label: form.submit?.label };
+          form.submit = { toolName: validateTool, params: { [RECIPE_PARAM]: recipe.name }, idempotencyParam: VIEW_PARAM, label: form.submit?.label };
         } else if (!dataTools) {
           // No submit tool to call on this server: the values come back to the conversation instead.
           delete form.submit;
         }
         return {
           content: [{ type: "text", text: `Showing the "${recipe.title ?? recipe.name}" form. The user fills it in; you receive the result in context.` }],
-          _meta: { ...(await meta()), [FORM_META_KEY]: form },
+          ...(await rendered({ [FORM_META_KEY]: form })),
         };
       },
     );
@@ -278,12 +289,12 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
         {
           title: "Check form values",
           description: "Checks a recipe form's values before they reach the model. Called by the form, never by the model.",
-          inputSchema: z.looseObject({ [RECIPE_PARAM]: z.string() }),
+          inputSchema: z.looseObject({ [RECIPE_PARAM]: z.string(), [VIEW_PARAM]: z.string().optional() }),
           _meta: { ui: { visibility: ["app"] } },
         },
-        async ({ [RECIPE_PARAM]: name, ...values }) => {
+        async ({ [RECIPE_PARAM]: name, [VIEW_PARAM]: viewId, ...values }) => {
           const recipe = validated.find((r) => r.name === name);
-          const result: SubmitResult = recipe ? await options.validate!(recipe, values) : { ok: false, formError: `Unknown recipe "${name}".` };
+          const result: SubmitResult = recipe ? await options.validate!(recipe, values, viewId) : { ok: false, formError: `Unknown recipe "${name}".` };
           const text = result.ok ? (result.message ?? "Submitted.") : (result.formError ?? "Some answers need fixing.");
           return { content: [{ type: "text", text }], structuredContent: result };
         },

@@ -97,6 +97,7 @@ describe("mountGenUI", () => {
     const rendered = await client.callTool({ name: "render_rating", arguments: { question: "How was it?" } });
     expect(rendered._meta).toMatchObject({ "genui/theme": { light: { primary: "#16a34a" } } });
     expect(rendered._meta?.["genui/viewId"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(rendered.structuredContent).toEqual({ genui: { id: rendered._meta?.["genui/viewId"] } });
 
     // Data tools are on: the recipe keeps submitting to the company's create_item.
     const recipe = await client.callTool({ name: "use_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });

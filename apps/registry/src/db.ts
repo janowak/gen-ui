@@ -157,6 +157,13 @@ const MIGRATIONS = [
   -- The environment a member's previews, theme and recipes show in the management MCP. Null: prod.
   ALTER TABLE members ADD COLUMN environment TEXT;
   `,
+  `
+  -- Every change to what an environment serves bumps its revision: the SDK compares it to know when
+  -- to re-list. A company's server can register a refresh URL that genui calls on each change.
+  ALTER TABLE environments ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE environments ADD COLUMN refresh_url TEXT;
+  ALTER TABLE environments ADD COLUMN last_refresh TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): DatabaseSync {

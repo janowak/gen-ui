@@ -170,18 +170,20 @@ describe("hosted end-user MCP", () => {
   it("checks a recipe's values with its signed validation webhook", async () => {
     const client = await mcpClient(`/w/${acme}/mcp`);
     const shown = await client.callTool({ name: "use_recipe", arguments: { recipe: "quote" } });
-    const submit = (shown._meta?.["genui/form"] as { submit: { toolName: string; params: Record<string, unknown> } }).submit;
+    const submit = (shown._meta?.["genui/form"] as { submit: { toolName: string; params: Record<string, unknown>; idempotencyParam: string } }).submit;
     expect(submit.toolName).toBe("genui_validate");
 
-    // What the form sends on submit: the fixed params with the field values merged in.
-    const rejected = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "taken@acme.test" } });
+    // What the form sends on submit: the fixed params with the field values and its render id merged in.
+    const view = { [submit.idempotencyParam]: shown._meta?.["genui/viewId"] };
+    const rejected = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "taken@acme.test", ...view } });
     expect(rejected.structuredContent).toEqual({ ok: false, fieldErrors: { email: "Already a customer." } });
-    const accepted = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "new@acme.test" } });
+    const accepted = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "new@acme.test", ...view } });
     expect(accepted.structuredContent).toEqual({ ok: true, message: "We'll be in touch." });
 
+    const viewId = shown._meta?.["genui/viewId"];
     expect(received).toEqual([
-      { signed: true, body: expect.objectContaining({ recipe: "quote", values: { email: "taken@acme.test" } }) },
-      { signed: true, body: expect.objectContaining({ recipe: "quote", values: { email: "new@acme.test" } }) },
+      { signed: true, body: expect.objectContaining({ recipe: "quote", viewId, values: { email: "taken@acme.test" } }) },
+      { signed: true, body: expect.objectContaining({ recipe: "quote", viewId, values: { email: "new@acme.test" } }) },
     ]);
 
     // Admins read the signing secret from the API; rotating it replaces it.

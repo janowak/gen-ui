@@ -19,20 +19,20 @@ function privateHost(hostname: string): boolean {
 }
 
 /**
- * Why a webhook URL may not be called, or undefined when it may. Public https only, unless the
- * registry allows private webhooks (self-hosted installs, tests). Host names that resolve to a
- * private address are not caught here.
+ * Why a URL genui calls (a webhook, a refresh URL) may not be called, or undefined when it may.
+ * Public https only, unless the registry allows private webhooks (self-hosted installs, tests).
+ * Host names that resolve to a private address are not caught here.
  */
-export function webhookUrlError(url: string, allowPrivate = false): string | undefined {
+export function webhookUrlError(url: string, allowPrivate = false, what = "webhook URL"): string | undefined {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return "The webhook URL is not a valid URL.";
+    return `The ${what} is not a valid URL.`;
   }
-  if (allowPrivate) return /^https?:$/.test(parsed.protocol) ? undefined : "The webhook URL must use http or https.";
-  if (parsed.protocol !== "https:") return "The webhook URL must use https.";
-  if (privateHost(parsed.hostname)) return "The webhook URL must be a public address.";
+  if (allowPrivate) return /^https?:$/.test(parsed.protocol) ? undefined : `The ${what} must use http or https.`;
+  if (parsed.protocol !== "https:") return `The ${what} must use https.`;
+  if (privateHost(parsed.hostname)) return `The ${what} must be a public address.`;
   return undefined;
 }
 
@@ -44,6 +44,8 @@ export function signature(secret: string, timestamp: number, body: string): stri
 export interface WebhookCall {
   recipe: Recipe;
   values: Record<string, unknown>;
+  /** The form's render id: the same for every submit of one rendered form, so the webhook can dedupe. */
+  viewId?: string;
   workspaceId: string;
   secret: string;
   allowPrivate?: boolean;
@@ -51,11 +53,11 @@ export interface WebhookCall {
 }
 
 /**
- * Posts a recipe's values to its validation webhook and returns what the form shows: the webhook's
+ * Posts a recipe's values (and the form's `viewId`) to its validation webhook and returns what the form shows: the webhook's
  * { ok, fieldErrors?, formError?, message? }, or a try-again error when it can't be reached or
  * answers something else. The values pass through; nothing is stored or logged.
  */
-export async function validateWithWebhook({ recipe, values, workspaceId, secret, allowPrivate, fetch: doFetch = fetch }: WebhookCall): Promise<SubmitResult> {
+export async function validateWithWebhook({ recipe, values, viewId, workspaceId, secret, allowPrivate, fetch: doFetch = fetch }: WebhookCall): Promise<SubmitResult> {
   const url = recipe.validate?.url;
   if (!url) return { ok: true };
   const invalid = webhookUrlError(url, allowPrivate);
@@ -63,7 +65,7 @@ export async function validateWithWebhook({ recipe, values, workspaceId, secret,
     console.warn(`[genui] recipe ${recipe.name}: ${invalid}`);
     return UNAVAILABLE;
   }
-  const body = JSON.stringify({ type: "recipe.validate", workspace: workspaceId, recipe: recipe.name, values });
+  const body = JSON.stringify({ type: "recipe.validate", workspace: workspaceId, recipe: recipe.name, viewId, values });
   const timestamp = Math.floor(Date.now() / 1000);
   try {
     const res = await doFetch(url, {

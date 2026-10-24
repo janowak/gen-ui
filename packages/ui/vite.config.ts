@@ -8,7 +8,11 @@ const input = process.env.INPUT;
 
 export default defineConfig({
   plugins: [preact(), tailwindcss(), ...(input ? [viteSingleFile()] : [])],
-  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
+  resolve: {
+    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    // @genui/kit/react imports react (aliased to preact/compat): resolve it from here, so views keep one Preact.
+    dedupe: ["preact", "react", "react-dom"],
+  },
   build: {
     outDir: "dist",
     emptyOutDir: false,

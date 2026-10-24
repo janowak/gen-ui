@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { PREVIEW_META_KEY, Recipe, Theme, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, Recipe, Theme, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
 import { mountGenUI } from "./runtime.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
@@ -181,9 +181,11 @@ export async function createRegistryMcp(store: Store, member: Membership, toolsC
       // Previews call no tools: the component's data tools live on the company's server.
       async () => {
         const theme = store.getTheme(ws, env);
+        const id = randomUUID();
         return {
           content: [text(`Previewing ${component.name}@${component.version}.`)],
-          _meta: { [PREVIEW_META_KEY]: true, [VIEW_ID_META_KEY]: randomUUID(), ...(theme ? { [THEME_META_KEY]: theme } : {}) },
+          structuredContent: { [VIEW_CONTENT_KEY]: { id } },
+          _meta: { [PREVIEW_META_KEY]: true, [VIEW_ID_META_KEY]: id, ...(theme ? { [THEME_META_KEY]: theme } : {}) },
         };
       },
     );

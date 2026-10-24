@@ -46,8 +46,11 @@ class FakeGenUI:
         server = MCPServer("Acme")
 
         def result(text: str) -> CallToolResult:
+            view_id = str(uuid.uuid4())
             return CallToolResult(
-                content=[TextContent(type="text", text=text)], _meta={"genui/theme": THEME, "genui/viewId": str(uuid.uuid4())}
+                content=[TextContent(type="text", text=text)],
+                structured_content={"genui": {"id": view_id}},
+                _meta={"genui/theme": THEME, "genui/viewId": view_id},
             )
 
         @server.tool(name="render_form", title="Show form", description="Show a form.", meta={"ui": {"resourceUri": "ui://genui/form/aaaa"}})

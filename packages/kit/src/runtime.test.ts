@@ -1,9 +1,9 @@
-import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { AppBridge } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
-import { createRuntime, defineComponent, themeVariables, z, type StateStorage } from "./index.js";
+import { createRuntime, createViewStore, defineComponent, storageBackend, themeVariables, z, type StateStorage } from "./index.js";
 
 const rating = defineComponent({
   name: "rating",
@@ -15,7 +15,15 @@ const rating = defineComponent({
 
 function memoryStorage(): StateStorage {
   const items = new Map<string, string>();
-  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value) };
+  return {
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => void items.set(key, value),
+    removeItem: (key) => void items.delete(key),
+    key: (index) => [...items.keys()][index] ?? null,
+    get length() {
+      return items.size;
+    },
+  };
 }
 
 type CallToolResult = Awaited<ReturnType<NonNullable<AppBridge["oncalltool"]>>>;
@@ -24,7 +32,8 @@ type CallToolResult = Awaited<ReturnType<NonNullable<AppBridge["oncalltool"]>>>;
 async function host(options: { storage?: StateStorage; tool?: () => CallToolResult } = {}) {
   const app = new App({ name: "test-view", version: "1.0.0" }, {}, { autoResize: false });
   const changes = vi.fn();
-  const runtime = createRuntime(app, rating, changes, { storage: options.storage ?? memoryStorage() });
+  const state = createViewStore({ backend: storageBackend(options.storage ?? memoryStorage()), debounceMs: 0 });
+  const runtime = createRuntime(app, rating, changes, { state });
 
   const bridge = new AppBridge(
     null,
@@ -56,7 +65,11 @@ async function host(options: { storage?: StateStorage; tool?: () => CallToolResu
   return { ctx: runtime.context, runtime, bridge, calls, context, messages, changes };
 }
 
-const result = (meta: Record<string, unknown>) => ({ content: [{ type: "text" as const, text: "Showing Star rating." }], _meta: meta });
+const result = (meta: Record<string, unknown>, id?: string) => ({
+  content: [{ type: "text" as const, text: "Showing Star rating." }],
+  ...(id ? { structuredContent: { [VIEW_CONTENT_KEY]: { id } } } : {}),
+  _meta: meta,
+});
 
 describe("component runtime", () => {
   it("shows partial props while streaming, then validated props", async () => {
@@ -114,24 +127,42 @@ describe("component runtime", () => {
     expect(await ctx.tools.call("save_rating")).toMatchObject({ ok: false, unavailable: false, error: "Rating service down" });
   });
 
-  it("keeps state per view id, so a re-rendered message comes back as left", async () => {
+  it("keeps state per render id, so a re-rendered message comes back as left", async () => {
     const storage = memoryStorage();
+    const stars = (ctx: { useState: (initial: number, key?: string) => [number, (n: number) => void, { restored: boolean; persistence: string }] }) =>
+      ctx.useState(0, "stars");
+
     const first = await host({ storage });
     await first.bridge.sendToolInput({ arguments: { question: "Q" } });
-    first.ctx.state.set({ stars: 4 }); // before the view id arrives: kept, then saved
-    await first.bridge.sendToolResult(result({ [VIEW_ID_META_KEY]: "view-1" }));
-    await vi.waitFor(() => expect(storage.getItem("genui:rating:view-1")).toBe('{"stars":4}'));
+    stars(first.ctx)[1](4); // before the render id arrives: kept, then saved
+    expect(stars(first.ctx)[0]).toBe(4);
+    await first.bridge.sendToolResult(result({}, "view-1"));
+    await vi.waitFor(() => expect(JSON.parse(storage.getItem("genui:rating:view-1")!).values).toEqual({ stars: 4 }));
+    expect(first.ctx.viewId).toBe("view-1");
 
     const replay = await host({ storage });
     await replay.bridge.sendToolInput({ arguments: { question: "Q" } });
-    await replay.bridge.sendToolResult(result({ [VIEW_ID_META_KEY]: "view-1" }));
-    await vi.waitFor(() => expect(replay.ctx.state.get()).toEqual({ stars: 4 }));
+    expect(stars(replay.ctx)[2].restored).toBe(false);
+    await replay.bridge.sendToolResult(result({}, "view-1"));
+    await vi.waitFor(() => expect(stars(replay.ctx)[0]).toBe(4));
+    expect(stars(replay.ctx)[2]).toMatchObject({ restored: true, persistence: "browser" });
 
     const other = await host({ storage });
     await other.bridge.sendToolInput({ arguments: { question: "Q" } });
-    await other.bridge.sendToolResult(result({ [VIEW_ID_META_KEY]: "view-2" }));
-    await vi.waitFor(() => expect(other.changes).toHaveBeenCalledTimes(2));
-    expect(other.ctx.state.get()).toBeUndefined();
+    await other.bridge.sendToolResult(result({}, "view-2"));
+    await vi.waitFor(() => expect(stars(other.ctx)[2].restored).toBe(true));
+    expect(stars(other.ctx)[0]).toBe(0);
+  });
+
+  it("takes the render id from _meta when structuredContent has none, and keeps state in memory without one", async () => {
+    const withMeta = await host();
+    await withMeta.bridge.sendToolResult(result({ [VIEW_ID_META_KEY]: "view-3" }));
+    await vi.waitFor(() => expect(withMeta.ctx.viewId).toBe("view-3"));
+
+    const without = await host();
+    await without.bridge.sendToolResult(result({}));
+    await vi.waitFor(() => expect(without.ctx.useState(0)[2]).toMatchObject({ restored: true, persistence: "memory" }));
+    expect(without.ctx.viewId).toBeUndefined();
   });
 
   it("reads the workspace theme and reports cancellation", async () => {

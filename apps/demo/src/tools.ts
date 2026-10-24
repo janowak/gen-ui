@@ -31,6 +31,9 @@ function json(data: Record<string, unknown>) {
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let nextOrder = 1042;
+/** Results by idempotency key (the view's render id), so a repeated submit returns the first result. */
+const ratings = new Map<string, Record<string, unknown>>();
+const orders = new Map<string, Record<string, unknown>>();
 
 export function registerCompanyTools(server: McpServer): void {
   server.registerTool(
@@ -71,9 +74,12 @@ export function registerCompanyTools(server: McpServer): void {
         priority: z.string().optional(),
         delivery_date: z.string().optional(),
         notes: z.string().optional(),
+        request_id: z.string().optional().describe("Idempotency key: a repeated request returns the first result."),
       }),
     },
-    async ({ customer, products, delivery_date }) => {
+    async ({ customer, products, delivery_date, request_id }) => {
+      const earlier = request_id ? orders.get(request_id) : undefined;
+      if (earlier) return json(earlier);
       await delay(500);
       const fieldErrors: Record<string, string> = {};
       if (!products?.length) fieldErrors.products = "Pick at least one product";
@@ -81,7 +87,9 @@ export function registerCompanyTools(server: McpServer): void {
       if (Object.keys(fieldErrors).length) return json({ ok: false, fieldErrors });
       if (customer === "c-3") return json({ ok: false, formError: "Initech's account is on hold. Contact finance." });
       const orderId = nextOrder++;
-      return json({ ok: true, message: `Order #${orderId} created`, result: { orderId } });
+      const result = { ok: true, message: `Order #${orderId} created`, result: { orderId } };
+      if (request_id) orders.set(request_id, result);
+      return json(result);
     },
   );
 
@@ -89,12 +97,21 @@ export function registerCompanyTools(server: McpServer): void {
     "save_rating",
     {
       description: "Store a 1-5 star rating. Used by the rating component.",
-      inputSchema: z.object({ stars: z.number().int().min(1).max(10), question: z.string().optional(), subject: z.string().optional() }),
+      inputSchema: z.object({
+        stars: z.number().int().min(1).max(10),
+        question: z.string().optional(),
+        subject: z.string().optional(),
+        request_id: z.string().optional().describe("Idempotency key: a repeated request returns the first result."),
+      }),
     },
-    async ({ stars, question }) => {
+    async ({ stars, question, request_id }) => {
+      const earlier = request_id ? ratings.get(request_id) : undefined;
+      if (earlier) return json(earlier);
       await delay(300);
       console.log(`[demo] rating saved: ${stars}/5 for "${question ?? "?"}"`);
-      return json({ ok: true, message: `Saved ${stars}/5` });
+      const result = { ok: true, message: `Saved ${stars}/5` };
+      if (request_id) ratings.set(request_id, result);
+      return json(result);
     },
   );
 

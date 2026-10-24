@@ -40,6 +40,20 @@
         "dev"
       ],
       "port": 5180
+    },
+    {
+      "name": "site-worker",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@genui/site",
+        "exec",
+        "wrangler",
+        "dev",
+        "--port",
+        "8787"
+      ],
+      "port": 8787
     }
   ]
 }

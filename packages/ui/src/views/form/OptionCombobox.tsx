@@ -99,14 +99,16 @@ export function OptionCombobox(props: OptionComboboxProps) {
   if (props.multiple) {
     return (
       <Combobox {...shared} multiple value={props.value} onValueChange={(value: Option[]) => props.onChange(value)}>
-        <ComboboxChips ref={anchor}>
+        <ComboboxChips ref={anchor} className={disabled ? "pointer-events-none opacity-50" : undefined}>
           <ComboboxValue>
             {(values: Option[]) => (
               <Fragment>
                 {values.map((option) => (
-                  <ComboboxChip key={option.id}>{option.label}</ComboboxChip>
+                  <ComboboxChip key={option.id} showRemove={!disabled}>
+                    {option.label}
+                  </ComboboxChip>
                 ))}
-                <ComboboxChipsInput id={id} placeholder={values.length ? undefined : placeholder} aria-invalid={invalid || undefined} />
+                <ComboboxChipsInput id={id} placeholder={values.length ? undefined : placeholder} aria-invalid={invalid || undefined} disabled={disabled} />
               </Fragment>
             )}
           </ComboboxValue>

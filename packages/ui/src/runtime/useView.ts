@@ -1,4 +1,5 @@
-import { PREVIEW_META_KEY, THEME_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, readViewId, THEME_META_KEY } from "@genui/format";
+import { pageViewStore } from "@genui/kit/state";
 import type { App, McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { useApp, useHostStyles } from "@modelcontextprotocol/ext-apps/react";
 import { useEffect, useState } from "react";
@@ -9,6 +10,7 @@ export interface RenderResult {
   text: string;
   meta: Record<string, unknown>;
   structured: unknown;
+  viewId: string | undefined;
 }
 
 export interface ViewState {
@@ -19,6 +21,8 @@ export interface ViewState {
   streaming: boolean;
   /** Result of the render tool: server-side validation + theme + preview flag. */
   result: RenderResult | undefined;
+  /** The render id, once the result arrived: the key of this render's saved state, and an idempotency key for submits. */
+  viewId: string | undefined;
   cancelled: boolean;
   hostContext: McpUiHostContext | undefined;
 }
@@ -34,6 +38,12 @@ export function useView(name: string): ViewState {
     appInfo: { name: `genui-${name}`, version: "0.1.0" },
     capabilities: {},
     onAppCreated: (created) => {
+      // Before connecting: the render id comes with the tool result, which the host sends once.
+      pageViewStore().attach(created, name);
+      created.onteardown = async () => {
+        await pageViewStore().info.flush();
+        return {};
+      };
       created.ontoolinputpartial = (params) => {
         setInput(params.arguments);
         setStreaming(true);
@@ -47,7 +57,13 @@ export function useView(name: string): ViewState {
           .map((c) => (c.type === "text" ? c.text : ""))
           .filter(Boolean)
           .join("\n");
-        setResult({ isError: res.isError === true, text, meta: (res._meta ?? {}) as Record<string, unknown>, structured: res.structuredContent });
+        setResult({
+          isError: res.isError === true,
+          text,
+          meta: (res._meta ?? {}) as Record<string, unknown>,
+          structured: res.structuredContent,
+          viewId: readViewId(res),
+        });
       };
       created.ontoolcancelled = () => setCancelled(true);
       created.onhostcontextchanged = (ctx) => setHostContext((prev) => ({ ...prev, ...ctx }));
@@ -65,7 +81,7 @@ export function useView(name: string): ViewState {
   const hostVariables = hostContext?.styles?.variables;
   useEffect(() => applyTheme({ mode, hostVariables, workspace }), [mode, hostVariables, workspace]);
 
-  return { app, connectError: error ?? null, input, streaming, result, cancelled, hostContext };
+  return { app, connectError: error ?? null, input, streaming, result, viewId: result?.viewId, cancelled, hostContext };
 }
 
 /**

@@ -13,6 +13,18 @@ export {
   type RuntimeOptions,
   type Status,
 } from "./runtime.js";
-export type { StateStorage, ViewState } from "./state.js";
+export {
+  createViewStore,
+  memoryBackend,
+  storageBackend,
+  widgetStateBackend,
+  type AppEvents,
+  type Persistence,
+  type SetState,
+  type StateBackend,
+  type StateInfo,
+  type StateStorage,
+  type ViewStore,
+} from "./state.js";
 export { THEME_VARIABLES, themeVariables } from "./theme.js";
 export type { ToolOutcome } from "./tools.js";

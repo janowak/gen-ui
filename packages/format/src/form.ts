@@ -115,6 +115,12 @@ export const SubmitAction = z
   .object({
     toolName: z.string().describe("Tool on this server called with the form values when the user submits."),
     params: ToolParams.optional().describe("Fixed arguments merged with the form values."),
+    idempotencyParam: z
+      .string()
+      .optional()
+      .describe(
+        "Name of the submit tool's idempotency-key parameter (e.g. request_id), if it has one. The form passes one id per rendered form, so the tool can ignore a repeated submit.",
+      ),
     label: z.string().optional().describe("Submit button text."),
   })
   .describe("Omit to return the submitted values to the conversation instead of calling a tool.");
@@ -125,6 +131,10 @@ export const FormSpec = z.object({
   description: z.string().optional(),
   fields: z.array(Field).min(1),
   submit: SubmitAction.optional(),
+  persistDraft: z
+    .boolean()
+    .optional()
+    .describe("false for sensitive forms: unsent answers aren't kept when the chat is reloaded. Default true."),
 });
 export type FormSpec = z.infer<typeof FormSpec>;
 

@@ -2,7 +2,7 @@ import { ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_BUNDLE_BYT
 import { Hono, type Context, type Next } from "hono";
 import { z } from "zod";
 import type { RegistryAppOptions } from "./app.js";
-import { RegistryError, type Scope, type Store, type TokenInfo } from "./store.js";
+import { RegistryError, type EnvironmentInfo, type Scope, type Store, type TokenInfo } from "./store.js";
 import { webhookUrlError } from "./webhook.js";
 
 /** Which token scopes may call what. Admin can do everything. */
@@ -21,6 +21,7 @@ const denied = (required: Scope, got: Scope) => `Requires ${required === "admin"
 const PublishBody = z.object({ manifest: ComponentManifest, html: z.string().min(1), environment: EnvironmentName.default(DEFAULT_ENVIRONMENT) });
 const DeployBody = z.object({ version: z.string().regex(SEMVER, "x.y.z") });
 const EnvironmentBody = z.object({ name: EnvironmentName });
+const EnvironmentSettingsBody = z.object({ refreshUrl: z.url().nullable() });
 const TokenBody = z.object({
   scope: z.enum(["server", "publish", "admin"]),
   name: z.string().min(1),
@@ -84,9 +85,19 @@ export function createApi(store: Store, options: RegistryAppOptions = {}): Hono<
   });
 
   // Environments: each serves what was last published or saved to it, at its own end-user MCP.
-  api.get("/environments", auth("server"), (c) =>
-    c.json({ environments: store.listEnvironments(ws(c)).map((name) => ({ name, path: endUserPath(ws(c), name) })) }),
-  );
+  const describe = (workspaceId: string, info: EnvironmentInfo) => ({ ...info, path: endUserPath(workspaceId, info.name) });
+
+  api.get("/environments", auth("server"), (c) => c.json({ environments: store.listEnvironmentInfo(ws(c)).map((info) => describe(ws(c), info)) }));
+
+  // Admin: the company server's refresh endpoint (@genui/sdk), called after every change to what the environment serves.
+  api.put("/environments/:name", auth("admin"), async (c) => {
+    const name = String(c.req.param("name"));
+    const { refreshUrl } = EnvironmentSettingsBody.parse(await body(c));
+    const invalid = refreshUrl && webhookUrlError(refreshUrl, options.allowPrivateWebhooks, "refresh URL");
+    if (invalid) throw new RegistryError(400, invalid);
+    store.setRefreshUrl(ws(c), name, refreshUrl);
+    return c.json(describe(ws(c), store.environment(ws(c), name)!));
+  });
 
   api.post("/environments", auth("admin"), async (c) => {
     const { name } = EnvironmentBody.parse(await body(c));

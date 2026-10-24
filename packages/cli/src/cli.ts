@@ -13,8 +13,9 @@ Commands:
   publish [dir]                     Publish the component in dir (default .) to an environment      publish
   publish <name>@<version>          Serve an already published version in an environment, no rebuild  publish
   list                              Components and the version each environment serves
-  env list                          Environments and their end-user MCP URLs
+  env list                          Environments, their end-user MCP URLs and refresh URLs
   env add <name> | rm <name>        Create or delete an environment (prod always exists)             admin
+  env set <name> --refresh-url <u>  Your server's refresh endpoint, called on changes ("" clears)    admin
   theme <file.json> | --clear       Set or clear an environment's theme                              admin
   token <scope> <name> [--env a,b]  Create a token (scope: server | publish | admin)                 admin
   invite <email> [--role r]         Let someone manage the workspace in chat (member|admin)          admin
@@ -47,6 +48,7 @@ const { values, positionals } = parseArgs({
     env: { type: "string" },
     role: { type: "string" },
     clear: { type: "boolean" },
+    "refresh-url": { type: "string" },
     json: { type: "boolean" },
     port: { type: "string" },
     help: { type: "boolean", short: "h" },
@@ -110,6 +112,21 @@ function printPublished(result: Published, what: string) {
     .join(" ");
   const lines = [`${what}. Now ${pointers}`, ...result.warnings.map((w) => `warning: breaking props change: ${w}`)];
   print(result, lines.join("\n"));
+}
+
+interface Environment {
+  name: string;
+  path: string;
+  refreshUrl: string | null;
+  lastRefresh: { at: string; ok: boolean; status?: number; error?: string } | null;
+}
+
+function describeEnvironment(e: Environment): string {
+  const line = `${e.name}  ${registry().url}${e.path}`;
+  if (!e.refreshUrl) return line;
+  const last = e.lastRefresh;
+  const outcome = !last ? "not called yet" : last.ok ? `last call ok (${last.at})` : `last call failed: ${last.error ?? `HTTP ${last.status}`} (${last.at})`;
+  return `${line}\n  refresh ${e.refreshUrl}  ${outcome}`;
 }
 
 /** `rating@1.2.0`: a version that's already published. */
@@ -188,15 +205,25 @@ switch (command) {
   case "env": {
     const [action = "list", name] = args;
     if (action === "list") {
-      const result = await api<{ environments: { name: string; path: string }[] }>("GET", "/v1/environments");
-      print(result, result.environments.map((e) => `${e.name}  ${registry().url}${e.path}`).join("\n"));
+      const result = await api<{ environments: Environment[] }>("GET", "/v1/environments");
+      print(result, result.environments.map(describeEnvironment).join("\n"));
+    } else if (action === "set") {
+      const target = name ?? fail("usage: genui env set <name> --refresh-url <url>");
+      const url = values["refresh-url"] ?? fail("usage: genui env set <name> --refresh-url <url>  (\"\" clears it)");
+      const updated = await api<Environment>("PUT", `/v1/environments/${target}`, { refreshUrl: url || null });
+      print(
+        updated,
+        updated.refreshUrl
+          ? `${target} calls ${updated.refreshUrl} after every publish, theme or recipe change.`
+          : `${target} has no refresh URL; servers pick up changes at their next check.`,
+      );
     } else if (action === "add") {
       const created = await api<{ name: string; path: string }>("POST", "/v1/environments", { name: name ?? fail("usage: genui env add <name>") });
       print(created, `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`);
     } else if (action === "rm") {
       await api("DELETE", `/v1/environments/${name ?? fail("usage: genui env rm <name>")}`);
       console.log(`Deleted ${name} with what it served: versions, theme and recipes.`);
-    } else fail("usage: genui env list | add <name> | rm <name>");
+    } else fail("usage: genui env list | add <name> | rm <name> | set <name> --refresh-url <url>");
     break;
   }
   case "theme": {

@@ -26,6 +26,7 @@ describe("genui dev server", () => {
     const view = await (await fetch(`${base}/?genui-view`)).text();
     expect(view).toContain('<p id="out">');
     expect(view).toContain("/@vite/client"); // served through Vite, so modules transform on the fly
+    expect(view).toContain("window.openai = {"); // the saved-state shim, run before the view's modules
 
     const harness = await fetch(`${base}/__genui/harness.js`);
     expect(harness.status).toBe(200);

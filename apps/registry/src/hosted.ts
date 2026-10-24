@@ -72,8 +72,8 @@ export async function createHostedMcp(store: Store, { workspace, environment, da
     registry: storeCatalog(store, workspace.id, lookup),
     environment,
     dataTools,
-    validate: (recipe, values) =>
-      validateWithWebhook({ recipe, values, workspaceId: workspace.id, secret: store.webhookSecret(workspace.id), allowPrivate: options.allowPrivateWebhooks }),
+    validate: (recipe, values, viewId) =>
+      validateWithWebhook({ recipe, values, viewId, workspaceId: workspace.id, secret: store.webhookSecret(workspace.id), allowPrivate: options.allowPrivateWebhooks }),
   });
 
   // Earlier versions of components, for old messages the host renders again. Bundles are immutable and kept.
@@ -141,4 +141,19 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
   };
   app.all("/w/:workspace/mcp", serve);
   app.all("/w/:workspace/:environment/mcp", serve);
+
+  // The environment's revision, next to its MCP: the SDK re-lists genui's tools only when it changed.
+  const revision = (c: Context) => {
+    const environment = c.req.param("environment") ?? DEFAULT_ENVIRONMENT;
+    const hosted = resolve(c, String(c.req.param("workspace")), environment);
+    if (hosted instanceof Response) return hosted;
+    const current = store.environment(hosted.workspace.id, environment)!.revision;
+    const etag = `"${current}"`;
+    c.header("etag", etag);
+    c.header("cache-control", "no-store");
+    if (c.req.header("if-none-match") === etag) return c.body(null, 304);
+    return c.json({ revision: current });
+  };
+  app.get("/w/:workspace/revision", revision);
+  app.get("/w/:workspace/:environment/revision", revision);
 }
