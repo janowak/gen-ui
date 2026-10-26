@@ -16,7 +16,7 @@ export interface GenUIOptions {
   /** From `connectGenUI`, once per process and environment: its URL picks the environment this server serves. */
   genui: GenUIClient;
   /**
-   * Long-lived (stateful) servers: re-sync when genui's tools change (a publish, a recipe or theme
+   * Long-lived (stateful) servers: re-sync when genui's tools change (a publish, a theme, instructions or workflow
    * save) and notify the client with list_changed. Leave off for per-request servers.
    */
   watch?: boolean;
@@ -51,8 +51,8 @@ function mirror<T extends { name: string }, H extends { remove(): void }>(mounte
 }
 
 /**
- * Puts genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`), their
- * `ui://` resources and the recipe prompts on your MCP server, next to your own tools. Calls are
+ * Puts genui's tools (`render_form`, `render_chart`, `render_<component>`), their
+ * `ui://` resources and the workflow prompts on your MCP server, next to your own tools. Calls are
  * forwarded to genui. genui's views call your tools through the host, so those never leave your server.
  */
 export async function mountGenUI(server: McpServer, { genui, watch = false }: GenUIOptions): Promise<GenUIHandle> {

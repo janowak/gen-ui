@@ -1,7 +1,6 @@
 import { z } from "zod";
-import type { WorkflowPrompt } from "./guide.js";
-import type { Recipe } from "./recipe.js";
 import { Theme } from "./theme.js";
+import type { Workflow } from "./workflow.js";
 
 /** Every workspace has it, and the end-user MCP serves it at `/w/<workspace>/mcp`. Admins add the others. */
 export const DEFAULT_ENVIRONMENT = "prod";
@@ -47,15 +46,14 @@ export interface CatalogComponent {
   manifest: ComponentManifest;
 }
 
-/** What one environment serves: its components, theme, recipes, instructions and workflow prompts. */
+/** What one environment serves: its components, theme, instructions and workflows. */
 export interface Catalog {
   environment: string;
   theme: Theme | null;
   components: CatalogComponent[];
-  recipes: Recipe[];
-  /** The end-user MCP's server instructions. */
+  /** The environment's own instructions; `serverInstructions` adds the workflows. */
   instructions: string | null;
-  prompts: WorkflowPrompt[];
+  workflows: Workflow[];
 }
 
 /** Max bundle size accepted by the registry. D1 stores at most 2 MB per row; the rest is room for the manifest. */

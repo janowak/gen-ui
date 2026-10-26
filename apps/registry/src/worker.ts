@@ -1,9 +1,9 @@
 import chart from "@genui/ui/views/chart.html";
 import form from "@genui/ui/views/form.html";
 import manager from "@genui/ui/views/manager.html";
-import recipes from "@genui/ui/views/recipes.html";
+import workflows from "@genui/ui/views/workflows.html";
 import theme from "@genui/ui/views/theme.html";
-import guide from "@genui/ui/views/guide.html";
+import instructions from "@genui/ui/views/instructions.html";
 import workspace from "@genui/ui/views/workspace.html";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
@@ -20,7 +20,7 @@ interface Env {
   DB: D1Binding;
 }
 
-const assets: Assets = { views: { form, chart, manager, theme, recipes, workspace, guide }, pages: { "sign-in": signIn, consent } };
+const assets: Assets = { views: { form, chart, manager, theme, workflows, workspace, instructions }, pages: { "sign-in": signIn, consent } };
 
 /**
  * Client ID Metadata Documents over plain fetch. A Worker has no private network behind it to reach,

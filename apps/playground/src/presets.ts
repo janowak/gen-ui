@@ -97,10 +97,6 @@ export const PRESETS: Record<string, { tool: string; args: Record<string, unknow
     tool: "render_rating",
     args: { question: "How was your last order?", subject: "order-1042" },
   },
-  "Recipe: create_order (pre-filled)": {
-    tool: "use_recipe",
-    args: { recipe: "create_order", prefill: { customer: { id: "c-2", label: "Globex" }, priority: "high", notes: "Gift wrap" } },
-  },
   "Registry: manage components": { tool: "manage_components", args: {} },
   "Registry: theme controller": { tool: "open_theme_controller", args: {} },
   "Registry: preview rating (active environment)": { tool: "preview_rating", args: { question: "Preview: how was it?" } },

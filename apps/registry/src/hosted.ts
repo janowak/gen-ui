@@ -1,4 +1,4 @@
-import { DEFAULT_ENVIRONMENT } from "@genui/format";
+import { DEFAULT_ENVIRONMENT, serverInstructions } from "@genui/format";
 import { mountGenUI, type CatalogSource } from "@genui/runtime";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import type { Context, Hono } from "hono";
@@ -7,7 +7,6 @@ import { ALLOWED } from "./api.js";
 import type { RegistryAppOptions } from "./app.js";
 import type { Store } from "./store.js";
 import { builtInViews } from "./views.js";
-import { validateWithWebhook } from "./webhook.js";
 
 /**
  * Who the end-user MCP serves. Public: anyone with the URL of a workspace that didn't make it private,
@@ -66,14 +65,14 @@ export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLo
 export const iconPath = (workspaceId: string) => `/w/${workspaceId}/icon`;
 
 /**
- * One environment's end-user MCP: genui's forms, charts, recipes and components, presented with the
- * workspace's branding and the environment's instructions and workflow prompts. Recipes with
- * `validate` are checked by their webhook before the values reach the model.
+ * One environment's end-user MCP: genui's forms, charts and components, presented with the workspace's
+ * branding. Its instructions carry the workflows without params; those with params are slash commands.
  */
 export async function createHostedMcp(store: Store, { workspace, environment, dataTools, origin }: Hosted, options: RegistryAppOptions, bundle?: BundleLookup): Promise<McpServer> {
   const lookup = bundle ?? ((hash: string) => store.bundle(workspace.id, hash));
   const [branding, snapshot] = await Promise.all([store.branding(workspace.id), storeCatalog(store, workspace.id, lookup).snapshot(environment)]);
   const label = environment === DEFAULT_ENVIRONMENT ? "" : ` (${environment})`;
+  const instructions = snapshot && serverInstructions(snapshot.catalog.instructions, snapshot.catalog.workflows);
   const server = new McpServer(
     {
       name: `${workspace.name}${label}`,
@@ -85,15 +84,13 @@ export async function createHostedMcp(store: Store, { workspace, environment, da
         ? { icons: [{ src: `${origin}${iconPath(workspace.id)}?v=${branding.icon.hash}`, mimeType: branding.icon.type, ...(branding.icon.type === "image/svg+xml" ? { sizes: ["any"] } : {}) }] }
         : {}),
     },
-    snapshot?.catalog.instructions ? { instructions: snapshot.catalog.instructions } : {},
+    instructions ? { instructions } : {},
   );
   await mountGenUI(server, {
     views: builtInViews(options.assets),
     registry: { snapshot: async () => snapshot, bundle: lookup },
     environment,
     dataTools,
-    validate: async (recipe, values, viewId) =>
-      validateWithWebhook({ recipe, values, viewId, workspaceId: workspace.id, secret: await store.webhookSecret(workspace.id), allowPrivate: options.allowPrivateWebhooks }),
   });
   return server;
 }

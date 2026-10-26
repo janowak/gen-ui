@@ -26,9 +26,6 @@ export function readViewId(result: { structuredContent?: unknown; _meta?: unknow
   return typeof meta === "string" ? meta : undefined;
 }
 
-/** Key under which use_recipe returns the built form in the result's `_meta`; the form view renders it. */
-export const FORM_META_KEY = "genui/form";
-
 /**
  * Version of the component contract above. Components built with @genui/kit declare the version
  * they need in their manifest (`contract`); the SDK skips components that need a newer one.

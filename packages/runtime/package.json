@@ -11,6 +11,10 @@
     "./local": {
       "types": "./dist/local.d.ts",
       "default": "./dist/local.js"
+    },
+    "./serve": {
+      "types": "./dist/serve.d.ts",
+      "default": "./dist/serve.js"
     }
   },
   "files": [
@@ -23,12 +27,14 @@
   },
   "dependencies": {
     "@genui/format": "workspace:*",
+    "@genui/ui": "workspace:*",
+    "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@modelcontextprotocol/server": "^2.3.1",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@genui/ui": "workspace:*",
     "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^24.0.0",
     "vitest": "^5.0.5"

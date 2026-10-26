@@ -1,4 +1,4 @@
-"""genui for Python MCP servers: forms, charts, recipes and registry components rendered as MCP Apps.
+"""genui for Python MCP servers: forms, charts and registry components rendered as MCP Apps.
 
     from mcp.server.mcpserver import MCPServer
     from genui import connect_genui, mount_genui

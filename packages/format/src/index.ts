@@ -4,6 +4,6 @@ export * from "./theme.js";
 export * from "./path.js";
 export * from "./normalize.js";
 export * from "./registry.js";
-export * from "./recipe.js";
+export * from "./workflow.js";
 export * from "./meta.js";
-export * from "./guide.js";
+export * from "./branding.js";

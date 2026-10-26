@@ -3,19 +3,16 @@ import {
   ChartSpec,
   COMPONENT_CONTRACT,
   DEFAULT_ENVIRONMENT,
-  FORM_META_KEY,
   FormSpec,
+  isCommand,
   PREVIEW_META_KEY,
-  RecipePrefill,
-  recipeForm,
-  type SubmitResult,
   THEME_META_KEY,
   VIEW_CONTENT_KEY,
   VIEW_ID_META_KEY,
   type Catalog,
   type CatalogComponent,
-  type Recipe,
   type Theme,
+  workflowMessage,
 } from "@genui/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, ResourceNotFoundError, ResourceTemplate, type McpServer } from "@modelcontextprotocol/server";
@@ -28,7 +25,7 @@ export interface Snapshot {
   bundles: Record<string, string>;
 }
 
-/** Where custom components, recipes and the theme come from: the registry's store, or files on disk. */
+/** Where custom components, workflows and the theme come from: the registry's store, or files on disk. */
 export interface CatalogSource {
   snapshot(environment: string): Promise<Snapshot | undefined>;
   /**
@@ -48,7 +45,7 @@ export interface GenUIOptions {
   theme?: Theme | (() => Theme | undefined | Promise<Theme | undefined>);
   /** The built-in form and chart views (`builtInViews(assets)`). */
   views: Record<ViewName, ViewBundle>;
-  /** Custom components, recipes and the theme. */
+  /** Custom components, workflows and the theme. */
   registry?: CatalogSource;
   /**
    * Environment this server serves. Default prod. Elsewhere, tool and prompt names end in
@@ -60,30 +57,14 @@ export interface GenUIOptions {
    * so they never collide with a customer server's render_* tools when both connectors are on.
    */
   preview?: boolean;
-  /** Recipes to offer through use_recipe and as slash commands (MCP prompts). Defaults to the registry's. */
-  recipes?: Recipe[];
   /**
    * Whether views can call tools on this server (option sources, chart sources, submit tools).
    * True behind a customer's server (the SDK forwards genui's tools from there, next to their data
    * tools). False for the public end-user MCP, which only renders: specs that use tools are
-   * rejected, and recipe forms send their values back to the conversation. Default true.
+   * rejected. Default true.
    */
   dataTools?: boolean;
-  /**
-   * Checks a recipe's values before they reach the model, for recipes with `validate` set. Their
-   * forms submit to the app-only genui_validate tool, which calls this with the form's render id
-   * (one per rendered form, so a repeated submit can be recognised). The end-user MCP posts the
-   * values to the recipe's webhook.
-   */
-  validate?: (recipe: Recipe, values: Record<string, unknown>, viewId: string | undefined) => Promise<SubmitResult>;
 }
-
-/** App-only tool that recipe forms with `validate` submit to. */
-const VALIDATE_TOOL = "genui_validate";
-/** Fixed submit param naming the recipe; the field values are merged next to it. */
-const RECIPE_PARAM = "genui_recipe";
-/** Submit param the form fills with its render id (`idempotencyParam`). */
-const VIEW_PARAM = "genui_view";
 
 /** Components already reported as too new, so per-request servers warn once per process. */
 const tooNew = new Set<string>();
@@ -134,8 +115,6 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   const label = suffix ? ` (${environment})` : "";
   const formTool = options.preview ? "preview_form" : `render_form${suffix}`;
   const chartTool = options.preview ? "preview_chart" : `render_chart${suffix}`;
-  const recipeTool = options.preview ? "preview_recipe" : `use_recipe${suffix}`;
-  const validateTool = `${VALIDATE_TOOL}${suffix}`;
 
   // Read once: the registry builds a server per request, so this is what the request should see.
   const snapshot = await registry?.snapshot(environment);
@@ -288,106 +267,19 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
     );
   }
 
-  // Workflow prompts: slash commands that start one of the workspace's workflows.
+  // Workflows with params are slash commands (MCP prompts) taking them. The others are in the server instructions.
   if (!options.preview) {
-    for (const workflow of snapshot?.catalog.prompts ?? []) {
+    for (const workflow of (snapshot?.catalog.workflows ?? []).filter(isCommand)) {
+      const args = Object.fromEntries(
+        workflow.params.map((p) => [p.name, p.required ? z.string().describe(p.description) : z.string().optional().describe(p.description)]),
+      );
       server.registerPrompt(
         `${workflow.name}${suffix}`,
-        {
-          title: `${workflow.title ?? workflow.name}${label}`,
-          description: workflow.description,
-          argsSchema: z.object({ details: z.string().optional().describe("Anything the workflow should know, in plain words.") }),
-        },
-        ({ details }) => ({
-          messages: [{ role: "user", content: { type: "text", text: details ? `${workflow.prompt}\n\nDetails: ${details}` : workflow.prompt } }],
+        { title: `${workflow.title ?? workflow.name}${label}`, description: workflow.description, argsSchema: z.object(args) },
+        (values: Record<string, string | undefined>) => ({
+          messages: [{ role: "user", content: { type: "text", text: workflowMessage(workflow, values) } }],
         }),
       );
-    }
-  }
-
-  // Recipes: one use_recipe tool (the server builds the form; the model picks and pre-fills)
-  // plus one prompt per recipe, which hosts show as a slash command.
-  const recipes = options.recipes ?? snapshot?.catalog.recipes ?? [];
-  if (recipes.length) {
-    const names = recipes.map((r) => r.name) as [string, ...string[]];
-    const list = recipes.map((r) => `- ${r.name}: ${r.when}${r.notes ? ` ${r.notes}` : ""}`).join("\n");
-    registerAppTool(
-      server,
-      recipeTool,
-      {
-        title: options.preview ? "Preview recipe" : `Use recipe${label}`,
-        description:
-          preview +
-          `Show one of this workspace's ready-made forms. Prefer it over ${formTool} whenever a recipe matches what the user wants. ` +
-          "Pick the recipe and pre-fill the fields you already know from the conversation; the fields, validation and submit action are fixed. " +
-          "Do not call the submit tool yourself.\nRecipes:\n" +
-          list,
-        inputSchema: z.object({
-          recipe: z.enum(names),
-          prefill: RecipePrefill.optional().describe("Known values keyed by field name. Selects take an option id; tool-backed selects take { id, label }."),
-        }),
-        _meta: { ui: { resourceUri: views.form.uri } },
-      },
-      async ({ recipe: name, prefill }) => {
-        const recipe = recipes.find((r) => r.name === name)!;
-        const form = recipeForm(recipe, prefill);
-        if (options.validate && recipe.validate) {
-          // Checked by genui_validate first, then sent to the model like a form without a submit tool.
-          form.submit = { toolName: validateTool, params: { [RECIPE_PARAM]: recipe.name }, idempotencyParam: VIEW_PARAM, label: form.submit?.label };
-        } else if (!dataTools) {
-          // No submit tool to call on this server: the values come back to the conversation instead.
-          delete form.submit;
-        }
-        return {
-          content: [{ type: "text", text: `Showing the "${recipe.title ?? recipe.name}" form. The user fills it in; you receive the result in context.` }],
-          ...(await rendered({ [FORM_META_KEY]: form })),
-        };
-      },
-    );
-
-    const validated = options.validate ? recipes.filter((r) => r.validate) : [];
-    if (validated.length) {
-      server.registerTool(
-        validateTool,
-        {
-          title: "Check form values",
-          description: "Checks a recipe form's values before they reach the model. Called by the form, never by the model.",
-          inputSchema: z.looseObject({ [RECIPE_PARAM]: z.string(), [VIEW_PARAM]: z.string().optional() }),
-          _meta: { ui: { visibility: ["app"] } },
-        },
-        async ({ [RECIPE_PARAM]: name, [VIEW_PARAM]: viewId, ...values }) => {
-          const recipe = validated.find((r) => r.name === name);
-          const result: SubmitResult = recipe ? await options.validate!(recipe, values, viewId) : { ok: false, formError: `Unknown recipe "${name}".` };
-          const text = result.ok ? (result.message ?? "Submitted.") : (result.formError ?? "Some answers need fixing.");
-          return { content: [{ type: "text", text }], structuredContent: result };
-        },
-      );
-    }
-
-    if (!options.preview) {
-      for (const recipe of recipes) {
-        server.registerPrompt(
-          `${recipe.name}${suffix}`,
-          {
-            title: `${recipe.title ?? recipe.name}${label}`,
-            description: recipe.when,
-            argsSchema: z.object({ details: z.string().optional().describe("Anything to pre-fill, in plain words.") }),
-          },
-          ({ details }) => ({
-            messages: [
-              {
-                role: "user",
-                content: {
-                  type: "text",
-                  text:
-                    `Use the "${recipe.title ?? recipe.name}" recipe: call ${recipeTool} with recipe "${recipe.name}". ` +
-                    (details ? `Pre-fill from: ${details}` : "Pre-fill what you already know from this conversation."),
-                },
-              },
-            ],
-          }),
-        );
-      }
     }
   }
 

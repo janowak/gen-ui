@@ -1,4 +1,4 @@
-"""`mount_genui`: puts genui's tools, `ui://` resources and recipe prompts on your MCPServer.
+"""`mount_genui`: puts genui's tools, `ui://` resources and workflow prompts on your MCPServer.
 
 A port of `packages/sdk/src/mount.ts`. Calls are forwarded to genui; your own tools stay on your
 server, where genui's views call them through the host.
@@ -136,13 +136,13 @@ def mount_genui(
     watch: bool = False,
     bus: SubscriptionBus | None = None,
 ) -> GenUIHandle:
-    """Puts genui's tools (render_form, render_chart, use_recipe, render_<component>), their `ui://`
-    resources and the recipe prompts on your server, next to your own tools.
+    """Puts genui's tools (render_form, render_chart, render_<component>), their `ui://`
+    resources and the workflow prompts on your server, next to your own tools.
 
     Args:
         server: The MCPServer that also serves your data and submit tools.
         genui: From `connect_genui`, once per process. Its URL picks the environment this server serves.
-        watch: Re-sync when genui's tools change (on a publish or a recipe/theme save) and notify clients (list_changed).
+        watch: Re-sync when genui's tools change (on a publish or a theme, instructions or workflow save) and notify clients (list_changed).
         bus: The SubscriptionBus passed to MCPServer(subscriptions=...), used for watch notifications to
             2026-07-28 clients. Defaults to the server's own bus.
     """

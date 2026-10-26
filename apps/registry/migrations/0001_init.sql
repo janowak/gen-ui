@@ -2,17 +2,15 @@
 -- usually one. Versions are immutable; deployments point an environment at one.
 
 -- hosted: the workspace's end-user MCP is public (no server token needed).
--- webhook_secret signs requests to recipe validation webhooks; kept in plain text because signing needs it.
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   hosted INTEGER NOT NULL DEFAULT 0,
-  webhook_secret TEXT,
   created_at TEXT NOT NULL
 );
 
 -- Each environment serves exactly what was last published or saved to it: component versions, its theme
--- and its recipes. Every workspace has prod. Every change bumps the revision, which the SDK compares to know
+-- and its workflows. Every workspace has prod. Every change bumps the revision, which the SDK compares to know
 -- when to re-list; a company's server can register a refresh URL that genui calls on each change.
 CREATE TABLE environments (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -64,7 +62,7 @@ CREATE TABLE deployments (
 );
 
 -- People who manage a workspace. user_id is the better-auth user id. environment: what the person's
--- previews, theme and recipes show in the management MCP (null: prod).
+-- previews, theme, instructions and workflows show in the management MCP (null: prod).
 CREATE TABLE members (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
   user_id TEXT NOT NULL,
@@ -84,12 +82,12 @@ CREATE TABLE invites (
   PRIMARY KEY (workspace_id, email)
 );
 
--- Named, business-owned forms, per environment.
-CREATE TABLE recipes (
+-- Playbooks for the model, per environment: with params a slash command, without part of the instructions.
+CREATE TABLE workflows (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
   environment TEXT NOT NULL,
   name TEXT NOT NULL,
-  recipe TEXT NOT NULL,
+  workflow TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (workspace_id, environment, name)
 );

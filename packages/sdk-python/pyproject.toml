@@ -1,7 +1,7 @@
 [project]
 name = "genui-sdk"
 version = "0.1.0"
-description = "genui for Python MCP servers: forms, charts, recipes and registry components as MCP Apps, served by genui."
+description = "genui for Python MCP servers: forms, charts and registry components as MCP Apps, served by genui."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

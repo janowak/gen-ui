@@ -1,6 +1,7 @@
-import { readdir, readFile, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { ComponentManifest, Guide, MAX_BUNDLE_BYTES, Recipe, Theme, type Catalog, type WorkflowPrompt } from "@genui/format";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
+import { ComponentManifest, MAX_BUNDLE_BYTES, MAX_ENVIRONMENT_INSTRUCTIONS, MAX_INSTRUCTIONS, serverInstructions, Theme, Workflow, type Catalog } from "@genui/format";
+import { parse as parseYaml } from "yaml";
 import type { z } from "zod";
 import type { CatalogSource, Snapshot } from "./runtime.js";
 import { contentHash } from "./views.js";
@@ -63,26 +64,69 @@ async function readSchema<T extends z.ZodType>(path: string, schema: T): Promise
   return parsed.data;
 }
 
-/** One recipe file, or every `*.json` in a directory. */
-async function recipeFiles(path: string): Promise<string[]> {
-  const info = await stat(path).catch(() => undefined);
-  if (!info) throw new Error(`${path} not found`);
-  if (!info.isDirectory()) return [path];
-  return (await readdir(path))
-    .filter((file) => file.endsWith(".json"))
-    .sort()
-    .map((file) => join(path, file));
+/** Workflow files sit next to the components they use: `<name>.workflow.md`, in a component dir or its workflows/. */
+export const WORKFLOW_FILE = ".workflow.md";
+
+/** A workflow as it sits on disk, ready to publish or serve. */
+export interface WorkflowFile {
+  workflow: Workflow;
+  path: string;
+}
+
+/**
+ * Parses a workflow file: YAML frontmatter (title, description, params; name defaults to the file
+ * name) and the instructions as the Markdown body. A `.json` file holds the workflow as is.
+ * Throws with a message for the developer.
+ */
+export function parseWorkflowFile(text: string, path: string): Workflow {
+  let raw: Record<string, unknown>;
+  if (path.endsWith(".json")) raw = parseJson(text, path) as Record<string, unknown>;
+  else {
+    const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
+    if (!match) throw new Error(`invalid workflow ${path}: expected YAML frontmatter between --- lines, then the instructions`);
+    try {
+      raw = { ...((parseYaml(match[1]!) as Record<string, unknown> | null) ?? {}), instructions: match[2]!.trim() };
+    } catch (cause) {
+      throw new Error(`invalid workflow ${path}: ${message(cause)}`);
+    }
+  }
+  const name = raw.name ?? basename(path).replace(/\.workflow\.md$|\.md$|\.json$/, "");
+  const parsed = Workflow.safeParse({ ...raw, name });
+  if (!parsed.success) throw new Error(`invalid workflow ${path}:\n${issues(parsed.error)}`);
+  return parsed.data;
+}
+
+export async function readWorkflowFile(path: string): Promise<WorkflowFile> {
+  const text = await readFile(path, "utf8").catch(() => undefined);
+  if (text === undefined) throw new Error(`${path} not found`);
+  return { workflow: parseWorkflowFile(text, path), path };
+}
+
+/** The `*.workflow.md` files in dir and dir/workflows/, by name. Throws when two share a name. */
+export async function readWorkflowDir(dir: string): Promise<WorkflowFile[]> {
+  const root = resolve(dir);
+  const paths: string[] = [];
+  for (const folder of [root, resolve(root, "workflows")]) {
+    const entries = await readdir(folder).catch(() => [] as string[]);
+    paths.push(...entries.filter((entry) => entry.endsWith(WORKFLOW_FILE)).map((entry) => resolve(folder, entry)));
+  }
+  const files = await Promise.all(paths.sort().map((path) => readWorkflowFile(path)));
+  const seen = new Map<string, string>();
+  for (const { workflow, path } of files) {
+    const other = seen.get(workflow.name);
+    if (other) throw new Error(`two workflows are named ${workflow.name}: ${other} and ${path}`);
+    seen.set(workflow.name, path);
+  }
+  return files.sort((a, b) => a.workflow.name.localeCompare(b.workflow.name));
 }
 
 export interface LocalCatalogOptions {
-  /** Component directories, as `genui publish` takes them. */
+  /** Component directories, as `genui publish` takes them, with their workflow files. A dir may hold only workflows. */
   dirs: string[];
   /** Theme JSON file. */
   theme?: string;
-  /** A recipe JSON file, or a directory of them. */
-  recipes?: string;
-  /** Guide JSON file: the MCP's instructions and workflow prompts. */
-  guide?: string;
+  /** Markdown file: the environment's MCP instructions. Workflows without params are added after it. */
+  instructions?: string;
 }
 
 /** Something that didn't load. The rest is served without it. */
@@ -105,28 +149,44 @@ export interface LocalCatalog extends CatalogSource {
   revision(): number;
   components(): ComponentDir[];
   problems(): Problem[];
-  /** The environment's instructions, for the MCP server's `instructions`. */
+  /** The server instructions hosts get: the environment's, with the workflows added. */
   instructions(): string | undefined;
 }
 
 interface State {
   components: ComponentDir[];
   theme: Theme | null;
-  recipes: Recipe[];
-  guide: { instructions: string | null; prompts: WorkflowPrompt[] };
+  instructions: string | null;
+  workflows: Workflow[];
   problems: Problem[];
 }
 
 /** What's served, without paths or HTML, so a rebuild with the same output doesn't count as a change. */
 const signature = (state: State) =>
-  JSON.stringify({ components: state.components.map((c) => [c.manifest, c.hash]), theme: state.theme, recipes: state.recipes, guide: state.guide });
+  JSON.stringify({ components: state.components.map((c) => [c.manifest, c.hash]), theme: state.theme, instructions: state.instructions, workflows: state.workflows });
 
 async function load(options: LocalCatalogOptions): Promise<State> {
   const problems: Problem[] = [];
   const components: ComponentDir[] = [];
+  const workflows: Workflow[] = [];
   for (const dir of options.dirs) {
+    let hasWorkflows = false;
     try {
-      const component = await readComponentDir(dir);
+      for (const { workflow, path } of await readWorkflowDir(dir)) {
+        hasWorkflows = true;
+        if (workflows.some((w) => w.name === workflow.name)) problems.push({ path, message: `workflow "${workflow.name}" is defined twice; skipped` });
+        else workflows.push(workflow);
+      }
+    } catch (cause) {
+      problems.push({ path: resolve(dir), message: message(cause) });
+    }
+    try {
+      const component = await readComponentDir(dir).catch((cause: unknown) => {
+        // A dir with only workflows is fine.
+        if (hasWorkflows && message(cause).startsWith("no genui.component.json")) return undefined;
+        throw cause;
+      });
+      if (!component) continue;
       const taken = components.find((c) => c.manifest.name === component.manifest.name);
       if (taken) throw new Error(`component "${component.manifest.name}" is already served from ${taken.manifestPath}`);
       components.push(component);
@@ -144,39 +204,21 @@ async function load(options: LocalCatalogOptions): Promise<State> {
     }
   }
 
-  const recipes: Recipe[] = [];
-  if (options.recipes) {
-    try {
-      for (const file of await recipeFiles(options.recipes)) {
-        try {
-          const recipe = await readSchema(file, Recipe);
-          if (recipes.some((r) => r.name === recipe.name)) throw new Error(`recipe "${recipe.name}" is defined twice`);
-          recipes.push(recipe);
-        } catch (cause) {
-          problems.push({ path: resolve(file), message: message(cause) });
-        }
-      }
-    } catch (cause) {
-      problems.push({ path: resolve(options.recipes), message: message(cause) });
-    }
+  let instructions: string | null = null;
+  if (options.instructions) {
+    const text = await readFile(options.instructions, "utf8").catch(() => undefined);
+    if (text === undefined) problems.push({ path: resolve(options.instructions), message: `${options.instructions} not found` });
+    else if (text.trim().length > MAX_ENVIRONMENT_INSTRUCTIONS)
+      problems.push({ path: resolve(options.instructions), message: `${options.instructions} is over ${MAX_ENVIRONMENT_INSTRUCTIONS} characters; the registry rejects it` });
+    instructions = text?.trim() || null;
+  }
+  const length = serverInstructions(instructions, workflows)?.length ?? 0;
+  if (length > MAX_INSTRUCTIONS) {
+    problems.push({ path: resolve(options.instructions ?? "."), message: `the server instructions are ${length} characters; the registry allows ${MAX_INSTRUCTIONS}. Shorten them or give workflows params` });
   }
 
-  const guide: State["guide"] = { instructions: null, prompts: [] };
-  if (options.guide) {
-    try {
-      const read = await readSchema(options.guide, Guide);
-      guide.instructions = read.instructions?.trim() || null;
-      for (const prompt of read.prompts) {
-        // A recipe's slash command has the recipe's name; the registry rejects the clash on save.
-        if (recipes.some((r) => r.name === prompt.name)) problems.push({ path: resolve(options.guide), message: `prompt "${prompt.name}" has a recipe's name; skipped` });
-        else guide.prompts.push(prompt);
-      }
-    } catch (cause) {
-      problems.push({ path: resolve(options.guide), message: message(cause) });
-    }
-  }
-
-  return { components, theme, recipes, guide, problems };
+  workflows.sort((a, b) => a.name.localeCompare(b.name));
+  return { components, theme, instructions, workflows, problems };
 }
 
 /** Describes what changed between two loads, plus problems that are new. */
@@ -189,8 +231,8 @@ function describe(before: State, after: State): string[] {
   }
   for (const b of before.components) if (!after.components.some((c) => c.manifest.name === b.manifest.name)) lines.push(`${b.manifest.name} removed`);
   if (JSON.stringify(before.theme) !== JSON.stringify(after.theme)) lines.push("theme reloaded");
-  if (JSON.stringify(before.recipes) !== JSON.stringify(after.recipes)) lines.push(`recipes reloaded (${after.recipes.map((r) => r.name).join(", ") || "none"})`);
-  if (JSON.stringify(before.guide) !== JSON.stringify(after.guide)) lines.push("guide reloaded");
+  if (JSON.stringify(before.workflows) !== JSON.stringify(after.workflows)) lines.push(`workflows reloaded (${after.workflows.map((w) => w.name).join(", ") || "none"})`);
+  if (before.instructions !== after.instructions) lines.push("instructions reloaded");
   for (const p of after.problems) {
     if (!before.problems.some((b) => b.path === p.path && b.message === p.message)) lines.push(`problem: ${p.message}`);
   }
@@ -198,7 +240,7 @@ function describe(before: State, after: State): string[] {
 }
 
 /**
- * Components, theme, recipes and guide read from files, for `genui serve`. A file that doesn't load
+ * Components, workflows, theme and instructions read from files, for `genui serve`. A file that doesn't load
  * is reported in `problems()` and left out; the next `reload()` tries it again. Every bundle seen
  * since start stays available by hash, so messages rendered before a rebuild still load.
  */
@@ -215,9 +257,8 @@ export async function localCatalog(options: LocalCatalogOptions): Promise<LocalC
         environment,
         theme: state.theme,
         components: state.components.map(({ manifest, hash }) => ({ name: manifest.name, version: manifest.version, hash, manifest })),
-        recipes: state.recipes,
-        instructions: state.guide.instructions,
-        prompts: state.guide.prompts,
+        instructions: state.instructions,
+        workflows: state.workflows,
       };
       return { catalog, bundles: Object.fromEntries(state.components.map((c) => [c.hash, c.html])) };
     },
@@ -236,6 +277,6 @@ export async function localCatalog(options: LocalCatalogOptions): Promise<LocalC
     revision: () => revision,
     components: () => state.components,
     problems: () => state.problems,
-    instructions: () => state.guide.instructions ?? undefined,
+    instructions: () => serverInstructions(state.instructions, state.workflows),
   };
 }

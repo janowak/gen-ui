@@ -129,7 +129,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   async function load(): Promise<void> {
     const { tools, prompts, instructions } = await request(async (client) => ({
       tools: (await client.listTools(undefined, { timeout, cacheMode: "refresh" })).tools,
-      // No prompts capability until the environment has recipes or workflow prompts.
+      // No prompts capability until the environment has a workflow with params.
       prompts: client.getServerCapabilities()?.prompts ? (await client.listPrompts(undefined, { timeout, cacheMode: "refresh" })).prompts : [],
       instructions: client.getInstructions(),
     }));

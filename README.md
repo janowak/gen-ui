@@ -1,6 +1,6 @@
 # genui
 
-Forms, charts and custom components for MCP Apps, with built-in loading patterns, served by genui's MCP and forwarded from your MCP server through a thin SDK. A runtime registry keeps the versions, theme and recipes each environment (prod, staging, …) serves. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
+Forms, charts and custom components for MCP Apps, with built-in loading patterns, served by genui's MCP and forwarded from your MCP server through a thin SDK. A runtime registry keeps the versions, theme, instructions and workflows each environment (prod, staging, …) serves. See [V1-PLAN.md](V1-PLAN.md) for the product plan.
 
 ## Packages
 
@@ -10,14 +10,14 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
 | `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
 | `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
-| `packages/cli` | `genui` CLI: publish (to an environment) / list / env / theme / recipe / token |
-| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, recipes, components from a `CatalogSource`). Used by the registry; `genui serve` next ([DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md)) |
-| `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme and recipes), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@genui/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
+| `packages/cli` | `genui` CLI: publish (components and workflows, to an environment) / list / env / theme / workflow / instructions / token |
+| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, components and workflow prompts from a `CatalogSource`; `@genui/runtime/local` reads component dirs and workflow files). Used by the registry; `genui serve` next ([DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md)) |
+| `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme, instructions and workflows), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@genui/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
 | `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@genui/ui/styles.css`): `pnpm --filter @genui/site dev` on http://localhost:5180 |
 | `packages/kit` | `@genui/kit`: build custom components. `defineComponent` + `mount` runtime, and the `genui()` Vite plugin |
-| `examples/rating` | Custom component (vanilla TS on `@genui/kit`) published through the registry |
+| `examples/rating` | Custom component (vanilla TS on `@genui/kit`) published through the registry, with workflows next to it in `workflows/` |
 
 Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/compat` (about 57 KB gzipped less per view), while code, types and shadcn components stay React. [`runtime/preact.ts`](packages/ui/src/runtime/preact.ts) passes `ref` to function components as a prop, like React 19, so components from `shadcn add` work unchanged. Avoid React 19-only APIs (`use`, `useActionState`, `useOptimistic`, `<Activity>`) and fragments as direct children of Recharts charts.
 
@@ -92,7 +92,7 @@ Fill in `registry.env` before starting; the logs show the admin token printed at
 
 ## Registry and environments
 
-genui is a runtime registry, not a release manager. Each workspace has environments: `prod` always exists, and admins add the others. An environment serves exactly what was last published or saved to it (component versions, its theme, its recipes), and nothing moves between environments on its own. There is no promote or rollback: to go back, publish the older version again.
+genui is a runtime registry, not a release manager. Each workspace has environments: `prod` always exists, and admins add the others. An environment serves exactly what was last published or saved to it (component versions, its theme, its instructions and workflows), and nothing moves between environments on its own. There is no promote or rollback: to go back, publish the older version again.
 
 ```bash
 export GENUI_URL=http://localhost:4000
@@ -103,9 +103,9 @@ GENUI_TOKEN=<admin> genui token publish ci-preview --env staging       # CI: pub
 GENUI_TOKEN=<admin> genui token server demo                            # SDK: the end-user MCP with data tools
 GENUI_TOKEN=<publish> genui publish examples/rating --env staging      # → staging
 GENUI_TOKEN=<publish> genui publish rating@1.2.0 --env prod            # prod serves 1.2.0, no rebuild
-GENUI_TOKEN=<publish> genui publish examples/rating                    # → prod (the default)
+GENUI_TOKEN=<publish> genui publish examples/rating                    # → prod (the default), component and its workflows
 GENUI_TOKEN=<admin> genui theme theme.json --env staging               # staging's theme
-GENUI_TOKEN=<admin> genui recipe set recipe.json --env staging         # a recipe in staging
+GENUI_TOKEN=<admin> genui instructions instructions.md --env staging  # staging's MCP instructions
 ```
 
 - Versions are immutable: one version, one bundle. They don't have to increase.
@@ -113,7 +113,23 @@ GENUI_TOKEN=<admin> genui recipe set recipe.json --env staging         # a recip
 - A breaking props change (a removed prop or a newly required one) against what the environment served before is a warning, not an error.
 - `--json` prints the registry's response, for scripts.
 
-**Each environment is its own connector.** Its end-user MCP lives at `/w/<workspace>/<environment>/mcp` (prod at `/w/<workspace>/mcp`). Outside prod, tool and prompt names end in the environment's name (`render_form_staging`, `render_rating_staging`, `/add_item_staging`), so a staging connector can sit next to prod's in the same chat and testers see which one ran.
+**Workflows sit next to components.** A workflow is a playbook for the model in your own words: `<name>.workflow.md` in a component dir or its `workflows/`, with YAML frontmatter and the steps as the body. `genui publish <dir>` sends the dir's component and workflows to the environment, with the same publish token (a dir may hold only workflows). `genui workflow set|rm|list` handles single ones; admins can also edit them from the `manage_workflows` view.
+
+```md
+---
+title: New order
+description: The user wants to create an order for a customer.
+params:                       # with params: the slash command /create_order taking them
+  - name: customer
+    description: Customer name, if you know it
+---
+1. Look the customer up with search_customers.
+2. Show the order form with render_form … submit to create_order.
+```
+
+A workflow without params isn't a command: hosts get it in the MCP server instructions, after the environment's own instructions (`genui instructions <file.md>`). Those instructions go into every conversation, so together they're capped at 8000 characters.
+
+**Each environment is its own connector.** Its end-user MCP lives at `/w/<workspace>/<environment>/mcp` (prod at `/w/<workspace>/mcp`). Outside prod, tool and prompt names end in the environment's name (`render_form_staging`, `render_rating_staging`, `/create_order_staging`), so a staging connector can sit next to prod's in the same chat and testers see which one ran.
 
 **From CI:** the CI setup picks the environment, not the code. Give each GitHub environment its own token and `GENUI_ENV`:
 
@@ -190,11 +206,11 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 | Tool | Who | What |
 |---|---|---|
 | `manage_components` | members, admins | The version each environment serves, with a picker for the active environment |
-| `use_environment` | members, admins | Switches what your previews, theme and recipes show (default prod). Saved per person; end users are unaffected |
-| `open_theme_controller`, `manage_recipes`, `draft_recipe` | members (read-only), admins | The active environment's theme and recipes |
+| `use_environment` | members, admins | Switches what your previews, theme, instructions and workflows show (default prod). Saved per person; end users are unaffected |
+| `open_theme_controller`, `manage_instructions`, `draft_instructions`, `manage_workflows`, `draft_workflow` | members (read-only), admins | The active environment's theme, instructions and workflows |
 | `preview_<name>` | members, admins | Renders the version the active environment serves, with sample props |
 | `manage_workspace` | members (read-only), admins | People and invites, each environment's end-user MCP address, whether it's public, and tokens (admins). The model can prefill an invite |
-| `theme_save`, `recipe_save`, `recipe_delete` | admins | App-only: run only when a person clicks in the views, never by the model |
+| `theme_save`, `instructions_save`, `workflow_save`, `workflow_delete` | admins | App-only: run only when a person clicks in the views, never by the model |
 | `member_invite`, `invite_cancel`, `token_create`, `token_revoke`, `public_set` | admins | App-only, in the workspace view. A new token is shown once, in the view only: it never reaches the model |
 
 **Sign-in options (env):**
@@ -216,7 +232,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 ## Use the SDK
 
-genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`) are served by genui's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private in the workspace view (`manage_workspace`); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
+genui's tools (`render_form`, `render_chart`, `render_<component>`) and workflow prompts are served by genui's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private in the workspace view (`manage_workspace`); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
 
 ```ts
 import { connectGenUI, mountGenUI } from "@genui/sdk";
@@ -234,7 +250,7 @@ await mountGenUI(server, {
 
 Each deployment of your server (dev, staging, prod) points `GENUI_MCP_URL` at its environment. To serve two environments from one process (staff on staging, say), connect twice and pass the right client per request.
 
-**Picking up changes.** Every publish, theme or recipe change bumps the environment's revision. When genui's tools are used and the SDK's copy is older than `refreshSeconds` (default 60), it checks the revision in the background and re-lists only if it changed; a host never waits on it. To serve changes right away, mount the SDK's refresh endpoint and register its URL. genui then calls it on every change:
+**Picking up changes.** Every publish, theme, instructions or workflow change bumps the environment's revision. When genui's tools are used and the SDK's copy is older than `refreshSeconds` (default 60), it checks the revision in the background and re-lists only if it changed; a host never waits on it. To serve changes right away, mount the SDK's refresh endpoint and register its URL. genui then calls it on every change:
 
 ```ts
 import { refreshHandler } from "@genui/sdk";

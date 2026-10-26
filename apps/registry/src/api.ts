@@ -1,9 +1,9 @@
-import { Branding, ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, Guide, MAX_BUNDLE_BYTES, MAX_ICON_BYTES, Recipe, SEMVER, Theme } from "@genui/format";
+import { Branding, ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_BUNDLE_BYTES, MAX_ENVIRONMENT_INSTRUCTIONS, MAX_ICON_BYTES, SEMVER, Theme, Workflow } from "@genui/format";
 import { Hono, type Context, type Next } from "hono";
 import { z } from "zod";
 import type { RegistryAppOptions } from "./app.js";
 import { RegistryError, type EnvironmentInfo, type Scope, type Store, type TokenInfo } from "./store.js";
-import { webhookUrlError } from "./webhook.js";
+import { refreshUrlError } from "./url.js";
 
 /** Which token scopes may call what. Admin can do everything. */
 export const ALLOWED: Record<Scope, Scope[]> = {
@@ -28,6 +28,7 @@ const TokenBody = z.object({
   environments: z.array(EnvironmentName).min(1).optional(),
 });
 const HostingBody = z.object({ enabled: z.boolean() });
+const InstructionsBody = z.object({ instructions: z.string().max(MAX_ENVIRONMENT_INSTRUCTIONS).nullable() });
 
 type Env = { Variables: { caller: TokenInfo } };
 
@@ -49,7 +50,7 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
   const ws = (c: Context<Env>) => c.get("caller").workspaceId;
 
-  /** The environment a recipe or theme request targets: `?environment=`, default prod. */
+  /** The environment a workflow, theme or instructions request targets: `?environment=`, default prod. */
   async function environment(c: Context<Env>): Promise<string> {
     const name = EnvironmentName.parse(c.req.query("environment") ?? DEFAULT_ENVIRONMENT);
     await store.requireEnvironment(ws(c), name);
@@ -92,7 +93,7 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   api.put("/environments/:name", auth("admin"), async (c) => {
     const name = String(c.req.param("name"));
     const { refreshUrl } = EnvironmentSettingsBody.parse(await body(c));
-    const invalid = refreshUrl && webhookUrlError(refreshUrl, options.allowPrivateWebhooks, "refresh URL");
+    const invalid = refreshUrl && refreshUrlError(refreshUrl, options.allowPrivateWebhooks);
     if (invalid) throw new RegistryError(400, invalid);
     await store.setRefreshUrl(ws(c), name, refreshUrl);
     return c.json(describe(ws(c), (await store.environment(ws(c), name))!));
@@ -109,20 +110,21 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     return c.json({ deleted: c.req.param("name") });
   });
 
-  api.get("/recipes", auth("server"), async (c) => c.json({ recipes: await store.listRecipes(ws(c), await environment(c)) }));
+  api.get("/workflows", auth("server"), async (c) => c.json({ workflows: await store.listWorkflows(ws(c), await environment(c)) }));
 
-  // Admin (or CI with an admin token): recipes can live as JSON files in a repo.
-  api.put("/recipes/:name", auth("admin"), async (c) => {
+  // CI publishes workflows from the repo next to the components they use, with the same tokens.
+  api.put("/workflows/:name", auth("publish"), async (c) => {
     const target = await environment(c);
-    const recipe = Recipe.parse({ ...((await body(c)) as object), name: String(c.req.param("name")) });
-    const webhook = recipe.validate && webhookUrlError(recipe.validate.url, options.allowPrivateWebhooks);
-    if (webhook) throw new RegistryError(400, webhook);
-    const replaced = await store.saveRecipe(ws(c), target, recipe);
-    return c.json({ name: recipe.name, environment: target, replaced }, replaced ? 200 : 201);
+    allowPublish(c, target);
+    const workflow = Workflow.parse({ ...((await body(c)) as object), name: String(c.req.param("name")) });
+    const replaced = await store.saveWorkflow(ws(c), target, workflow);
+    return c.json({ name: workflow.name, environment: target, command: workflow.params.length > 0, replaced }, replaced ? 200 : 201);
   });
 
-  api.delete("/recipes/:name", auth("admin"), async (c) => {
-    await store.deleteRecipe(ws(c), await environment(c), String(c.req.param("name")));
+  api.delete("/workflows/:name", auth("publish"), async (c) => {
+    const target = await environment(c);
+    allowPublish(c, target);
+    await store.deleteWorkflow(ws(c), target, String(c.req.param("name")));
     return c.json({ deleted: c.req.param("name") });
   });
 
@@ -136,14 +138,17 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     return c.json({ environment: target, theme });
   });
 
-  // Instructions and workflow prompts the environment's end-user MCP gives hosts.
-  api.get("/guide", auth("server"), async (c) => c.json({ environment: await environment(c), ...(await store.getGuide(ws(c), await environment(c))) }));
-
-  api.put("/guide", auth("admin"), async (c) => {
+  // What the environment's MCP helps with; hosts get it with the workflows added.
+  api.get("/instructions", auth("server"), async (c) => {
     const target = await environment(c);
-    const guide = Guide.parse(await body(c));
-    await store.setGuide(ws(c), target, guide);
-    return c.json({ environment: target, ...guide });
+    return c.json({ environment: target, instructions: await store.getInstructions(ws(c), target) });
+  });
+
+  api.put("/instructions", auth("admin"), async (c) => {
+    const target = await environment(c);
+    const { instructions } = InstructionsBody.parse(await body(c));
+    await store.setInstructions(ws(c), target, instructions);
+    return c.json({ environment: target, instructions: await store.getInstructions(ws(c), target) });
   });
 
   // How the workspace's end-user MCP presents itself: title, description, website and icon.
@@ -181,10 +186,6 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     await store.setHosted(ws(c), enabled);
     return c.json(await hosting(ws(c)));
   });
-
-  // Admin: the secret recipe validation webhooks are signed with (x-genui-signature). POST replaces it.
-  api.get("/hosting/webhook-secret", auth("admin"), async (c) => c.json({ secret: await store.webhookSecret(ws(c)) }));
-  api.post("/hosting/webhook-secret", auth("admin"), async (c) => c.json({ secret: await store.rotateWebhookSecret(ws(c)) }));
 
   api.post("/tokens", auth("admin"), async (c) => {
     const { scope, name, environments } = TokenBody.parse(await body(c));

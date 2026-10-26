@@ -7,7 +7,6 @@ ALTER TABLE workspaces ADD COLUMN icon TEXT;
 ALTER TABLE workspaces ADD COLUMN icon_type TEXT;
 ALTER TABLE workspaces ADD COLUMN icon_hash TEXT;
 
--- How the model should use an environment's MCP: server instructions and workflow prompts (JSON list).
+-- What the environment's MCP helps with: the start of its server instructions (workflows are added after).
 -- Saved like the theme, with a revision bump.
 ALTER TABLE environments ADD COLUMN instructions TEXT;
-ALTER TABLE environments ADD COLUMN prompts TEXT;

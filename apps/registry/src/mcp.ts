@@ -1,5 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { Branding, Guide, MAX_ICON_BYTES, PREVIEW_META_KEY, Recipe, Theme, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import {
+  Branding,
+  isCommand,
+  MAX_ENVIRONMENT_INSTRUCTIONS,
+  MAX_INSTRUCTIONS,
+  PREVIEW_META_KEY,
+  serverInstructions,
+  Theme,
+  THEME_META_KEY,
+  VIEW_CONTENT_KEY,
+  VIEW_ID_META_KEY,
+  Workflow,
+  MAX_ICON_BYTES,
+} from "@genui/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { contentHash, mountGenUI } from "@genui/runtime";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
@@ -17,7 +30,7 @@ function managementViews(assets: Assets): ManagementViews {
   let views = hashed.get(assets);
   if (!views) {
     const load = (name: ManagementViewName) => ({ html: assets.views[name], uri: `ui://genui-registry/${name}/${contentHash(assets.views[name])}` });
-    hashed.set(assets, (views = { manager: load("manager"), theme: load("theme"), recipes: load("recipes"), workspace: load("workspace"), guide: load("guide") }));
+    hashed.set(assets, (views = { manager: load("manager"), theme: load("theme"), workflows: load("workflows"), workspace: load("workspace"), instructions: load("instructions") }));
   }
   return views;
 }
@@ -36,7 +49,7 @@ function failed(error: unknown) {
 /**
  * The registry's own MCP server, built per request for the signed-in person.
  * Members can browse, preview and pick the environment they look at; admins also get the
- * app-only tools that change what users see (save theme, save or delete recipes). Those are
+ * app-only tools that change what users see (save theme, instructions or workflows). Those are
  * never callable by the model: they run only when a person clicks a button in the management views.
  * `baseURL` is the registry's public URL, for the end-user MCP addresses the workspace view shows.
  * `toolsChanged` tells open clients to re-list, after a switch changes the preview tools.
@@ -51,14 +64,14 @@ export async function createRegistryMcp(
   const VIEWS = managementViews(assets);
   const isAdmin = member.role === "admin";
   const ws = member.workspaceId;
-  // Previews, theme and recipes show the member's active environment.
+  // Previews, theme, instructions and workflows show the member's active environment.
   const env = member.environment;
 
   // Built-in forms and charts as previews (preview_form / preview_chart) in the environment's theme.
   // No data tools here: those live on the customer's server, so only inline data works.
   const catalog = await store.catalog(ws, env);
   const theme = catalog.theme;
-  await mountGenUI(server, { views: builtInViews(assets), preview: true, theme: theme ?? undefined, recipes: catalog.recipes });
+  await mountGenUI(server, { views: builtInViews(assets), preview: true, theme: theme ?? undefined });
 
   for (const view of Object.values(VIEWS)) {
     registerAppResource(server, view.uri, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
@@ -88,7 +101,7 @@ export async function createRegistryMcp(
       const lines = state.components.map(
         (c) => `- ${c.name}: ${state.environments.map((e) => `${e} ${c.environments[e] ?? "—"}`).join(", ")}`,
       );
-      const active = `Previews, theme and recipes show ${env}.`;
+      const active = `Previews, theme, instructions and workflows show ${env}.`;
       return ok(state.components.length ? `Components:\n${lines.join("\n")}\n${active}` : `No components published yet. ${active}`, state);
     },
   );
@@ -99,7 +112,7 @@ export async function createRegistryMcp(
     {
       title: "Use environment",
       description:
-        "Switch the environment your previews, theme and recipes show here (default prod). It changes only what you see in this connector; " +
+        "Switch the environment your previews, theme, instructions and workflows show here (default prod). It changes only what you see in this connector; " +
         "end users get whatever each environment's own connector serves.",
       inputSchema: z.object({ name: z.string().describe("Environment name, e.g. staging.") }),
       _meta: { ui: { resourceUri: VIEWS.manager.uri } },
@@ -109,7 +122,7 @@ export async function createRegistryMcp(
         await store.setActiveEnvironment(ws, member.userId, name);
         if (name !== env) toolsChanged();
         return ok(
-          `Now showing ${name}: previews, theme and recipes follow it. If the preview tools still show the old versions, start a new chat.`,
+          `Now showing ${name}: previews, theme, instructions and workflows follow it. If the preview tools still show the old versions, start a new chat.`,
           await componentsState(name),
         );
       } catch (error) {
@@ -130,45 +143,46 @@ export async function createRegistryMcp(
     async () => ok(`Showing the ${env} theme controller.`, { role: member.role, environment: env, theme: await store.getTheme(ws, env) }),
   );
 
-  const recipesState = async (environment = env) => ({ mode: "list", role: member.role, environment, recipes: await store.listRecipes(ws, environment) });
+  const workflowsState = async (environment = env) => ({ mode: "list", role: member.role, environment, workflows: await store.listWorkflows(ws, environment) });
+  const describeWorkflow = (w: Workflow) => (isCommand(w) ? `- /${w.name} (${w.params.map((p) => p.name).join(", ")}): ${w.description}` : `- ${w.name}: ${w.description}`);
 
   registerAppTool(
     server,
-    "manage_recipes",
+    "manage_workflows",
     {
-      title: "Recipes",
+      title: "Workflows",
       description:
-        `Show the recipes in ${env}: ready-made forms the AI uses for matching requests, each also available as a slash command. ` +
-        "Admins can delete them from the view.",
+        `Show the workflows in ${env}: playbooks the AI follows, in the business's own words. A workflow with params is a slash command taking them; ` +
+        "one without is part of the MCP instructions the AI always has. Admins edit and delete them from the view.",
       inputSchema: z.object({}),
-      _meta: { ui: { resourceUri: VIEWS.recipes.uri } },
+      _meta: { ui: { resourceUri: VIEWS.workflows.uri } },
     },
     async () => {
-      const state = await recipesState();
-      const lines = state.recipes.map((r) => `- /${r.name}: ${r.when}`);
-      return ok(state.recipes.length ? `Recipes in ${env}:\n${lines.join("\n")}` : `No recipes in ${env} yet.`, state);
+      const state = await workflowsState();
+      return ok(state.workflows.length ? `Workflows in ${env}:\n${state.workflows.map(describeWorkflow).join("\n")}` : `No workflows in ${env} yet.`, state);
     },
   );
 
   registerAppTool(
     server,
-    "draft_recipe",
+    "draft_workflow",
     {
-      title: "Draft recipe",
+      title: "Draft workflow",
       description:
-        `Draft a recipe for review in ${env}: a named form (fields, validation, submit tool) plus \`when\` (which requests it handles) and \`notes\` for the AI. ` +
-        "Nothing is saved: an admin reviews the draft and clicks Save. Use the customer server's tool names for tool-backed selects and submit. " +
-        "Use preview_form first if you want to show how the form looks.",
-      inputSchema: Recipe,
-      _meta: { ui: { resourceUri: VIEWS.recipes.uri } },
+        `Draft a workflow for review in ${env}. \`description\`: when to use it. \`instructions\`: the steps for the AI, naming the tools to use in order: ` +
+        "render_form for forms (with the customer server's submit tool), render_chart, render_<component> for the workspace's components, and the customer server's own tools. " +
+        "Add `params` only for what a user would type when starting it as a slash command; without params it is always-on guidance. " +
+        "Nothing is saved: an admin reviews the draft and clicks Save. Workflows usually live in the repo next to the components and go out with genui publish.",
+      inputSchema: Workflow,
+      _meta: { ui: { resourceUri: VIEWS.workflows.uri } },
     },
-    async (recipe) =>
-      ok(`Drafted /${recipe.name} for ${env}. ${isAdmin ? `Click Save recipe to make it live in ${env}.` : "An admin must save it."}`, {
+    async (workflow) =>
+      ok(`Drafted ${isCommand(workflow) ? `/${workflow.name}` : workflow.name} for ${env}. ${isAdmin ? `Click Save to make it live in ${env}.` : "An admin must save it."}`, {
         mode: "draft",
         role: member.role,
         environment: env,
-        recipe,
-        replaces: Boolean(await store.getRecipe(ws, env, recipe.name)),
+        workflow,
+        replaces: Boolean(await store.getWorkflow(ws, env, workflow.name)),
       }),
   );
 
@@ -218,49 +232,50 @@ export async function createRegistryMcp(
     },
   );
 
-  // Instructions and workflow prompts: what the end-user MCP tells the model about its workflows.
-  const guideState = async (environment = env) => ({ mode: "view", role: member.role, environment, ...(await store.getGuide(ws, environment)), recipes: (await store.listRecipes(ws, environment)).map((r) => r.name) });
+  // Instructions: what the end-user MCP tells the model when a host connects, with the workflows added.
+  const instructionsState = async (environment = env, draft?: string | null) => {
+    const [saved, workflows] = await Promise.all([store.getInstructions(ws, environment), store.listWorkflows(ws, environment)]);
+    const instructions = draft === undefined ? saved : draft;
+    return {
+      mode: draft === undefined ? "view" : "draft",
+      role: member.role,
+      environment,
+      instructions,
+      served: serverInstructions(instructions, workflows) ?? null,
+      limit: MAX_INSTRUCTIONS,
+    };
+  };
 
   registerAppTool(
     server,
-    "manage_guide",
+    "manage_instructions",
     {
-      title: "Instructions and workflows",
+      title: "Instructions",
       description:
-        `Show ${env}'s MCP instructions (what hosts give the model when someone adds the connector) and its workflow prompts (slash commands that start a workflow). ` +
-        "Use draft_guide to propose changes.",
+        `Show ${env}'s MCP instructions: the overview hosts give the AI when someone adds the connector, and the full text they get with the workflows added. ` +
+        "Use draft_instructions to propose changes.",
       inputSchema: z.object({}),
-      _meta: { ui: { resourceUri: VIEWS.guide.uri } },
+      _meta: { ui: { resourceUri: VIEWS.instructions.uri } },
     },
     async () => {
-      const state = await guideState();
-      const prompts = state.prompts.map((p) => `- /${p.name}: ${p.description}`);
-      return ok(
-        `Instructions in ${env}: ${state.instructions ? `\n${state.instructions}` : "none."}\nWorkflow prompts: ${prompts.length ? `\n${prompts.join("\n")}` : "none."}`,
-        state,
-      );
+      const state = await instructionsState();
+      return ok(state.served ? `What hosts get from ${env} (${state.served.length}/${MAX_INSTRUCTIONS} characters):\n${state.served}` : `No instructions or workflows in ${env} yet.`, state);
     },
   );
 
   registerAppTool(
     server,
-    "draft_guide",
+    "draft_instructions",
     {
-      title: "Draft instructions and workflows",
+      title: "Draft instructions",
       description:
-        `Draft ${env}'s MCP instructions and workflow prompts for review; it replaces both when saved. ` +
-        "instructions: a short overview the model reads when the connector is added: what this MCP helps with, the workflows it covers and, for each, which recipes and tools to use in what order. " +
-        "prompts: one slash command per workflow; `prompt` tells the model the steps. Refer to recipes by name (use_recipe) and to the customer server's tools by name. " +
-        "A prompt can't share a name with a recipe. Nothing is saved: an admin reviews the draft and clicks Save.",
-      inputSchema: Guide,
-      _meta: { ui: { resourceUri: VIEWS.guide.uri } },
+        `Draft ${env}'s MCP instructions for review: a short overview of what this MCP helps with and which tools to prefer. ` +
+        "Don't repeat the workflows; they are added after it. Nothing is saved: an admin reviews the draft and clicks Save.",
+      inputSchema: z.object({ instructions: z.string().max(MAX_ENVIRONMENT_INSTRUCTIONS) }),
+      _meta: { ui: { resourceUri: VIEWS.instructions.uri } },
     },
-    async (guide) =>
-      ok(`Drafted instructions and ${guide.prompts.length} workflow prompt(s) for ${env}. ${isAdmin ? `Click Save to make them live in ${env}.` : "An admin must save them."}`, {
-        ...(await guideState()),
-        mode: "draft",
-        ...guide,
-      }),
+    async ({ instructions }) =>
+      ok(`Drafted instructions for ${env}. ${isAdmin ? `Click Save to make them live in ${env}.` : "An admin must save them."}`, await instructionsState(env, instructions)),
   );
 
   // Preview the version the active environment serves of each component, rendered with props the model provides.
@@ -409,20 +424,17 @@ export async function createRegistryMcp(
 
   registerAppTool(
     server,
-    "guide_save",
+    "instructions_save",
     {
-      title: "Save instructions and workflows",
-      description: "Replace an environment's MCP instructions and workflow prompts. Its servers pick them up on their next registry refresh.",
-      inputSchema: z.object({ guide: Guide, environment: target }),
-      _meta: appOnly(VIEWS.guide.uri),
+      title: "Save instructions",
+      description: "Replace an environment's MCP instructions; empty clears them. Hosts get them on their next connection.",
+      inputSchema: z.object({ instructions: z.string().max(MAX_ENVIRONMENT_INSTRUCTIONS).nullable(), environment: target }),
+      _meta: appOnly(VIEWS.instructions.uri),
     },
-    async ({ guide, environment = env }) => {
+    async ({ instructions, environment = env }) => {
       try {
-        await store.setGuide(ws, environment, guide);
-        return ok(`Saved the instructions and ${guide.prompts.length} workflow prompt(s) in ${environment}. Hosts get them on their next connection.`, {
-          ...(await guideState(environment)),
-          saved: true,
-        });
+        await store.setInstructions(ws, environment, instructions);
+        return ok(`Saved the instructions in ${environment}. Hosts get them on their next connection.`, { ...(await instructionsState(environment)), saved: true });
       } catch (error) {
         return failed(error);
       }
@@ -431,21 +443,21 @@ export async function createRegistryMcp(
 
   registerAppTool(
     server,
-    "recipe_save",
+    "workflow_save",
     {
-      title: "Save recipe",
-      description: "Make a drafted recipe live in an environment. Its servers pick it up on their next registry refresh.",
-      inputSchema: z.object({ recipe: Recipe, environment: target }),
-      _meta: appOnly(VIEWS.recipes.uri),
+      title: "Save workflow",
+      description: "Make a drafted workflow live in an environment. Its servers pick it up on their next registry refresh.",
+      inputSchema: z.object({ workflow: Workflow, environment: target }),
+      _meta: appOnly(VIEWS.workflows.uri),
     },
-    async ({ recipe, environment = env }) => {
+    async ({ workflow, environment = env }) => {
       try {
-        const replaced = await store.saveRecipe(ws, environment, recipe);
-        return ok(`${replaced ? "Updated" : "Saved"} /${recipe.name} in ${environment}. It reaches your servers within a minute.`, {
+        const replaced = await store.saveWorkflow(ws, environment, workflow);
+        return ok(`${replaced ? "Updated" : "Saved"} ${workflow.name} in ${environment}. It reaches your servers within a minute.`, {
           mode: "draft",
           role: member.role,
           environment,
-          recipe,
+          workflow,
           replaces: false,
           saved: true,
         });
@@ -457,17 +469,17 @@ export async function createRegistryMcp(
 
   registerAppTool(
     server,
-    "recipe_delete",
+    "workflow_delete",
     {
-      title: "Delete recipe",
-      description: "Delete a recipe and its slash command from an environment.",
+      title: "Delete workflow",
+      description: "Delete a workflow, and its slash command if it has params, from an environment.",
       inputSchema: z.object({ name: z.string(), environment: target }),
-      _meta: appOnly(VIEWS.recipes.uri),
+      _meta: appOnly(VIEWS.workflows.uri),
     },
     async ({ name, environment = env }) => {
       try {
-        await store.deleteRecipe(ws, environment, name);
-        return ok(`Deleted /${name} from ${environment}.`, await recipesState(environment));
+        await store.deleteWorkflow(ws, environment, name);
+        return ok(`Deleted ${name} from ${environment}.`, await workflowsState(environment));
       } catch (error) {
         return failed(error);
       }

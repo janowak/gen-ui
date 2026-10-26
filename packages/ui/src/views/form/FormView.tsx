@@ -1,4 +1,4 @@
-import { Field, FORM_META_KEY, FormSpec, SubmitResult } from "@genui/format";
+import { Field, FormSpec, SubmitResult } from "@genui/format";
 import { useViewState } from "@genui/kit/react";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { CheckCircle2Icon, Loader2Icon } from "lucide-react";
@@ -34,12 +34,7 @@ function partialSpec(input: Record<string, unknown> | undefined): { title?: stri
 
 export function FormView() {
   const { app, connectError, input, streaming, result, viewId, cancelled } = useView("form");
-  // use_recipe: the server builds the form and returns it in the result; render_form: the input is the form.
-  const recipeForm = result?.meta[FORM_META_KEY];
-  const parsed = useMemo(
-    () => (recipeForm ? FormSpec.safeParse(recipeForm) : input && !streaming && Array.isArray(input.fields) ? FormSpec.safeParse(input) : undefined),
-    [recipeForm, input, streaming],
-  );
+  const parsed = useMemo(() => (input && !streaming && Array.isArray(input.fields) ? FormSpec.safeParse(input) : undefined), [input, streaming]);
   const spec = parsed?.success ? parsed.data : undefined;
   const canCall = toolsReady(result);
 

@@ -6,11 +6,11 @@ import {
   type Catalog,
   type CatalogComponent,
   type ComponentManifest,
-  type Guide,
   type IconType,
-  type Recipe,
   type Theme,
-  type WorkflowPrompt,
+  type Workflow,
+  MAX_INSTRUCTIONS,
+  serverInstructions,
 } from "@genui/format";
 import { breakingChanges, compareSemver } from "./compat.js";
 import { statement, type Database, type Statement } from "./db.js";
@@ -22,7 +22,7 @@ export interface Membership {
   workspaceId: string;
   userId: string;
   role: Role;
-  /** Active environment in the management MCP: what previews, theme and recipes show. */
+  /** Active environment in the management MCP: what previews, theme and workflows show. */
   environment: string;
 }
 
@@ -124,7 +124,7 @@ export interface EnvironmentInfo {
   lastRefresh: LastRefresh | null;
 }
 
-/** A committed change to what an environment serves: versions, theme or recipes. */
+/** A committed change to what an environment serves: versions, theme, instructions or workflows. */
 export interface EnvironmentChange {
   workspaceId: string;
   environment: string;
@@ -137,9 +137,27 @@ export interface EnvironmentChange {
  */
 const WORKSPACE_USED = `((SELECT COUNT(*) FROM members WHERE workspace_id = ?1) > 1
   OR EXISTS (SELECT 1 FROM components WHERE workspace_id = ?1)
-  OR EXISTS (SELECT 1 FROM recipes WHERE workspace_id = ?1)
+  OR EXISTS (SELECT 1 FROM workflows WHERE workspace_id = ?1)
   OR EXISTS (SELECT 1 FROM tokens WHERE workspace_id = ?1)
   OR EXISTS (SELECT 1 FROM invites WHERE workspace_id = ?1))`;
+
+/**
+ * Hosts send the server instructions on every turn: the environment's instructions plus the workflows
+ * without params must fit. Commands don't count; their steps go out only when someone runs them.
+ */
+function checkInstructions(instructions: string | null, workflows: Workflow[]): void {
+  const length = serverInstructions(instructions, workflows)?.length ?? 0;
+  if (length <= MAX_INSTRUCTIONS) return;
+  const biggest = workflows
+    .filter((w) => !w.params.length)
+    .sort((a, b) => b.instructions.length - a.instructions.length)
+    .slice(0, 3)
+    .map((w) => `${w.name} (${w.instructions.length})`);
+  throw new RegistryError(
+    400,
+    `The server instructions would be ${length} characters; hosts get at most ${MAX_INSTRUCTIONS}. Shorten the instructions or these workflows, or give them params so they become commands: ${biggest.join(", ") || "none"}`,
+  );
+}
 
 /** SQLite's error for a duplicate key, in node:sqlite's and D1's messages alike. */
 const isUniqueViolation = (error: unknown) => error instanceof Error && /UNIQUE constraint failed/i.test(error.message);
@@ -214,22 +232,6 @@ export class Store {
 
   async setHosted(workspaceId: string, hosted: boolean): Promise<void> {
     await this.db.run("UPDATE workspaces SET hosted = ? WHERE id = ?", hosted ? 1 : 0, workspaceId);
-  }
-
-  /** The secret recipe validation webhooks are signed with; created on first use. */
-  async webhookSecret(workspaceId: string): Promise<string> {
-    const row = await this.db.get<{ webhook_secret: string | null }>("SELECT webhook_secret FROM workspaces WHERE id = ?", workspaceId);
-    if (row?.webhook_secret) return row.webhook_secret;
-    // Two first uses at once keep whichever secret was written first.
-    const secret = `whsec_${randomBytes(24).toString("base64url")}`;
-    await this.db.run("UPDATE workspaces SET webhook_secret = ? WHERE id = ? AND webhook_secret IS NULL", secret, workspaceId);
-    return (await this.db.get<{ webhook_secret: string }>("SELECT webhook_secret FROM workspaces WHERE id = ?", workspaceId))!.webhook_secret;
-  }
-
-  async rotateWebhookSecret(workspaceId: string): Promise<string> {
-    const secret = `whsec_${randomBytes(24).toString("base64url")}`;
-    await this.db.run("UPDATE workspaces SET webhook_secret = ? WHERE id = ?", secret, workspaceId);
-    return secret;
   }
 
   // Branding: how the end-user MCP presents itself to hosts. Hosted servers are built per request, so
@@ -377,13 +379,13 @@ export class Store {
     await this.db.run("UPDATE environments SET last_refresh = ? WHERE workspace_id = ? AND name = ?", JSON.stringify(result), workspaceId, name);
   }
 
-  /** Deletes an environment with what it serves: its deployments, theme and recipes. */
+  /** Deletes an environment with what it serves: its deployments, theme, instructions and workflows. */
   async deleteEnvironment(workspaceId: string, name: string): Promise<void> {
     if (name === DEFAULT_ENVIRONMENT) throw new RegistryError(400, `${DEFAULT_ENVIRONMENT} can't be deleted`);
     await this.requireEnvironment(workspaceId, name);
     await this.db.batch([
       statement("DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ?)", name, workspaceId),
-      statement("DELETE FROM recipes WHERE workspace_id = ? AND environment = ?", workspaceId, name),
+      statement("DELETE FROM workflows WHERE workspace_id = ? AND environment = ?", workspaceId, name),
       statement("DELETE FROM environments WHERE workspace_id = ? AND name = ?", workspaceId, name),
     ]);
   }
@@ -449,7 +451,7 @@ export class Store {
   }
 
   /**
-   * Deletes a workspace nobody used: one member, nothing published, no recipes, tokens or invites. Each
+   * Deletes a workspace nobody used: one member, nothing published, no workflows, tokens or invites. Each
    * statement re-checks, so a workspace someone starts using meanwhile stays.
    */
   private deleteIfUnused(workspaceId: string): Statement[] {
@@ -512,47 +514,49 @@ export class Store {
     return this.membership(user.id, workspace.id);
   }
 
-  // Recipes: per environment, live in that environment on save.
+  // Workflows: per environment, live in that environment on save.
 
-  async listRecipes(workspaceId: string, environment: string): Promise<Recipe[]> {
-    const rows = await this.db.all<{ recipe: string }>("SELECT recipe FROM recipes WHERE workspace_id = ? AND environment = ? ORDER BY name", workspaceId, environment);
-    return rows.map((r) => JSON.parse(r.recipe) as Recipe);
+  async listWorkflows(workspaceId: string, environment: string): Promise<Workflow[]> {
+    const rows = await this.db.all<{ workflow: string }>(
+      "SELECT workflow FROM workflows WHERE workspace_id = ? AND environment = ? ORDER BY name",
+      workspaceId,
+      environment,
+    );
+    return rows.map((r) => JSON.parse(r.workflow) as Workflow);
   }
 
-  async getRecipe(workspaceId: string, environment: string, name: string): Promise<Recipe | undefined> {
-    const row = await this.db.get<{ recipe: string }>(
-      "SELECT recipe FROM recipes WHERE workspace_id = ? AND environment = ? AND name = ?",
+  async getWorkflow(workspaceId: string, environment: string, name: string): Promise<Workflow | undefined> {
+    const row = await this.db.get<{ workflow: string }>(
+      "SELECT workflow FROM workflows WHERE workspace_id = ? AND environment = ? AND name = ?",
       workspaceId,
       environment,
       name,
     );
-    return row ? (JSON.parse(row.recipe) as Recipe) : undefined;
+    return row ? (JSON.parse(row.workflow) as Workflow) : undefined;
   }
 
-  /** Creates or replaces a recipe. Returns true when it replaced an existing one. */
-  async saveRecipe(workspaceId: string, environment: string, recipe: Recipe): Promise<boolean> {
+  /** Creates or replaces a workflow. Returns true when it replaced an existing one. */
+  async saveWorkflow(workspaceId: string, environment: string, workflow: Workflow): Promise<boolean> {
     await this.requireEnvironment(workspaceId, environment);
-    // Each recipe is also a slash command, so it can't share a name with a workflow prompt.
-    if ((await this.getGuide(workspaceId, environment)).prompts.some((p) => p.name === recipe.name)) {
-      throw new RegistryError(409, `/${recipe.name} is already a workflow prompt in ${environment}`);
-    }
-    const existed = Boolean(await this.getRecipe(workspaceId, environment, recipe.name));
+    const [workflows, instructions] = await Promise.all([this.listWorkflows(workspaceId, environment), this.getInstructions(workspaceId, environment)]);
+    const existed = workflows.some((w) => w.name === workflow.name);
+    checkInstructions(instructions, [...workflows.filter((w) => w.name !== workflow.name), workflow]);
     await this.change(workspaceId, environment, [
       statement(
-        "INSERT INTO recipes (workspace_id, environment, name, recipe, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, environment, name) DO UPDATE SET recipe = excluded.recipe, updated_at = excluded.updated_at",
+        "INSERT INTO workflows (workspace_id, environment, name, workflow, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, environment, name) DO UPDATE SET workflow = excluded.workflow, updated_at = excluded.updated_at",
         workspaceId,
         environment,
-        recipe.name,
-        JSON.stringify(recipe),
+        workflow.name,
+        JSON.stringify(workflow),
         now(),
       ),
     ]);
     return existed;
   }
 
-  async deleteRecipe(workspaceId: string, environment: string, name: string): Promise<void> {
-    if (!(await this.getRecipe(workspaceId, environment, name))) throw new RegistryError(404, `Recipe "${name}" not found in ${environment}`);
-    await this.change(workspaceId, environment, [statement("DELETE FROM recipes WHERE workspace_id = ? AND environment = ? AND name = ?", workspaceId, environment, name)]);
+  async deleteWorkflow(workspaceId: string, environment: string, name: string): Promise<void> {
+    if (!(await this.getWorkflow(workspaceId, environment, name))) throw new RegistryError(404, `Workflow "${name}" not found in ${environment}`);
+    await this.change(workspaceId, environment, [statement("DELETE FROM workflows WHERE workspace_id = ? AND environment = ? AND name = ?", workspaceId, environment, name)]);
   }
 
   // Theme: per environment.
@@ -569,39 +573,19 @@ export class Store {
     ]);
   }
 
-  // Guide: per environment, the end-user MCP's instructions and workflow prompts.
+  // Instructions: per environment, what its MCP helps with. Hosts get them with the workflows added.
 
-  async getGuide(workspaceId: string, environment: string): Promise<Guide> {
-    const row = await this.db.get<{ instructions: string | null; prompts: string | null }>(
-      "SELECT instructions, prompts FROM environments WHERE workspace_id = ? AND name = ?",
-      workspaceId,
-      environment,
-    );
-    return {
-      ...(row?.instructions ? { instructions: row.instructions } : {}),
-      prompts: row?.prompts ? (JSON.parse(row.prompts) as WorkflowPrompt[]) : [],
-    };
+  async getInstructions(workspaceId: string, environment: string): Promise<string | null> {
+    const row = await this.db.get<{ instructions: string | null }>("SELECT instructions FROM environments WHERE workspace_id = ? AND name = ?", workspaceId, environment);
+    return row?.instructions ?? null;
   }
 
-  /** Replaces the environment's instructions and workflow prompts. */
-  async setGuide(workspaceId: string, environment: string, guide: Guide): Promise<void> {
+  /** Replaces the environment's instructions; null or blank clears them. */
+  async setInstructions(workspaceId: string, environment: string, instructions: string | null): Promise<void> {
     await this.requireEnvironment(workspaceId, environment);
-    const names = new Set<string>();
-    const recipes = new Set((await this.listRecipes(workspaceId, environment)).map((r) => r.name));
-    for (const { name } of guide.prompts) {
-      if (names.has(name)) throw new RegistryError(400, `Two workflow prompts are named /${name}`);
-      if (recipes.has(name)) throw new RegistryError(409, `/${name} is already a recipe in ${environment}`);
-      names.add(name);
-    }
-    await this.change(workspaceId, environment, [
-      statement(
-        "UPDATE environments SET instructions = ?, prompts = ? WHERE workspace_id = ? AND name = ?",
-        guide.instructions?.trim() || null,
-        guide.prompts.length ? JSON.stringify(guide.prompts) : null,
-        workspaceId,
-        environment,
-      ),
-    ]);
+    const text = instructions?.trim() || null;
+    checkInstructions(text, await this.listWorkflows(workspaceId, environment));
+    await this.change(workspaceId, environment, [statement("UPDATE environments SET instructions = ? WHERE workspace_id = ? AND name = ?", text, workspaceId, environment)]);
   }
 
   // Components
@@ -756,7 +740,7 @@ export class Store {
   }
 
   async catalog(workspaceId: string, environment: string): Promise<Catalog> {
-    const [rows, theme, recipes, guide] = await Promise.all([
+    const [rows, theme, instructions, workflows] = await Promise.all([
       this.db.all<{ name: string; version: string; hash: string; manifest: string }>(
         `SELECT co.name, v.version, v.hash, v.manifest FROM deployments d
          JOIN components co ON co.id = d.component_id
@@ -766,11 +750,11 @@ export class Store {
         environment,
       ),
       this.getTheme(workspaceId, environment),
-      this.listRecipes(workspaceId, environment),
-      this.getGuide(workspaceId, environment),
+      this.getInstructions(workspaceId, environment),
+      this.listWorkflows(workspaceId, environment),
     ]);
     const components: CatalogComponent[] = rows.map((r) => ({ name: r.name, version: r.version, hash: r.hash, manifest: JSON.parse(r.manifest) }));
-    return { environment, theme, components, recipes, instructions: guide.instructions ?? null, prompts: guide.prompts };
+    return { environment, theme, components, instructions, workflows };
   }
 
   /** Bundles are looked up within the caller's workspace only: no cross-tenant sharing by hash. */

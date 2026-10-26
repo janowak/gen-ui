@@ -11,18 +11,18 @@ export function loadAssets(): Promise<Assets> {
   loaded ??= (async () => {
     const view = (name: string) => readFile(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
     const page = (name: string) => readFile(new URL(`../dist-web/${name}.html`, import.meta.url), "utf8");
-    const [form, chart, manager, theme, recipes, workspace, guide, signIn, consent] = await Promise.all([
+    const [form, chart, manager, theme, workflows, workspace, instructions, signIn, consent] = await Promise.all([
       view("form"),
       view("chart"),
       view("manager"),
       view("theme"),
-      view("recipes"),
+      view("workflows"),
       view("workspace"),
-      view("guide"),
+      view("instructions"),
       page("sign-in"),
       page("consent"),
     ]);
-    return { views: { form, chart, manager, theme, recipes, workspace, guide }, pages: { "sign-in": signIn, consent } };
+    return { views: { form, chart, manager, theme, workflows, workspace, instructions }, pages: { "sign-in": signIn, consent } };
   })();
   return loaded;
 }

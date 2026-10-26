@@ -226,7 +226,7 @@ export function WorkspaceView() {
 
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-medium">Connector</h3>
-          <p className="text-sm text-muted-foreground">How hosts like Claude and ChatGPT show your end-user MCP. Instructions and workflows are set per environment (manage_guide).</p>
+          <p className="text-sm text-muted-foreground">How hosts like Claude and ChatGPT show your end-user MCP. Instructions and workflows are set per environment (manage_instructions, manage_workflows).</p>
           {isAdmin ? (
             <form
               className="flex flex-col gap-2"

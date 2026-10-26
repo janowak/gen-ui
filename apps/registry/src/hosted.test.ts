@@ -1,11 +1,9 @@
-import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRegistryApp, type Store } from "./app.js";
 import { loadAssets, testDatabase } from "./testing.js";
-import { signature } from "./webhook.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const component = (name: string, version: string) => ({
@@ -23,26 +21,13 @@ let acme: string;
 let other: string;
 let admin: string;
 
-// The company's validation webhook: checks our signature, rejects emails of existing customers.
-let webhook: Server;
-const received: { signed: boolean; body: { recipe: string; values: Record<string, unknown> } }[] = [];
-
-function startWebhook(): Promise<string> {
-  webhook = createServer((req, res) => {
-    let raw = "";
-    req.on("data", (chunk) => (raw += chunk));
-    req.on("end", async () => {
-      const [, t, v1] = /^t=(\d+),v1=([0-9a-f]+)$/.exec(String(req.headers["x-genui-signature"])) ?? [];
-      const signed = v1 === signature(await store.webhookSecret(acme), Number(t), raw);
-      const body = JSON.parse(raw) as { recipe: string; values: { email?: string } };
-      received.push({ signed, body });
-      const taken = body.values.email === "taken@acme.test";
-      res.writeHead(taken ? 422 : 200, { "content-type": "application/json" });
-      res.end(JSON.stringify(taken ? { ok: false, fieldErrors: { email: "Already a customer." } } : { ok: true, message: "We'll be in touch." }));
-    });
-  });
-  return new Promise((resolve) => webhook.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(webhook.address() as AddressInfo).port}/validate`)));
-}
+const addItem = {
+  name: "add_item",
+  description: "The user wants to add an item.",
+  instructions: "Show a form with the name and submit to create_item.",
+  params: [{ name: "name", description: "Item name", required: false }],
+};
+const feedback = { name: "feedback", description: "After an item is added.", instructions: "Ask for a rating with render_rating.", params: [] };
 
 async function mcpClient(path: string, headers?: Record<string, string>): Promise<Client> {
   const client = new Client({ name: "test-host", version: "1.0.0" });
@@ -57,8 +42,7 @@ async function resourceText(client: Client, tool: string): Promise<string | unde
 }
 
 beforeAll(async () => {
-  const webhookUrl = await startWebhook();
-  const created = createRegistryApp(await testDatabase(), { assets: await loadAssets(), allowPrivateWebhooks: true });
+  const created = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
   store = created.store;
   acme = await store.createWorkspace("Acme");
   await store.createEnvironment(acme, "staging");
@@ -66,17 +50,8 @@ beforeAll(async () => {
   await store.publish(acme, component("rating", "1.0.0"), html("rating v1"));
   await store.publish(acme, component("rating", "1.1.0"), html("rating v1.1"), "staging");
   await store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
-  await store.saveRecipe(acme, "prod", {
-    name: "add_item",
-    when: "The user wants to add an item.",
-    form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
-  });
-  await store.saveRecipe(acme, "prod", {
-    name: "quote",
-    when: "The user wants a quote.",
-    form: { fields: [{ name: "email", label: "Email", type: "email", required: true }] },
-    validate: { url: webhookUrl },
-  });
+  await store.saveWorkflow(acme, "prod", addItem);
+  await store.saveWorkflow(acme, "prod", feedback);
 
   other = await store.createWorkspace("Other");
   await store.publish(other, component("survey", "1.0.0"), html("survey"));
@@ -88,7 +63,6 @@ beforeAll(async () => {
 
 afterAll(() => {
   server?.close();
-  webhook?.close();
 });
 
 describe("hosted end-user MCP", () => {
@@ -111,14 +85,16 @@ describe("hosted end-user MCP", () => {
     expect(((await on.json()) as { hosted: boolean }).hosted).toBe(true);
   });
 
-  it("serves the workspace's render tools, components and recipes, with no admin tools", async () => {
+  it("serves the workspace's render tools, components and workflows, with no admin tools", async () => {
     const client = await mcpClient(`/w/${acme}/mcp`);
     expect(client.getServerVersion()?.name).toBe("Acme");
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(["render_form", "render_chart", "render_rating", "use_recipe"]));
+    expect(names).toEqual(expect.arrayContaining(["render_form", "render_chart", "render_rating"]));
     expect(names.some((n) => n.startsWith("preview_") || n.startsWith("component_") || n.startsWith("theme_"))).toBe(false);
     expect(names).not.toContain("render_survey");
-    expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item", "quote"]);
+    // The command workflow is a prompt; the other one is in the instructions.
+    expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item"]);
+    expect(client.getInstructions()).toContain("### feedback\nWhen: After an item is added.");
 
     // Prod serves what was published to prod, with prod's theme and no preview flag.
     expect(await resourceText(client, "render_rating")).toBe(html("rating v1"));
@@ -127,24 +103,26 @@ describe("hosted end-user MCP", () => {
     expect(rendered._meta).not.toHaveProperty("genui/preview");
   });
 
-  it("serves another environment at its own address, with suffixed names and its own recipes", async () => {
+  it("serves another environment at its own address, with suffixed names and its own workflows", async () => {
     const client = await mcpClient(`/w/${acme}/staging/mcp`);
     expect(client.getServerVersion()?.name).toBe("Acme (staging)");
     const tools = (await client.listTools()).tools;
     expect(tools.map((t) => t.name).sort()).toEqual(["render_chart_staging", "render_form_staging", "render_rating_staging"]);
     expect(tools.find((t) => t.name === "render_form_staging")?.title).toBe("Show form (staging)");
     expect(await resourceText(client, "render_rating_staging")).toBe(html("rating v1.1"));
-    // Staging has no recipes or theme of its own yet: prod's don't leak in.
+    // Staging has no workflows or theme of its own yet: prod's don't leak in.
     expect(client.getServerCapabilities()?.prompts).toBeUndefined();
+    expect(client.getInstructions()).toBeUndefined();
     const rendered = await client.callTool({ name: "render_rating_staging", arguments: { question: "How was it?" } });
     expect(rendered._meta).not.toHaveProperty("genui/theme");
 
-    await store.saveRecipe(acme, "staging", { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" }] } });
+    await store.saveWorkflow(acme, "staging", addItem);
     const again = await mcpClient(`/w/${acme}/staging/mcp`);
-    expect((await again.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item_staging"]);
-    const recipeTool = (await again.listTools()).tools.find((t) => t.name === "use_recipe_staging");
-    expect(recipeTool?.description).toContain("Prefer it over render_form_staging");
-    expect((await again.getPrompt({ name: "add_item_staging", arguments: {} })).messages[0]?.content).toMatchObject({ text: expect.stringContaining("call use_recipe_staging") });
+    expect((await again.listPrompts()).prompts.map((p) => [p.name, p.title])).toEqual([["add_item_staging", "add_item (staging)"]]);
+    expect((await again.getPrompt({ name: "add_item_staging", arguments: { name: "Mug" } })).messages[0]?.content).toEqual({
+      type: "text",
+      text: `${addItem.instructions}\n\nname: Mug`,
+    });
   });
 
   it("answers 404 for an environment that doesn't exist", async () => {
@@ -153,7 +131,7 @@ describe("hosted end-user MCP", () => {
     expect(await res.json()).toEqual({ error: 'No environment "stagng" in this workspace.' });
   });
 
-  it("renders inline data only; recipe values go back to the conversation", async () => {
+  it("renders inline data only; form values go back to the conversation", async () => {
     const client = await mcpClient(`/w/${acme}/mcp`);
     const withSubmit = await client.callTool({
       name: "render_form",
@@ -163,38 +141,6 @@ describe("hosted end-user MCP", () => {
 
     const inline = await client.callTool({ name: "render_form", arguments: { fields: [{ name: "email", label: "Email", type: "email" }] } });
     expect(inline.isError).toBeFalsy();
-
-    const recipe = await client.callTool({ name: "use_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });
-    expect(recipe.isError).toBeFalsy();
-    expect(recipe._meta?.["genui/form"]).toMatchObject({ fields: [{ name: "name", defaultValue: "Mug" }] });
-    expect(recipe._meta?.["genui/form"]).not.toHaveProperty("submit");
-  });
-
-  it("checks a recipe's values with its signed validation webhook", async () => {
-    const client = await mcpClient(`/w/${acme}/mcp`);
-    const shown = await client.callTool({ name: "use_recipe", arguments: { recipe: "quote" } });
-    const submit = (shown._meta?.["genui/form"] as { submit: { toolName: string; params: Record<string, unknown>; idempotencyParam: string } }).submit;
-    expect(submit.toolName).toBe("genui_validate");
-
-    // What the form sends on submit: the fixed params with the field values and its render id merged in.
-    const view = { [submit.idempotencyParam]: shown._meta?.["genui/viewId"] };
-    const rejected = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "taken@acme.test", ...view } });
-    expect(rejected.structuredContent).toEqual({ ok: false, fieldErrors: { email: "Already a customer." } });
-    const accepted = await client.callTool({ name: submit.toolName, arguments: { ...submit.params, email: "new@acme.test", ...view } });
-    expect(accepted.structuredContent).toEqual({ ok: true, message: "We'll be in touch." });
-
-    const viewId = shown._meta?.["genui/viewId"];
-    expect(received).toEqual([
-      { signed: true, body: expect.objectContaining({ recipe: "quote", viewId, values: { email: "taken@acme.test" } }) },
-      { signed: true, body: expect.objectContaining({ recipe: "quote", viewId, values: { email: "new@acme.test" } }) },
-    ]);
-
-    // Admins read the signing secret from the API; rotating it replaces it.
-    const read = async (method: string) =>
-      ((await (await fetch(`${base}/v1/hosting/webhook-secret`, { method, headers: { authorization: `Bearer ${admin}` } })).json()) as { secret: string }).secret;
-    const current = await read("GET");
-    expect(current).toBe(await store.webhookSecret(acme));
-    expect(await read("POST")).not.toBe(current);
   });
 
   it("keeps workspaces apart", async () => {
@@ -202,7 +148,7 @@ describe("hosted end-user MCP", () => {
     const names = (await client.listTools()).tools.map((t) => t.name);
     expect(names).toContain("render_survey");
     expect(names).not.toContain("render_rating");
-    expect(names).not.toContain("use_recipe");
+    expect(client.getServerCapabilities()?.prompts).toBeUndefined();
   });
 
   it("stops serving when hosting is turned off", async () => {
@@ -215,7 +161,7 @@ describe("hosted end-user MCP", () => {
 describe("upstream for a company's own server (server token)", () => {
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
-  it("turns data tools on: tool-backed fields, submit tools and recipe submits work", async () => {
+  it("turns data tools on: tool-backed fields and submit tools work", async () => {
     const client = await mcpClient(`/w/${acme}/mcp`, bearer(await store.createToken(acme, "server", "acme-mcp")));
     const description = (await client.listTools()).tools.find((t) => t.name === "render_form")?.description;
     expect(description).toContain("resource_select");
@@ -225,8 +171,6 @@ describe("upstream for a company's own server (server token)", () => {
       arguments: { fields: [{ name: "email", label: "Email", type: "email" }], submit: { toolName: "create_lead" } },
     });
     expect(withSubmit.isError).toBeFalsy();
-    const recipe = await client.callTool({ name: "use_recipe", arguments: { recipe: "add_item" } });
-    expect(recipe._meta?.["genui/form"]).toMatchObject({ submit: { toolName: "create_item" } });
   });
 
   it("serves private workspaces", async () => {
@@ -269,7 +213,7 @@ describe("upstream for a company's own server (server token)", () => {
   });
 });
 
-describe("branding, instructions and workflow prompts", () => {
+describe("branding and instructions", () => {
   // The smallest valid PNG header is enough: the format is read from the bytes.
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
   const call = (method: string, path: string, body?: unknown) =>
@@ -278,15 +222,12 @@ describe("branding, instructions and workflow prompts", () => {
       headers: { authorization: `Bearer ${admin}`, "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
       body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
     });
-  const guide = {
-    instructions: "Acme handles returns. For a return, ask for the order, then use the add_item recipe.",
-    prompts: [{ name: "return_order", title: "Return an order", description: "Return an order and pick a refund.", prompt: "Ask for the order number, then call use_recipe." }],
-  };
+  const instructions = "Acme handles returns. Look the order up with get_order first.";
 
   afterAll(async () => {
     await store.setBranding(acme, {});
     await store.setIcon(acme, null);
-    await store.setGuide(acme, "prod", { prompts: [] });
+    await store.setInstructions(acme, "prod", null);
   });
 
   it("presents the workspace's title, description, website and icon to hosts", async () => {
@@ -308,28 +249,19 @@ describe("branding, instructions and workflow prompts", () => {
     expect((await fetch(`${base}/w/${other}/icon`)).status).toBe(404);
   });
 
-  it("gives each environment its own instructions and workflow prompts", async () => {
+  it("gives each environment its own instructions, with its workflows added", async () => {
     const before = (await store.environment(acme, "prod"))!.revision;
-    expect((await call("PUT", "/guide?environment=prod", guide)).status).toBe(200);
+    expect((await call("PUT", "/instructions?environment=prod", { instructions })).status).toBe(200);
     expect((await store.environment(acme, "prod"))!.revision).toBe(before + 1);
 
     const client = await mcpClient(`/w/${acme}/mcp`);
-    expect(client.getInstructions()).toBe(guide.instructions);
-    expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["return_order", "add_item", "quote"]);
-    const prompt = await client.getPrompt({ name: "return_order", arguments: { details: "order 42" } });
-    expect(prompt.messages[0]?.content).toEqual({ type: "text", text: `${guide.prompts[0]!.prompt}\n\nDetails: order 42` });
+    expect(client.getInstructions()).toBe(
+      `${instructions}\n\n## Workflows\n\nThe user starts these as slash commands:\n- /add_item: ${addItem.description}\n\n### feedback\nWhen: ${feedback.description}\n${feedback.instructions}`,
+    );
 
-    // Staging has none of prod's.
+    // Staging has none of prod's instructions, only its own workflow.
     const staging = await mcpClient(`/w/${acme}/staging/mcp`);
-    expect(staging.getInstructions()).toBeUndefined();
-    expect((await staging.listPrompts()).prompts.map((p) => p.name)).not.toContain("return_order_staging");
-    expect(await (await call("GET", "/guide?environment=staging")).json()).toEqual({ environment: "staging", prompts: [] });
-  });
-
-  it("keeps workflow prompts and recipes from sharing a slash command", async () => {
-    const clash = await call("PUT", "/guide?environment=prod", { prompts: [{ ...guide.prompts[0], name: "add_item" }] });
-    expect(clash.status).toBe(409);
-    const recipe = await call("PUT", "/recipes/return_order?environment=prod", { when: "Returns.", form: { fields: [{ name: "n", label: "N", type: "text" }] } });
-    expect(recipe.status).toBe(409);
+    expect(staging.getInstructions()).not.toContain(instructions);
+    expect(await (await call("GET", "/instructions?environment=staging")).json()).toEqual({ environment: "staging", instructions: null });
   });
 });

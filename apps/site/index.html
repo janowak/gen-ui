@@ -199,8 +199,8 @@
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
                 Write them with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in TypeScript or
-                the framework you use, or describe a form as a recipe. Props are a Zod schema; the build is one HTML
-                file.
+                the framework you use, with workflows in Markdown next to them. Props are a Zod schema; the build is
+                one HTML file.
               </p>
               <pre class="code"><code><span class="k">defineComponent</span>({
   name: <span class="s">"rating"</span>,
@@ -257,10 +257,10 @@
               <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Recipes</dt>
+              <dt class="font-medium">Workflows</dt>
               <dd class="max-w-xl text-muted-foreground">
-                Forms your business owns. Fields and validation are fixed; the model only picks the recipe and
-                pre-fills values. Each recipe is also a slash command.
+                Playbooks in your own words, kept next to your components and published with them. A workflow with
+                params is a slash command; one without is guidance the model always has.
               </dd>
               <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
             </div>
@@ -284,7 +284,7 @@
               <dt class="font-medium">Environments</dt>
               <dd class="max-w-xl text-muted-foreground">
                 Add staging or any other environment when you want one. Each has its own address, versions, theme and
-                recipes, so testers can keep it next to prod in the same chat. Publish a tested version to prod without
+                workflows, so testers can keep it next to prod in the same chat. Publish a tested version to prod without
                 rebuilding it.
               </dd>
               <dd><code class="badge badge-outline font-mono">genui publish --env staging</code></dd>
@@ -317,7 +317,7 @@
                 <span class="badge badge-default">Start here</span>
               </div>
               <p class="text-muted-foreground">
-                Register, publish your components and share the address. Components, recipes, forms and charts.
+                Register, publish your components and share the address. Components, workflows, forms and charts.
               </p>
               <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#how">How it works</a>
             </li>
@@ -354,7 +354,7 @@
             <div class="flex flex-col gap-4">
               <h3 class="font-medium">One call in your server</h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Your components, recipes, forms and charts become tools on your server, next to the ones you have.
+                Your components, forms and charts become tools on your server, your workflows slash commands, next to the ones you have.
               </p>
               <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
   genui: connectGenUI({
@@ -398,7 +398,7 @@
             <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
               <p class="font-medium">genui</p>
               <p class="mt-1 text-muted-foreground">
-                Serves forms, charts, recipes and your components. It sees calls to its own tools, never your tools'
+                Serves forms, charts, workflows and your components. It sees calls to its own tools, never your tools'
                 calls or their results.
               </p>
             </div>
@@ -415,7 +415,7 @@
             <li>
               <h3 class="font-medium">People confirm, not the model</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Theme and recipe saves are hidden from the model. They run only from a click in the view.
+                Theme, instructions and workflow saves are hidden from the model. They run only from a click in the view.
               </p>
             </li>
           </ul>

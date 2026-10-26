@@ -42,7 +42,7 @@ app.all("/mcp", async (req: Request, res: Response) => {
   }
 });
 
-// genui calls this after every publish, theme or recipe change: genui env set <env> --refresh-url http://<this server>/genui/refresh
+// genui calls this after every publish, theme, instructions or workflow change: genui env set <env> --refresh-url http://<this server>/genui/refresh
 app.post("/genui/refresh", (req: Request, res: Response) => {
   const revision: unknown = req.body?.revision;
   void genui?.refresh(typeof revision === "number" ? revision : undefined);

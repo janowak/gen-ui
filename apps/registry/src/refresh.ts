@@ -1,5 +1,5 @@
 import type { EnvironmentChange, LastRefresh, Store } from "./store.js";
-import { webhookUrlError } from "./webhook.js";
+import { refreshUrlError } from "./url.js";
 
 const TIMEOUT_MS = 3000;
 
@@ -16,8 +16,8 @@ export interface Refresher {
 }
 
 /**
- * Calls an environment's refresh URL after every change to what it serves (a publish, a theme or
- * recipe save, from the API or the registry MCP), so the company's server re-lists genui's tools
+ * Calls an environment's refresh URL after every change to what it serves (a publish, a theme,
+ * instructions or workflow save, from the API or the registry MCP), so the company's server re-lists genui's tools
  * now instead of at its next check. Only the change's environment and revision are sent; the
  * answer is recorded as the environment's last refresh, never read. A failed call never fails the
  * write: the SDK's own check catches up.
@@ -30,7 +30,7 @@ export function refreshServers(store: Store, { allowPrivate = false, fetch: doFe
   async function call({ workspaceId, environment }: EnvironmentChange): Promise<void> {
     const target = await store.environment(workspaceId, environment);
     if (!target?.refreshUrl) return;
-    const invalid = webhookUrlError(target.refreshUrl, allowPrivate, "refresh URL");
+    const invalid = refreshUrlError(target.refreshUrl, allowPrivate);
     let result: LastRefresh;
     if (invalid) {
       result = { at: new Date().toISOString(), ok: false, error: invalid };

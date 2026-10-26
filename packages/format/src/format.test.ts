@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChartSpec, FormSpec, Recipe, SubmitResult, getPath, inlineSeries, recipeForm, rowsToSeries, toOptions } from "./index.js";
+import { ChartSpec, FormSpec, SubmitResult, Workflow, getPath, inlineSeries, rowsToSeries, serverInstructions, toOptions, workflowMessage } from "./index.js";
 
 describe("getPath", () => {
   it("reads nested and indexed paths", () => {
@@ -57,30 +57,32 @@ describe("schemas", () => {
   });
 });
 
-describe("recipes", () => {
-  const recipe = Recipe.parse({
-    name: "add_item",
-    when: "The user wants to add an item.",
-    form: {
-      fields: [
-        { name: "name", label: "Name", type: "text", required: true },
-        { name: "price", label: "Price", type: "number" },
-        { name: "category", label: "Category", type: "resource_select", source: { toolName: "list_categories", labelPath: "name" } },
-        { name: "tags", label: "Tags", type: "multiselect", options: [{ id: "new", label: "New" }] },
-      ],
-      submit: { toolName: "create_item" },
-    },
+describe("workflows", () => {
+  const ret = Workflow.parse({
+    name: "return_order",
+    title: "Return an order",
+    description: "The user wants to return an order.",
+    instructions: "Ask for the order, then show a form with the reason and call create_return.",
+    params: [{ name: "order_id", description: "The order number", required: true }, { name: "reason", description: "Why" }],
+  });
+  const faq = Workflow.parse({ name: "shipping", description: "Questions about shipping.", instructions: "Look up the order with get_order first." });
+
+  it("adds the workflows to the server instructions; full steps only for those without params", () => {
+    const text = serverInstructions("Acme support.", [ret, faq])!;
+    expect(text).toContain("Acme support.\n\n## Workflows");
+    expect(text).toContain("- /return_order: The user wants to return an order.");
+    expect(text).not.toContain("create_return");
+    expect(text).toContain("### shipping\nWhen: Questions about shipping.\nLook up the order with get_order first.");
+    expect(serverInstructions(null, [])).toBeUndefined();
   });
 
-  it("pre-fills fields with light coercion and ignores values that don't fit", () => {
-    const form = recipeForm(recipe, { name: "Mug", price: "12", category: "c-1", tags: "new", unknown: 1 });
-    const byName = Object.fromEntries(form.fields.map((f) => [f.name, f.defaultValue]));
-    expect(byName).toEqual({ name: "Mug", price: 12, category: { id: "c-1", label: "c-1" }, tags: ["new"] });
-    expect(recipeForm(recipe, { price: "not a number" }).fields[1]?.defaultValue).toBeUndefined();
-    expect(form.submit?.toolName).toBe("create_item");
+  it("sends the steps with the params the user gave", () => {
+    expect(workflowMessage(ret, { order_id: "1042", reason: " " })).toBe(`${ret.instructions}\n\norder_id: 1042`);
+    expect(workflowMessage(ret, {})).toBe(ret.instructions);
   });
 
-  it("rejects bad recipe names", () => {
-    expect(Recipe.safeParse({ ...recipe, name: "Add Item" }).success).toBe(false);
+  it("rejects bad names and duplicate params", () => {
+    expect(Workflow.safeParse({ ...faq, name: "Return Order" }).success).toBe(false);
+    expect(Workflow.safeParse({ ...ret, params: [ret.params[0], ret.params[0]] }).success).toBe(false);
   });
 });

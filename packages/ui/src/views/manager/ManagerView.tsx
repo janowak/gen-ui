@@ -16,7 +16,7 @@ interface Component {
 
 interface State {
   role: "member" | "admin";
-  /** The environment previews, theme and recipes show for this person. */
+  /** The environment previews, theme, instructions and workflows show for this person. */
   environment: string;
   environments: string[];
   components: Component[];
@@ -55,7 +55,7 @@ export function ManagerView() {
       <CardHeader>
         <CardTitle>Components</CardTitle>
         <CardDescription>
-          The version each environment serves. CI publishes to environments; previews, theme and recipes here show {state?.environment ?? "prod"}.
+          The version each environment serves. CI publishes to environments; previews, theme, instructions and workflows here show {state?.environment ?? "prod"}.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

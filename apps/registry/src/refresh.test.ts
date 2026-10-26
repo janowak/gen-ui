@@ -6,7 +6,7 @@ import { loadAssets, testDatabase } from "./testing.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const rating = (version: string) => ({ name: "rating", version, description: "Ask for a star rating.", props: { type: "object", properties: {} }, tools: [] });
-const recipe = { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" as const }] } };
+const workflow = { name: "add_item", description: "The user wants to add an item.", instructions: "Show a form and submit to create_item.", params: [] };
 
 let app: ReturnType<typeof createRegistryApp>["app"];
 let store: Store;
@@ -75,9 +75,10 @@ describe("revisions", () => {
     expect(await revision()).toBe(start + 1);
 
     await store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
-    await store.saveRecipe(acme, "prod", recipe);
-    await store.deleteRecipe(acme, "prod", recipe.name);
-    expect(await revision()).toBe(start + 4);
+    await store.saveWorkflow(acme, "prod", workflow);
+    await store.deleteWorkflow(acme, "prod", workflow.name);
+    await store.setInstructions(acme, "prod", "Acme.");
+    expect(await revision()).toBe(start + 5);
   });
 
   it("are served next to the MCP, with an ETag", async () => {
@@ -109,7 +110,7 @@ describe("refresh URLs", () => {
     await refresher.idle();
     expect(received).toEqual([{ type: "genui.refresh", environment: "prod", revision: await revision() }]);
 
-    // Saves from the registry MCP go through the same store: theme and recipes too.
+    // Saves from the registry MCP go through the same store: theme, instructions and workflows too.
     await store.setTheme(acme, "prod", null);
     await refresher.idle();
     expect(received.at(-1)).toEqual({ type: "genui.refresh", environment: "prod", revision: await revision() });
@@ -125,9 +126,9 @@ describe("refresh URLs", () => {
 
   it("send one more call with the latest revision for changes made during a call", async () => {
     delayMs = 50;
-    await store.saveRecipe(acme, "prod", recipe);
-    await store.saveRecipe(acme, "prod", { ...recipe, when: "Adding things." });
-    await store.deleteRecipe(acme, "prod", recipe.name);
+    await store.saveWorkflow(acme, "prod", workflow);
+    await store.saveWorkflow(acme, "prod", { ...workflow, description: "Adding things." });
+    await store.deleteWorkflow(acme, "prod", workflow.name);
     await refresher.idle();
     expect(received).toHaveLength(2);
     expect(received.at(-1)?.revision).toBe(await revision());

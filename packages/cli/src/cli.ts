@@ -4,14 +4,14 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, Guide, Recipe, Theme } from "@genui/format";
-import { readComponentDir } from "@genui/runtime/local";
+import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_ENVIRONMENT_INSTRUCTIONS, Theme, type Workflow } from "@genui/format";
+import { readComponentDir, readWorkflowDir, readWorkflowFile, type ComponentDir, type WorkflowFile } from "@genui/runtime/local";
 
 const USAGE = `genui <command> [options]
 
 Commands:
   dev [dir] [--port n]              Develop the component in dir (default .) in a local host; no registry needed
-  publish [dir]                     Publish the component in dir (default .) to an environment      publish
+  publish [dir]                     Publish the component and workflows in dir (default .)           publish
   publish <name>@<version>          Serve an already published version in an environment, no rebuild  publish
   list                              Components and the version each environment serves
   env list                          Environments, their end-user MCP URLs and refresh URLs
@@ -19,17 +19,17 @@ Commands:
   env set <name> --refresh-url <u>  Your server's refresh endpoint, called on changes ("" clears)    admin
   theme <file.json> | --clear       Set or clear an environment's theme                              admin
   token <scope> <name> [--env a,b]  Create a token (scope: server | publish | admin)                 admin
-  recipe list                       List an environment's recipes
-  recipe set <file.json>            Create or replace a recipe from a JSON file                      admin
-  recipe rm <name>                  Delete a recipe                                                  admin
-  guide <file.json> | --clear       Set or clear an environment's MCP instructions and workflow prompts admin
+  workflow list                     List an environment's workflows
+  workflow set <file>               Create or replace a workflow from a .workflow.md or .json file   publish
+  workflow rm <name>                Delete a workflow                                                publish
+  instructions <file.md> | --clear  Set or clear an environment's MCP instructions                  admin
   branding <file.json>              Set the connector's title, description and website               admin
   icon <image> | --clear            Set or clear the connector icon (PNG, JPEG, WebP or SVG, 100 KB) admin
 
 Options:
   --url <url>      Registry URL     (env GENUI_URL)
   --token <token>  Registry token   (env GENUI_TOKEN)
-  --env <name>     Environment for publish, theme, recipe and guide (env GENUI_ENV, default prod)
+  --env <name>     Environment for publish, theme, workflow and instructions (env GENUI_ENV, default prod)
   --json           Print the registry's response as JSON (publish, list, env list)
 
 Token scopes: server reads (SDK); publish publishes to any environment, or with --env only to
@@ -41,7 +41,12 @@ re-run. A version never changes: to serve it in another environment, publish <na
 
 A component dir contains a manifest (genui.component.json) and the built single-file HTML.
 Built with @genui/kit/vite, both are generated into dist/. A hand-written manifest sits next to
-the sources and points at dist/index.html by default (override with "bundle" in the manifest).`;
+the sources and points at dist/index.html by default (override with "bundle" in the manifest).
+
+Workflows sit next to the components they use, as <name>.workflow.md in the component dir or its
+workflows/: YAML frontmatter (title, description, params) and the steps for the AI as the body.
+With params a workflow is a slash command taking them; without, it is part of the MCP instructions.
+publish sends them with the component; a dir may hold only workflows.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -144,11 +149,28 @@ async function publish(target: string) {
   const ref = REF.exec(target);
   if (ref) return deploy(ref[1]!, ref[2]!);
   const env = environment();
-  const { manifest, html } = await readComponentDir(target).catch((error: Error) => fail(error.message));
+  const [component, workflows] = await Promise.all([
+    readComponentDir(target).catch((error: Error) => error),
+    readWorkflowDir(target).catch((error: Error) => fail(error.message)),
+  ]);
+  if (component instanceof Error && !workflows.length) fail(`${component.message}, and no *.workflow.md files`);
+  if (!(component instanceof Error)) await publishComponent(component, env);
+  for (const file of workflows) await publishWorkflow(file, env);
+}
+
+async function publishComponent({ manifest, html }: ComponentDir, env: string) {
   const { name } = manifest;
   const result = await api<Published>("POST", "/v1/components", { manifest, html, environment: env });
   const what = result.created ? `Published ${name}@${result.version} to ${env}` : `${name}@${result.version} was already published with this bundle; ${env} serves it`;
   printPublished(result, `${what} (hash ${result.hash})`);
+}
+
+const describeWorkflow = (w: Workflow) => (w.params.length ? `/${w.name} (${w.params.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})` : w.name);
+
+async function publishWorkflow({ workflow }: WorkflowFile, env: string) {
+  const { name, ...rest } = workflow;
+  const result = await api<{ replaced: boolean }>("PUT", `/v1/workflows/${name}?environment=${env}`, rest);
+  print(result, `${result.replaced ? "Updated" : "Published"} workflow ${describeWorkflow(workflow)} in ${env}${workflow.params.length ? "" : " (in the instructions)"}`);
 }
 
 /** Runs the component's dev server with the local host from @genui/kit, resolved from the component. */
@@ -201,7 +223,7 @@ switch (command) {
       print(
         updated,
         updated.refreshUrl
-          ? `${target} calls ${updated.refreshUrl} after every publish, theme or recipe change.`
+          ? `${target} calls ${updated.refreshUrl} after every publish, theme, instructions or workflow change.`
           : `${target} has no refresh URL; servers pick up changes at their next check.`,
       );
     } else if (action === "add") {
@@ -209,7 +231,7 @@ switch (command) {
       print(created, `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`);
     } else if (action === "rm") {
       await api("DELETE", `/v1/environments/${name ?? fail("usage: genui env rm <name>")}`);
-      console.log(`Deleted ${name} with what it served: versions, theme and recipes.`);
+      console.log(`Deleted ${name} with what it served: versions, theme, instructions and workflows.`);
     } else fail("usage: genui env list | add <name> | rm <name> | set <name> --refresh-url <url>");
     break;
   }
@@ -229,37 +251,27 @@ switch (command) {
     console.log(result.token);
     break;
   }
-  case "recipe": {
+  case "workflow": {
     const [action, arg] = args;
     const env = environment();
-    const query = `?environment=${env}`;
     if (action === "list") {
-      const { recipes } = await api<{ recipes: { name: string; when: string; form: { fields: unknown[] } }[] }>("GET", `/v1/recipes${query}`);
-      if (!recipes.length) console.log(`No recipes in ${env} yet.`);
-      for (const r of recipes) console.log(`/${r.name}  (${r.form.fields.length} fields)  ${r.when}`);
+      const { workflows } = await api<{ workflows: Workflow[] }>("GET", `/v1/workflows?environment=${env}`);
+      print({ workflows }, workflows.length ? workflows.map((w) => `${describeWorkflow(w)}  ${w.description}`).join("\n") : `No workflows in ${env} yet.`);
     } else if (action === "set") {
-      const file = arg ?? fail("usage: genui recipe set <file.json> [--env e]");
-      const parsed = Recipe.safeParse(JSON.parse(await readFile(file, "utf8")));
-      if (!parsed.success) fail(`invalid recipe:\n${parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n")}`);
-      const { name, ...rest } = parsed.data;
-      const result = await api<{ replaced: boolean }>("PUT", `/v1/recipes/${name}${query}`, rest);
-      console.log(`${result.replaced ? "Updated" : "Created"} recipe /${name} in ${env}.`);
+      const file = await readWorkflowFile(arg ?? fail("usage: genui workflow set <file> [--env e]")).catch((error: Error) => fail(error.message));
+      await publishWorkflow(file, env);
     } else if (action === "rm") {
-      await api("DELETE", `/v1/recipes/${arg ?? fail("usage: genui recipe rm <name> [--env e]")}${query}`);
-      console.log(`Deleted recipe /${arg} from ${env}.`);
-    } else fail("usage: genui recipe list | set <file.json> | rm <name> [--env e]");
+      await api("DELETE", `/v1/workflows/${arg ?? fail("usage: genui workflow rm <name> [--env e]")}?environment=${env}`);
+      console.log(`Deleted workflow ${arg} from ${env}.`);
+    } else fail("usage: genui workflow list | set <file> | rm <name> [--env e]");
     break;
   }
-  case "guide": {
+  case "instructions": {
     const env = environment();
-    const parse = async (file: string) => {
-      const parsed = Guide.safeParse(JSON.parse(await readFile(file, "utf8")));
-      if (!parsed.success) fail(`invalid guide:\n${parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n")}`);
-      return parsed.data;
-    };
-    const guide = values.clear ? { prompts: [] } : await parse(args[0] ?? fail("usage: genui guide <file.json> | --clear [--env e]"));
-    await api("PUT", `/v1/guide?environment=${env}`, guide);
-    console.log(values.clear ? `Instructions and workflow prompts cleared in ${env}.` : `Instructions and ${guide.prompts.length} workflow prompt(s) saved in ${env}.`);
+    const instructions = values.clear ? null : (await readFile(args[0] ?? fail("usage: genui instructions <file.md> | --clear [--env e]"), "utf8")).trim();
+    if (instructions && instructions.length > MAX_ENVIRONMENT_INSTRUCTIONS) fail(`instructions are ${instructions.length} characters; at most ${MAX_ENVIRONMENT_INSTRUCTIONS}`);
+    await api("PUT", `/v1/instructions?environment=${env}`, { instructions });
+    console.log(instructions ? `Instructions saved in ${env}. Hosts get them on their next connection.` : `Instructions cleared in ${env}.`);
     break;
   }
   case "branding": {

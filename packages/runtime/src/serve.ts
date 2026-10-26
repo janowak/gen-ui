@@ -57,7 +57,7 @@ const rpcError = (status: number, message: string) =>
   Response.json({ jsonrpc: "2.0", error: { code: -32000, message }, id: null }, { status });
 
 /**
- * A local genui MCP: genui's forms, charts, recipes and the catalog's components, with no registry.
+ * A local genui MCP: genui's forms, charts and the catalog's components and workflows, with no registry.
  * Each session gets its own server, mounted again when the catalog changes (`changed()`), which
  * tells the client its lists changed.
  *
@@ -222,7 +222,7 @@ export async function startServe(options: ServeOptions): Promise<Served> {
   const reload = () => {
     reloading = reloading.then(async () => {
       const { changed, lines } = await catalog.reload();
-      for (const line of lines) log(line.startsWith("guide") ? `${line}; instructions update when a client reconnects` : line);
+      for (const line of lines) log(line.startsWith("instructions") || line.startsWith("workflows") ? `${line}; instructions update when a client reconnects` : line);
       if (!changed) return;
       await mcp.changed();
       if (options.refreshUrl) {
@@ -233,9 +233,8 @@ export async function startServe(options: ServeOptions): Promise<Served> {
       }
     });
   };
-  const files = [options.theme, options.guide, options.recipes].filter((path): path is string => !!path);
-  const recipesDir = options.recipes && !options.recipes.endsWith(".json") ? [options.recipes] : [];
-  closers.push(watchPaths({ dirs: [...options.dirs, ...recipesDir], files: files.filter((f) => !recipesDir.includes(f)) }, reload, log));
+  const files = [options.theme, options.instructions].filter((path): path is string => !!path);
+  closers.push(watchPaths({ dirs: options.dirs, files }, reload, log));
 
   let url: string | undefined;
   if (options.stdio) {

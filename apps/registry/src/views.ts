@@ -1,7 +1,7 @@
 import { viewBundles, type ViewBundle, type ViewName } from "@genui/runtime";
 
 export type { ViewName };
-export type ManagementViewName = "manager" | "theme" | "recipes" | "workspace" | "guide";
+export type ManagementViewName = "manager" | "theme" | "workflows" | "workspace" | "instructions";
 
 /**
  * The HTML the registry serves. Each runtime loads it its own way: Node reads it from disk

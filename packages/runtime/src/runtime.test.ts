@@ -121,104 +121,54 @@ describe("mountGenUI", () => {
   });
 });
 
-describe("recipes", () => {
-  const addOrder = {
-    name: "add_order",
+describe("workflows", () => {
+  const createOrder = {
+    name: "create_order",
     title: "New order",
-    when: "The user wants to create an order.",
-    notes: "Pre-fill the customer when mentioned.",
-    form: {
-      title: "New order",
-      fields: [
-        { name: "customer", label: "Customer", type: "resource_select", source: { toolName: "search_customers", labelPath: "name" } },
-        { name: "quantity", label: "Quantity", type: "number" },
-      ],
-      submit: { toolName: "create_order" },
-    },
-  } as const;
-  const wipe = { name: "wipe", when: "Never.", form: { fields: [{ name: "x", label: "X", type: "text" }], submit: { toolName: "drop_tables" } } } as const;
+    description: "The user wants to create an order.",
+    instructions: "Look the customer up, then show the order form and submit to create_order.",
+    params: [
+      { name: "customer", description: "Customer name", required: true },
+      { name: "notes", description: "Anything else", required: false },
+    ],
+  };
+  const feedback = { name: "feedback", description: "After an order.", instructions: "Ask for a rating with render_rating.", params: [] };
+  const source = (): CatalogSource => ({
+    snapshot: async () => ({ catalog: { environment: "prod", theme: null, instructions: null, workflows: [createOrder, feedback], components: [] }, bundles: {} }),
+  });
 
-  async function connectWithRecipes() {
-    const server = new McpServer({ name: "recipes", version: "1.0.0" });
-    await mountGenUI(server, { views, recipes: [addOrder as never, wipe as never] });
+  async function connectWith(options: { environment?: string; preview?: boolean } = {}) {
+    const server = new McpServer({ name: "workflows", version: "1.0.0" });
+    await mountGenUI(server, { views, registry: source(), ...options });
     const [a, b] = InMemoryTransport.createLinkedPair();
-    const recipeClient = new Client({ name: "c", version: "1.0.0" });
-    await Promise.all([server.connect(b), recipeClient.connect(a)]);
-    return recipeClient;
+    const c = new Client({ name: "c", version: "1.0.0" });
+    await Promise.all([server.connect(b), c.connect(a)]);
+    return c;
   }
 
-  it("builds the form on the server from the recipe and the model's pre-fill", async () => {
-    const c = await connectWithRecipes();
-    const tool = (await c.listTools()).tools.find((t) => t.name === "use_recipe");
-    expect(tool?.description).toContain("- add_order: The user wants to create an order. Pre-fill the customer when mentioned.");
-
-    const result = await c.callTool({ name: "use_recipe", arguments: { recipe: "add_order", prefill: { customer: { id: "c-2", label: "Globex" }, quantity: "3" } } });
-    expect(result.isError).toBeFalsy();
-    const form = result._meta?.["genui/form"] as { fields: { name: string; defaultValue?: unknown }[] };
-    expect(form.fields.map((f) => f.defaultValue)).toEqual([{ id: "c-2", label: "Globex" }, 3]);
-  });
-
-  it("sends recipe values back to the conversation on a server without data tools", async () => {
-    const server = new McpServer({ name: "render-only", version: "1.0.0" });
-    await mountGenUI(server, { views, recipes: [wipe as never], dataTools: false });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    const c = new Client({ name: "c", version: "1.0.0" });
-    await Promise.all([server.connect(b), c.connect(a)]);
-    const result = await c.callTool({ name: "use_recipe", arguments: { recipe: "wipe" } });
-    expect(result.isError).toBeFalsy();
-    expect(result._meta?.["genui/form"]).not.toHaveProperty("submit");
-  });
-
-  it("checks recipes with `validate` through the app-only genui_validate tool", async () => {
-    const quote = {
-      name: "quote",
-      when: "The user wants a quote.",
-      form: { fields: [{ name: "email", label: "Email", type: "email" }] },
-      validate: { url: "https://example.com/validate" },
-    };
-    const calls: { recipe: string; values: Record<string, unknown>; viewId?: string }[] = [];
-    const server = new McpServer({ name: "validated", version: "1.0.0" });
-    await mountGenUI(server, { views,
-      recipes: [quote as never, wipe as never],
-      dataTools: false,
-      validate: async (recipe, values, viewId) => {
-        calls.push({ recipe: recipe.name, values, viewId });
-        return values.email === "taken@example.com" ? { ok: false, fieldErrors: { email: "Already a customer." } } : { ok: true };
-      },
-    });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    const c = new Client({ name: "c", version: "1.0.0" });
-    await Promise.all([server.connect(b), c.connect(a)]);
-
-    const tool = (await c.listTools()).tools.find((t) => t.name === "genui_validate");
-    expect((tool?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
-
-    const shown = await c.callTool({ name: "use_recipe", arguments: { recipe: "quote" } });
-    const submit = (shown._meta?.["genui/form"] as { submit?: { toolName: string; params: Record<string, unknown>; idempotencyParam: string } }).submit;
-    expect(submit).toMatchObject({ toolName: "genui_validate", params: { genui_recipe: "quote" }, idempotencyParam: "genui_view" });
-    // Recipes without `validate` keep sending their values straight to the conversation.
-    expect((await c.callTool({ name: "use_recipe", arguments: { recipe: "wipe" } }))._meta?.["genui/form"]).not.toHaveProperty("submit");
-
-    // What the form sends: the fixed params with the field values and its render id merged in.
-    const view = { [submit!.idempotencyParam]: "view-1" };
-    const rejected = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "taken@example.com", ...view } });
-    expect(rejected.structuredContent).toEqual({ ok: false, fieldErrors: { email: "Already a customer." } });
-    const accepted = await c.callTool({ name: "genui_validate", arguments: { ...submit!.params, email: "new@example.com", ...view } });
-    expect(accepted.structuredContent).toEqual({ ok: true });
-    expect(calls).toEqual([
-      { recipe: "quote", values: { email: "taken@example.com" }, viewId: "view-1" },
-      { recipe: "quote", values: { email: "new@example.com" }, viewId: "view-1" },
-    ]);
-  });
-
-  it("exposes each recipe as a prompt (slash command)", async () => {
-    const c = await connectWithRecipes();
+  it("makes workflows with params slash commands taking them; the others stay out", async () => {
+    const c = await connectWith();
     const { prompts } = await c.listPrompts();
-    expect(prompts.map((p) => p.name)).toEqual(["add_order", "wipe"]);
-    const prompt = await c.getPrompt({ name: "add_order", arguments: { details: "3 mugs for Globex" } });
-    const text = (prompt.messages[0]?.content as { text: string }).text;
-    expect(text).toContain('call use_recipe with recipe "add_order"');
-    expect(text).toContain("3 mugs for Globex");
+    expect(prompts).toEqual([
+      expect.objectContaining({
+        name: "create_order",
+        title: "New order",
+        description: "The user wants to create an order.",
+        arguments: [
+          { name: "customer", description: "Customer name", required: true },
+          { name: "notes", description: "Anything else", required: false },
+        ],
+      }),
+    ]);
+    const prompt = await c.getPrompt({ name: "create_order", arguments: { customer: "Globex" } });
+    expect((prompt.messages[0]?.content as { text: string }).text).toBe(`${createOrder.instructions}\n\ncustomer: Globex`);
+    expect((await c.listTools()).tools.map((t) => t.name)).not.toContain("use_recipe");
+  });
+
+  it("suffixes command names outside prod and leaves them out of previews", async () => {
+    expect((await (await connectWith({ environment: "staging" })).listPrompts()).prompts.map((p) => [p.name, p.title])).toEqual([["create_order_staging", "New order (staging)"]]);
+    const preview = await connectWith({ preview: true });
+    expect(preview.getServerCapabilities()?.prompts).toBeUndefined();
   });
 });
 
@@ -233,7 +183,7 @@ describe("components", () => {
   const bundles: Record<string, string> = { aaaa: "<p>rating 1.0.0</p>", bbbb: "<p>rating 1.1.0</p>" };
   const source = (hash: string, version: string): CatalogSource => ({
     snapshot: async () => ({
-      catalog: { environment: "prod", theme: null, instructions: null, prompts: [], recipes: [], components: [{ name: "rating", version, hash, manifest: manifest(version) }] },
+      catalog: { environment: "prod", theme: null, instructions: null, workflows: [], components: [{ name: "rating", version, hash, manifest: manifest(version) }] },
       bundles: { [hash]: bundles[hash]! },
     }),
     bundle: async (h) => bundles[h],

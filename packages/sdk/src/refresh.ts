@@ -2,7 +2,7 @@ import type { GenUIClient } from "./client.js";
 
 /**
  * Your server's refresh endpoint: genui calls it after every change to what your environment serves
- * (a publish, a theme or recipe save), so your server re-lists genui's tools now instead of at its
+ * (a publish, a theme, instructions or workflow save), so your server re-lists genui's tools now instead of at its
  * next check. Register its URL with `genui env set <environment> --refresh-url <url>`.
  *
  * A fetch-style handler (`(request: Request) => Response`) for Hono, Next.js, Bun, Deno or Workers:

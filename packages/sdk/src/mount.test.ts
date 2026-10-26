@@ -66,10 +66,11 @@ beforeAll(async () => {
   await store.publish(acme, rating("1.0.0"), html("rating v1"));
   await store.publish(acme, rating("1.1.0"), html("rating v1.1"), "staging");
   await store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
-  await store.saveRecipe(acme, "prod", {
+  await store.saveWorkflow(acme, "prod", {
     name: "add_item",
-    when: "The user wants to add an item.",
-    form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
+    description: "The user wants to add an item.",
+    instructions: "Show a form with the name and submit to create_item.",
+    params: [{ name: "item", description: "What to add", required: false }],
   });
   registry = await listen(created.app);
   url = `http://localhost:${port(registry)}/w/${acme}/mcp`;
@@ -81,27 +82,23 @@ afterAll(() => registry?.close());
 describe("mountGenUI", () => {
   const connect = (to = url) => connectGenUI({ url: to, token, refreshSeconds: 0, fetch: counted, logger: { warn: () => {} } });
 
-  it("puts genui's tools and recipe prompts next to the company's own tools", async () => {
+  it("puts genui's tools and workflow prompts next to the company's own tools", async () => {
     const { client, handle } = await companyServer(connect());
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(["search_customers", "render_form", "render_chart", "render_rating", "use_recipe"]));
+    expect(names).toEqual(expect.arrayContaining(["search_customers", "render_form", "render_chart", "render_rating"]));
     expect(handle.tools()).not.toContain("search_customers");
     expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item"]);
 
-    const prompt = await client.getPrompt({ name: "add_item", arguments: { details: "a blue mug" } });
-    expect((prompt.messages[0]?.content as { text: string }).text).toContain("a blue mug");
+    const prompt = await client.getPrompt({ name: "add_item", arguments: { item: "a blue mug" } });
+    expect((prompt.messages[0]?.content as { text: string }).text).toContain("item: a blue mug");
   });
 
-  it("forwards calls and returns genui's result: theme, view id, recipe form with its submit tool", async () => {
+  it("forwards calls and returns genui's result: theme and view id", async () => {
     const { client } = await companyServer(connect());
     const rendered = await client.callTool({ name: "render_rating", arguments: { question: "How was it?" } });
     expect(rendered._meta).toMatchObject({ "genui/theme": { light: { primary: "#16a34a" } } });
     expect(rendered._meta?.["genui/viewId"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(rendered.structuredContent).toEqual({ genui: { id: rendered._meta?.["genui/viewId"] } });
-
-    // Data tools are on: the recipe keeps submitting to the company's create_item.
-    const recipe = await client.callTool({ name: "use_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });
-    expect(recipe._meta?.["genui/form"]).toMatchObject({ fields: [{ defaultValue: "Mug" }], submit: { toolName: "create_item" } });
   });
 
   it("answers tools/list and resource reads from memory; only calls reach genui", async () => {

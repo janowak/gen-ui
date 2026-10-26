@@ -16,7 +16,7 @@ from .client import GenUIClient
 def refresh_endpoint(genui: GenUIClient) -> Callable[[Request], Awaitable[Response]]:
     """A Starlette endpoint that re-lists genui's tools in the background when genui calls it.
 
-    genui calls it after a publish or a theme or recipe save, so your server serves the change now
+    genui calls it after a publish or a theme, instructions or workflow save, so your server serves the change now
     instead of at its next check. Register its URL with `genui env set <environment> --refresh-url <url>`.
 
         server.custom_route("/genui/refresh", methods=["POST"])(refresh_endpoint(genui))

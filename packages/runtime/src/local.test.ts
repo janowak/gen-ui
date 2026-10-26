@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_BUNDLE_BYTES } from "@genui/format";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { localCatalog, readComponentDir } from "./local.js";
+import { localCatalog, parseWorkflowFile, readComponentDir, readWorkflowDir } from "./local.js";
 import { contentHash } from "./views.js";
 
 const manifest = { name: "rating", version: "1.2.0", description: "Ask the user to rate something.", props: { type: "object" } };
@@ -68,24 +68,26 @@ describe("localCatalog", () => {
     await write(`${path}/dist/genui.component.json`, { ...manifest, name, version, bundle: "index.html" });
     await write(`${path}/dist/index.html`, body);
   };
-  const recipe = (name: string) => ({ name, when: `The user wants ${name}.`, form: { title: name, fields: [{ name: "email", label: "Email", type: "email" }] } });
+  const workflow = (description: string, params = "") => `---\ndescription: ${description}\n${params}---\nSteps for ${description}\n`;
+  const withParam = "params:\n  - name: email\n    description: Email\n";
 
-  it("serves components, theme, recipes and guide from files", async () => {
+  it("serves components, workflows next to them, theme and instructions from files", async () => {
     await component("rating", "rating", "1.0.0");
+    await write("rating/workflows/signup.workflow.md", workflow("Sign up.", withParam));
+    await write("rating/feedback.workflow.md", workflow("After an order."));
+    await write("rating/notes.md", "ignored");
+    await write("flows/contact.workflow.md", workflow("Contact us.", withParam));
     await write("theme.json", { light: { primary: "#4f46e5" } });
-    await write("recipes/a.json", recipe("signup"));
-    await write("recipes/b.json", recipe("contact"));
-    await write("recipes/notes.txt", "ignored");
-    await write("guide.json", { instructions: "Help with orders.", prompts: [{ name: "returns", description: "Return an order.", prompt: "Use signup." }] });
-    const catalog = await localCatalog({ dirs: [join(dir, "rating")], theme: join(dir, "theme.json"), recipes: join(dir, "recipes"), guide: join(dir, "guide.json") });
+    await write("instructions.md", "Help with orders.\n");
+    const catalog = await localCatalog({ dirs: [join(dir, "rating"), join(dir, "flows")], theme: join(dir, "theme.json"), instructions: join(dir, "instructions.md") });
 
     const snapshot = (await catalog.snapshot("prod"))!;
     expect(snapshot.catalog.components.map((c) => `${c.name}@${c.version}`)).toEqual(["rating@1.0.0"]);
     expect(snapshot.bundles[snapshot.catalog.components[0]!.hash]).toBe("<p>rating 1.0.0</p>");
     expect(snapshot.catalog.theme).toEqual({ light: { primary: "#4f46e5" } });
-    expect(snapshot.catalog.recipes.map((r) => r.name)).toEqual(["signup", "contact"]);
-    expect(snapshot.catalog.prompts.map((p) => p.name)).toEqual(["returns"]);
-    expect(catalog.instructions()).toBe("Help with orders.");
+    expect(snapshot.catalog.workflows.map((w) => w.name)).toEqual(["contact", "feedback", "signup"]);
+    expect(snapshot.catalog.instructions).toBe("Help with orders.");
+    expect(catalog.instructions()).toMatch(/^Help with orders\.\n\n## Workflows[\s\S]*### feedback\nWhen: After an order\.\nSteps for After an order\.$/);
     expect(catalog.problems()).toEqual([]);
   });
 
@@ -104,21 +106,17 @@ describe("localCatalog", () => {
     expect(catalog.problems()).toHaveLength(1);
   });
 
-  it("serves a component name once, and skips duplicate recipes and prompts with a recipe's name", async () => {
+  it("serves a component and a workflow name once", async () => {
     await component("a", "rating", "1.0.0");
     await component("b", "rating", "2.0.0");
-    await write("recipes/a.json", recipe("signup"));
-    await write("recipes/b.json", recipe("signup"));
-    await write("guide.json", { prompts: [{ name: "signup", description: "Clash.", prompt: "x" }] });
-    const catalog = await localCatalog({ dirs: [join(dir, "a"), join(dir, "b")], recipes: join(dir, "recipes"), guide: join(dir, "guide.json") });
+    await write("a/signup.workflow.md", workflow("Sign up."));
+    await write("b/signup.workflow.md", workflow("Sign up again."));
+    const catalog = await localCatalog({ dirs: [join(dir, "a"), join(dir, "b")] });
     expect(catalog.components().map((c) => c.manifest.version)).toEqual(["1.0.0"]);
-    const snapshot = (await catalog.snapshot("prod"))!;
-    expect(snapshot.catalog.recipes).toHaveLength(1);
-    expect(snapshot.catalog.prompts).toEqual([]);
+    expect((await catalog.snapshot("prod"))!.catalog.workflows.map((w) => w.description)).toEqual(["Sign up."]);
     expect(catalog.problems().map((p) => p.message)).toEqual([
-      expect.stringContaining('"rating" is already served'),
       expect.stringContaining('"signup" is defined twice'),
-      expect.stringContaining("has a recipe's name"),
+      expect.stringContaining('"rating" is already served'),
     ]);
   });
 
@@ -138,5 +136,41 @@ describe("localCatalog", () => {
     expect(catalog.revision()).toBe(2);
     expect(await catalog.bundle(first)).toBe("<p>rating 1.0.0</p>");
     expect(await catalog.bundle(catalog.components()[0]!.hash)).toBe("<p>rating 1.0.1</p>");
+  });
+});
+
+describe("workflow files", () => {
+  const file = (front: string, body: string) => `---\n${front}\n---\n${body}\n`;
+
+  it("reads frontmatter and takes the body as instructions; the name defaults to the file name", () => {
+    const workflow = parseWorkflowFile(
+      file("title: New order\ndescription: Create an order.\nparams:\n  - name: customer\n    description: Customer name\n    required: true", "1. Look up.\n2. Show the form."),
+      "/repo/create_order.workflow.md",
+    );
+    expect(workflow).toEqual({
+      name: "create_order",
+      title: "New order",
+      description: "Create an order.",
+      instructions: "1. Look up.\n2. Show the form.",
+      params: [{ name: "customer", description: "Customer name", required: true }],
+    });
+  });
+
+  it("explains what is wrong", () => {
+    expect(() => parseWorkflowFile("no frontmatter", "/repo/x.workflow.md")).toThrow(/frontmatter/);
+    expect(() => parseWorkflowFile(file("title: x", "Steps."), "/repo/x_y.workflow.md")).toThrow(/description/);
+  });
+
+  it("finds workflows next to a component and in its workflows/, and rejects duplicate names", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "genui-workflows-"));
+    await mkdir(join(dir, "workflows"));
+    await writeFile(join(dir, "feedback.workflow.md"), file("description: After an order.", "Ask for a rating."));
+    await writeFile(join(dir, "workflows", "create_order.workflow.md"), file("description: Create an order.", "Show the form."));
+    await writeFile(join(dir, "README.md"), "not a workflow");
+    expect((await readWorkflowDir(dir)).map((f) => f.workflow.name)).toEqual(["create_order", "feedback"]);
+
+    await writeFile(join(dir, "workflows", "other.workflow.md"), file("name: feedback\ndescription: Again.", "Steps."));
+    await expect(readWorkflowDir(dir)).rejects.toThrow(/two workflows are named feedback/);
+    await rm(dir, { recursive: true, force: true });
   });
 });

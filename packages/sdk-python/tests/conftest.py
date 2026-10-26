@@ -74,7 +74,7 @@ class FakeGenUI:
 
         @server.prompt(name="add_item", title="Add item", description="The user wants to add an item.")
         def add_item(details: str | None = None) -> str:
-            return f'Use the "add_item" recipe. Pre-fill from: {details}'
+            return f"Show a form with the name and submit to create_item.\n\ndetails: {details}"
 
         return server
 

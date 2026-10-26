@@ -186,7 +186,7 @@ class GenUIClient:
     async def _load(self) -> None:
         async with self._session() as client:
             tools = list((await client.list_tools()).tools)
-            # No prompts capability until the environment has recipes.
+            # No prompts capability until the environment has a workflow with params.
             prompts = list((await client.list_prompts()).prompts) if client.server_capabilities.prompts else []
             for tool in tools:
                 uri = resource_uri(tool)

@@ -3,8 +3,8 @@
 Recipes go away. An environment has **instructions** (the overview) and **workflows** (editable playbooks in the customer's own words). A workflow with params becomes a slash command; one without params is guidance the model always has.
 
 **Status (2026-10-26)**
-- Proposed. Not started.
-- Builds on the uncommitted guide work (instructions + workflow prompts in `guide.ts`, migration `0003`, `GuideView`). This plan folds those workflow prompts and recipes into one concept.
+- Done on branch `workflows` (on top of `cloudflare-d1`): §2–§10 plus §13 (code path). Recipes, `guide.ts`, `GuideView` and the validation webhook are gone.
+- `genui serve` (`localCatalog`) reads workflow files and `--instructions` too; its CLI flags still need switching from `--recipes`/`--guide`.
 - Dev mode: no migration of existing recipes, no compat aliases. Local databases get recreated.
 
 **Principle: one concept, the model builds the UI.** Components describe themselves and `render_form` builds any form, so a workflow only needs to say *what to do*. No business-owned fixed forms, no validation webhook. If a customer needs a guaranteed form later, it comes back as an optional part of a workflow, not as its own concept.
@@ -158,3 +158,14 @@ The `draft_workflow` description teaches the model to write instructions that na
 - Should a param-less workflow also be startable as a command (no args)? This plan says no: params are the switch, as asked.
 - Combined instructions limit: 8000 characters is a guess; check what Claude and ChatGPT truncate at.
 - Param types beyond string (enum hints for autocomplete via MCP `completion/complete`)? Not now.
+
+## 13. Code path: workflows next to components
+
+Workflows live in the repo next to the components they use and ship the same way:
+
+- `<name>.workflow.md` in a component dir or its `workflows/`: YAML frontmatter (`title`, `description`, `params`; `name` defaults to the file name) and the instructions as the body. `.json` works for `genui workflow set`.
+- `genui publish <dir>` sends the dir's component and its workflows to the environment (`PUT /v1/workflows/:name`), with the same publish token and its environment limits. A dir may hold only workflows.
+- `genui workflow list | set <file> | rm <name>` for single ones; `genui instructions <file.md> | --clear` for the environment's instructions (admin).
+- `@genui/runtime/local`: `parseWorkflowFile`, `readWorkflowFile`, `readWorkflowDir`, also used by `genui serve`.
+- Publishing doesn't delete workflows that left the repo; `genui workflow rm` does. A sync mode (`--prune`) can come later.
+- Example: `examples/rating/workflows/` (`create_order` is a command, `order_feedback` is always-on).

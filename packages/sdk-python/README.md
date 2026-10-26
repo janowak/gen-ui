@@ -1,6 +1,6 @@
 # genui-sdk (Python)
 
-genui for Python MCP servers. `mount_genui` puts genui's tools (`render_form`, `render_chart`, `use_recipe` and your registry components as `render_<name>`), their `ui://` views and the recipe prompts on an `MCPServer` from the official [`mcp`](https://pypi.org/project/mcp/) SDK (2.3+). Each tool is shown as an MCP App inside the AI client.
+genui for Python MCP servers. `mount_genui` puts genui's tools (`render_form`, `render_chart` and your registry components as `render_<name>`), their `ui://` views and the workflow prompts on an `MCPServer` from the official [`mcp`](https://pypi.org/project/mcp/) SDK (2.3+). Each tool is shown as an MCP App inside the AI client.
 
 The tools are served by genui's end-user MCP, in genui's cloud or your self-hosted genui server. This package forwards their calls there with a server token. genui's views call your own tools through the host, so your data tools and their results never leave your server. It works the same as `@genui/sdk` for Node.
 
@@ -41,12 +41,12 @@ One client serves one environment. A process that serves two environments calls 
 
 | Option | |
 |---|---|
-| `watch` | For long-lived servers: re-sync when genui's tools change (a publish, a recipe or theme save), and tell clients with `list_changed`. |
+| `watch` | For long-lived servers: re-sync when genui's tools change (a publish, a theme, instructions or workflow save), and tell clients with `list_changed`. |
 | `bus` | The `SubscriptionBus` you passed to `MCPServer(subscriptions=...)`, used for `watch` notifications to 2026-07-28 clients. |
 
 `mount_genui` is synchronous. It waits for the first listing, so call it before `server.run()`.
 
-`refresh_endpoint(genui)`: a Starlette endpoint genui calls after every publish, theme or recipe change, so your server serves it right away instead of at its next check. It answers 202 and refreshes in the background.
+`refresh_endpoint(genui)`: a Starlette endpoint genui calls after every publish, theme, instructions or workflow change, so your server serves it right away instead of at its next check. It answers 202 and refreshes in the background.
 
 ```python
 from genui import refresh_endpoint

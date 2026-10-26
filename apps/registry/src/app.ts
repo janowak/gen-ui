@@ -16,7 +16,7 @@ export type { Assets } from "./views.js";
 export interface RegistryAppOptions {
   /** The views and pages the registry serves, loaded by the runtime it runs on. */
   assets: Assets;
-  /** Let recipe validation webhooks and refresh URLs use http and private addresses. For self-hosted installs and tests. */
+  /** Let refresh URLs use http and private addresses. For self-hosted installs and tests. */
   allowPrivateWebhooks?: boolean;
   /** Public URL of the registry, for the absolute URLs hosts are given (the connector icon). Default: each request's origin. */
   baseURL?: string;

@@ -155,7 +155,7 @@ describe("management MCP", () => {
       components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" }, versions: ["1.1.0", "1.0.0"] }],
     });
 
-    // Switching changes only this person's previews, theme and recipes, and holds across connections.
+    // Switching changes only this person's previews, theme, instructions and workflows, and holds across connections.
     expect((await admin.callTool({ name: "use_environment", arguments: { name: "qa" } })).isError).toBe(true);
     const switched = await admin.callTool({ name: "use_environment", arguments: { name: "staging" } });
     expect(switched.structuredContent).toMatchObject({ environment: "staging" });
@@ -181,43 +181,44 @@ describe("management MCP", () => {
     expect(preview.structuredContent).toEqual({ genui: { id: preview._meta?.["genui/viewId"] } });
   });
 
-  it("drafts recipes for review; only an admin click saves them", async () => {
+  it("drafts workflows for review; only an admin click saves them", async () => {
     await store.invite(workspaceId, "dana@acme.test", "admin");
     const cookie = await signUp("dana@acme.test");
     await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "dana@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
-    const recipe = {
+    const workflow = {
       name: "add_item",
-      when: "The user wants to add an item.",
-      form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
+      description: "The user wants to add an item.",
+      instructions: "Show a form with the name and submit to create_item.",
+      params: [{ name: "name", description: "Item name", required: false }],
     };
 
-    const draft = await admin.callTool({ name: "draft_recipe", arguments: recipe });
-    expect(draft.structuredContent).toMatchObject({ mode: "draft", replaces: false });
-    expect(await store.listRecipes(workspaceId, "prod")).toEqual([]);
+    const draft = await admin.callTool({ name: "draft_workflow", arguments: workflow });
+    expect(draft.structuredContent).toMatchObject({ mode: "draft", replaces: false, workflow });
+    expect(await store.listWorkflows(workspaceId, "prod")).toEqual([]);
 
     const tools = (await admin.listTools()).tools;
-    expect((tools.find((t) => t.name === "recipe_save")?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
-    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe } })).isError).toBeFalsy();
-    expect((await store.listRecipes(workspaceId, "prod")).map((r) => r.name)).toEqual(["add_item"]);
+    for (const name of ["workflow_save", "workflow_delete"]) {
+      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    }
+    expect((await admin.callTool({ name: "workflow_save", arguments: { workflow } })).isError).toBeFalsy();
+    expect(await store.listWorkflows(workspaceId, "prod")).toEqual([workflow]);
+    expect((await admin.callTool({ name: "manage_workflows", arguments: {} })).content).toEqual([
+      { type: "text", text: "Workflows in prod:\n- /add_item (name): The user wants to add an item." },
+    ]);
 
     // The view sends the environment it showed; a save lands there.
-    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "staging" } })).structuredContent).toMatchObject({ environment: "staging" });
-    expect((await store.listRecipes(workspaceId, "staging")).map((r) => r.name)).toEqual(["add_item"]);
-    expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "qa" } })).isError).toBe(true);
-
-    // A fresh session previews it with the workspace theme.
-    const again = await mcpClient(await accessToken(await signUp("erin@acme.test")));
-    const preview = await again.callTool({ name: "preview_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });
-    expect(preview.isError).toBeFalsy();
-    expect((preview._meta?.["genui/form"] as { fields: { defaultValue?: unknown }[] }).fields[0]?.defaultValue).toBe("Mug");
+    expect((await admin.callTool({ name: "workflow_save", arguments: { workflow, environment: "staging" } })).structuredContent).toMatchObject({ environment: "staging" });
+    expect((await store.listWorkflows(workspaceId, "staging")).map((w) => w.name)).toEqual(["add_item"]);
+    expect((await admin.callTool({ name: "workflow_save", arguments: { workflow, environment: "qa" } })).isError).toBe(true);
+    expect((await admin.callTool({ name: "workflow_delete", arguments: { name: "add_item", environment: "staging" } })).structuredContent).toMatchObject({ mode: "list", workflows: [] });
   });
 
   it("gives later people member tools only", async () => {
     const member = await mcpClient(await accessToken(await signUp("bob@acme.test")));
     const names = (await member.listTools()).tools.map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(["manage_components", "use_environment", "open_theme_controller", "preview_rating"]));
-    expect(names).not.toContain("recipe_save");
+    expect(names).not.toContain("workflow_save");
     expect(names).not.toContain("theme_save");
     const listed = await member.callTool({ name: "manage_components", arguments: {} });
     expect(listed.structuredContent).toMatchObject({ role: "member" });
@@ -285,23 +286,29 @@ describe("management MCP", () => {
     expect(view).not.toHaveProperty("tokens");
   });
 
-  it("drafts instructions and workflow prompts for review; branding and saves are clicks in the views", async () => {
+  it("drafts instructions for review; branding and saves are clicks in the views", async () => {
     await store.invite(workspaceId, "ivy@acme.test", "admin");
     const cookie = await signUp("ivy@acme.test");
     await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "ivy@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
     const tools = (await admin.listTools()).tools;
-    for (const name of ["branding_save", "guide_save"]) {
+    for (const name of ["branding_save", "instructions_save"]) {
       expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
 
-    const guide = { instructions: "Use /return_order for returns.", prompts: [{ name: "return_order", description: "Return an order.", prompt: "Ask for the order number." }] };
-    const drafted = await admin.callTool({ name: "draft_guide", arguments: guide });
-    expect(drafted.structuredContent).toMatchObject({ mode: "draft", environment: "prod", ...guide });
-    expect(await store.getGuide(workspaceId, "prod")).toEqual({ prompts: [] });
-    const saved = await admin.callTool({ name: "guide_save", arguments: { guide } });
-    expect(saved.structuredContent).toMatchObject({ mode: "view", saved: true, ...guide });
-    expect((await admin.callTool({ name: "manage_guide", arguments: {} })).structuredContent).toMatchObject(guide);
+    const instructions = "Acme handles returns.";
+    const drafted = await admin.callTool({ name: "draft_instructions", arguments: { instructions } });
+    expect(drafted.structuredContent).toMatchObject({ mode: "draft", environment: "prod", instructions });
+    expect(await store.getInstructions(workspaceId, "prod")).toBeNull();
+    const saved = await admin.callTool({ name: "instructions_save", arguments: { instructions } });
+    expect(saved.structuredContent).toMatchObject({ mode: "view", saved: true, instructions });
+    // What hosts get: the instructions with the workflows added.
+    await store.saveWorkflow(workspaceId, "prod", { name: "returns", description: "A return.", instructions: "Ask for the order.", params: [] });
+    expect((await admin.callTool({ name: "manage_instructions", arguments: {} })).structuredContent).toMatchObject({
+      instructions,
+      served: expect.stringMatching(new RegExp(`^${instructions}\n\n## Workflows\n[\\s\\S]*### returns\nWhen: A return.\nAsk for the order.$`)),
+    });
+    await store.deleteWorkflow(workspaceId, "prod", "returns");
 
     // The icon arrives base64 from the view and is served next to the end-user MCP.
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");

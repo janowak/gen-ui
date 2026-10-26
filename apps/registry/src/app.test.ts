@@ -227,43 +227,48 @@ describe("sign-up gate", () => {
   });
 });
 
-describe("recipes", () => {
-  const recipe = {
-    when: "The user wants to add an item.",
-    form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
-  };
+describe("workflows", () => {
+  const workflow = { description: "The user wants to add an item.", instructions: "Show a form with the name and submit to create_item." };
 
-  it("saves, lists, replaces and deletes recipes", async () => {
-    expect((await call("PUT", "/v1/recipes/add_item", publisher, recipe)).status).toBe(403);
-    expect((await call("PUT", "/v1/recipes/add_item", admin, recipe)).status).toBe(201);
-    expect((await call("PUT", "/v1/recipes/add_item", admin, { ...recipe, notes: "Pre-fill the name." })).body).toEqual({
-      name: "add_item",
-      environment: "prod",
-      replaced: true,
-    });
-    expect((await call("PUT", "/v1/recipes/Bad Name", admin, recipe)).status).toBe(400);
+  it("publish tokens save, list, replace and delete workflows, like components", async () => {
+    expect((await call("PUT", "/v1/workflows/add_item", reader, workflow)).status).toBe(403);
+    expect((await call("PUT", "/v1/workflows/add_item", publisher, workflow)).body).toEqual({ name: "add_item", environment: "prod", command: false, replaced: false });
+    const command = { ...workflow, params: [{ name: "name", description: "Item name" }] };
+    expect((await call("PUT", "/v1/workflows/add_item", publisher, command)).body).toEqual({ name: "add_item", environment: "prod", command: true, replaced: true });
+    expect((await call("PUT", "/v1/workflows/Bad Name", publisher, workflow)).status).toBe(400);
 
-    const listed = await call("GET", "/v1/recipes", reader);
-    expect(listed.body.recipes).toEqual([{ name: "add_item", ...recipe, notes: "Pre-fill the name." }]);
+    const listed = await call("GET", "/v1/workflows", reader);
+    expect(listed.body.workflows).toEqual([{ name: "add_item", ...workflow, params: [{ name: "name", description: "Item name", required: false }] }]);
 
-    expect((await call("DELETE", "/v1/recipes/add_item", admin)).status).toBe(200);
-    expect((await call("DELETE", "/v1/recipes/add_item", admin)).status).toBe(404);
+    expect((await call("DELETE", "/v1/workflows/add_item", publisher)).status).toBe(200);
+    expect((await call("DELETE", "/v1/workflows/add_item", publisher)).status).toBe(404);
   });
 
-  it("keeps each environment's recipes apart", async () => {
-    expect((await call("PUT", "/v1/recipes/add_item?environment=staging", admin, recipe)).body).toMatchObject({ environment: "staging" });
-    expect((await call("GET", "/v1/recipes?environment=staging", reader)).body.recipes.map((r: { name: string }) => r.name)).toEqual(["add_item"]);
-    expect((await call("GET", "/v1/recipes", reader)).body.recipes).toEqual([]);
-    expect((await call("PUT", "/v1/recipes/add_item?environment=qa", admin, recipe)).status).toBe(404);
-    expect((await call("DELETE", "/v1/recipes/add_item?environment=staging", admin)).status).toBe(200);
+  it("keeps each environment's workflows apart and honours a token's environments", async () => {
+    expect((await call("PUT", "/v1/workflows/add_item?environment=staging", previewer, workflow)).body).toMatchObject({ environment: "staging" });
+    expect((await call("PUT", "/v1/workflows/add_item", previewer, workflow)).status).toBe(403);
+    expect((await call("GET", "/v1/workflows?environment=staging", reader)).body.workflows.map((w: { name: string }) => w.name)).toEqual(["add_item"]);
+    expect((await call("GET", "/v1/workflows", reader)).body.workflows).toEqual([]);
+    expect((await call("PUT", "/v1/workflows/add_item?environment=qa", admin, workflow)).status).toBe(404);
+    expect((await call("DELETE", "/v1/workflows/add_item?environment=staging", previewer)).status).toBe(200);
   });
 
-  it("accepts only public https validation webhooks", async () => {
-    const internal = await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "https://169.254.169.254/latest" } });
-    expect(internal.status).toBe(400);
-    expect(internal.body.error).toMatch(/public address/);
-    expect((await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "http://hooks.acme.com/validate" } })).status).toBe(400);
-    expect((await call("PUT", "/v1/recipes/quote", admin, { ...recipe, validate: { url: "https://hooks.acme.com/validate" } })).status).toBe(201);
-    expect((await call("DELETE", "/v1/recipes/quote", admin)).status).toBe(200);
+  it("keeps the instructions hosts get, workflows included, within the limit", async () => {
+    expect((await call("PUT", "/v1/instructions", publisher, { instructions: "Acme." })).status).toBe(403);
+    expect((await call("PUT", "/v1/instructions", admin, { instructions: " Acme returns. " })).body).toEqual({ environment: "prod", instructions: "Acme returns." });
+    expect((await call("GET", "/v1/instructions", reader)).body.instructions).toBe("Acme returns.");
+
+    const long = { description: "Long.", instructions: "x".repeat(4000) };
+    expect((await call("PUT", "/v1/workflows/one", publisher, long)).status).toBe(201);
+    const over = await call("PUT", "/v1/workflows/two", publisher, long);
+    expect(over.status).toBe(400);
+    expect(over.body.error).toMatch(/at most 8000.*one \(4000\)/);
+    // As a command it isn't in the instructions, so it fits.
+    expect((await call("PUT", "/v1/workflows/two", publisher, { ...long, params: [{ name: "x", description: "X" }] })).status).toBe(201);
+    expect((await call("PUT", "/v1/instructions", admin, { instructions: "y".repeat(4000) })).status).toBe(400);
+
+    await call("DELETE", "/v1/workflows/one", publisher);
+    await call("DELETE", "/v1/workflows/two", publisher);
+    expect((await call("PUT", "/v1/instructions", admin, { instructions: null })).body.instructions).toBeNull();
   });
 });

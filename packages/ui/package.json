@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --noEmit && for v in form chart manager theme recipes workspace guide; do INPUT=$v.html vite build || exit 1; done",
+    "build": "tsc --noEmit && for v in form chart manager theme workflows workspace instructions; do INPUT=$v.html vite build || exit 1; done",
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
