@@ -54,7 +54,7 @@ async function companyServer(genui: GenUIClient, watch = false) {
 
 async function resourceUri(client: Client, tool: string): Promise<string> {
   const found = (await client.listTools()).tools.find((t) => t.name === tool);
-  return (found?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+  return (found!._meta as { ui: { resourceUri: string } }).ui.resourceUri;
 }
 
 async function resourceText(client: Client, tool: string): Promise<string | undefined> {
@@ -94,7 +94,7 @@ describe("mountGenUI", () => {
     expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item"]);
 
     const prompt = await client.getPrompt({ name: "add_item", arguments: { item: "a blue mug" } });
-    expect((prompt.messages[0]?.content as { text: string }).text).toContain("item: a blue mug");
+    expect((prompt.messages[0]!.content as { text: string }).text).toContain("item: a blue mug");
   });
 
   it("forwards calls and returns genui's result: theme and view id", async () => {

@@ -194,6 +194,8 @@ export function createViewStore({ backend = defaultBackend(), debounceMs = 300 }
 
   function changed() {
     version++;
+    // A copy, so a listener that unsubscribes while we notify can't change this loop.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const listener of [...listeners]) listener();
   }
 

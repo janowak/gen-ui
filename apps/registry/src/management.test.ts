@@ -183,7 +183,7 @@ describe("management MCP", () => {
     );
     // Publishing stays with CI; stopping a component and the built-ins switch are clicks in the view.
     for (const name of ["theme_save", "component_remove", "built_ins_set"]) {
-      expect((byName[name]?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+      expect((byName[name]!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
     expect(byName.preview_rating?.title).toBe("Preview rating 1.0.0 (prod)");
 
@@ -243,7 +243,7 @@ describe("management MCP", () => {
 
     const tools = (await admin.listTools()).tools;
     for (const name of ["workflow_save", "workflow_delete"]) {
-      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+      expect((tools.find((t) => t.name === name)!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
     expect((await admin.callTool({ name: "workflow_save", arguments: { workflow } })).isError).toBeFalsy();
     expect(await store.listWorkflows(workspaceId, "prod")).toEqual([workflow]);
@@ -316,7 +316,7 @@ describe("management MCP", () => {
 
     const tools = (await admin.listTools()).tools;
     for (const name of ["member_invite", "invite_cancel", "token_create", "token_revoke", "public_set"]) {
-      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+      expect((tools.find((t) => t.name === name)!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
 
     // The model can prefill an invite; only the click sends it.
@@ -363,7 +363,7 @@ describe("management MCP", () => {
     const admin = await mcpClient(await accessToken(cookie));
     const tools = (await admin.listTools()).tools;
     for (const name of ["branding_save", "instructions_save"]) {
-      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+      expect((tools.find((t) => t.name === name)!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
 
     const instructions = "Acme handles returns.";

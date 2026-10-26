@@ -91,9 +91,9 @@ describe("mountGenUI", () => {
       ["render_chart_staging", "Show chart (staging)"],
     ]);
     // The views are the same bundles, so their ui:// URIs match prod's.
-    const prodUri = ((await client.listTools()).tools.find((t) => t.name === "render_form")?._meta as { ui: { resourceUri: string } }).ui
+    const prodUri = ((await client.listTools()).tools.find((t) => t.name === "render_form")!._meta as { ui: { resourceUri: string } }).ui
       .resourceUri;
-    expect((tools[0]?._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe(prodUri);
+    expect((tools[0]!._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe(prodUri);
   });
 
   it("renders inline charts", async () => {
@@ -176,7 +176,7 @@ describe("workflows", () => {
       }),
     ]);
     const prompt = await c.getPrompt({ name: "create_order", arguments: { customer: "Globex" } });
-    expect((prompt.messages[0]?.content as { text: string }).text).toBe(`${createOrder.instructions}\n\ncustomer: Globex`);
+    expect((prompt.messages[0]!.content as { text: string }).text).toBe(`${createOrder.instructions}\n\ncustomer: Globex`);
     expect((await c.listTools()).tools.map((t) => t.name)).not.toContain("use_recipe");
   });
 

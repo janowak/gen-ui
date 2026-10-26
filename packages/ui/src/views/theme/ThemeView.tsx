@@ -110,7 +110,7 @@ export function ThemeView() {
   const canFullscreen = hostContext?.availableDisplayModes?.includes("fullscreen") && hostContext.displayMode !== "fullscreen";
 
   const setToken = (key: keyof ThemeTokens, value: string | string[] | undefined) =>
-    setDraft((d) => ({ ...d, [mode]: { ...(d[mode] ?? {}), [key]: value } }));
+    setDraft((d) => ({ ...d, [mode]: { ...d[mode], [key]: value } }));
   const setChart = (index: number, value: string | undefined) => {
     const chart = [...(tokens.chart ?? [])];
     chart[index] = value ?? "";

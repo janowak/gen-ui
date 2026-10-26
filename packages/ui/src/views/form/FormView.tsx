@@ -125,7 +125,7 @@ export function FormView() {
     // One id per rendered form, so the submit tool can ignore a repeated submit.
     const key = form.submit.idempotencyParam && viewId ? { [form.submit.idempotencyParam]: viewId } : {};
     const outcome = await callTool(app, form.submit.toolName, {
-      ...(form.submit.params ?? {}),
+      ...form.submit.params,
       ...toSubmitValues(form.fields, values),
       ...key,
     });

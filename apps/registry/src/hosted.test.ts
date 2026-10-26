@@ -42,7 +42,7 @@ async function mcpClient(path: string, headers?: Record<string, string>): Promis
 
 async function resourceText(client: Client, tool: string): Promise<string | undefined> {
   const { tools } = await client.listTools();
-  const uri = (tools.find((t) => t.name === tool)?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+  const uri = (tools.find((t) => t.name === tool)!._meta as { ui: { resourceUri: string } }).ui.resourceUri;
   return ((await client.readResource({ uri })).contents[0] as { text?: string }).text;
 }
 
@@ -228,7 +228,7 @@ describe("upstream for a company's own server (server token)", () => {
     const token = await store.createToken(acme, "server", "versions");
     const staging = await mcpClient(`/w/${acme}/staging/mcp`, bearer(token));
     const stagingUri = (
-      (await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")?._meta as { ui: { resourceUri: string } }
+      (await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")!._meta as { ui: { resourceUri: string } }
     ).ui.resourceUri;
 
     // Prod serves 1.0.0, yet still reads the 1.1.0 bundle by its hash.

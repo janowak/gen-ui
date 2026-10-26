@@ -67,7 +67,7 @@ export function enableManagement(
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
   // A switch of environment changes the preview tools: open listen streams re-list.
   const mcp = createMcpHandler((ctx) =>
-    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
+    createRegistryMcp(store, (ctx.authInfo!.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
       mcp.notify.toolsChanged();
       mcp.notify.resourcesChanged();
     }),

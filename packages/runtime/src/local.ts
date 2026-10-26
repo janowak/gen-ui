@@ -94,7 +94,7 @@ export function parseWorkflowFile(text: string, path: string): Workflow {
     const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
     if (!match) throw new Error(`invalid workflow ${path}: expected YAML frontmatter between --- lines, then the instructions`);
     try {
-      raw = { ...((parseYaml(match[1]!) as Record<string, unknown> | null) ?? {}), instructions: match[2]!.trim() };
+      raw = { ...(parseYaml(match[1]!) as Record<string, unknown> | null), instructions: match[2]!.trim() };
     } catch (cause) {
       throw new Error(`invalid workflow ${path}: ${message(cause)}`);
     }

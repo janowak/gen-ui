@@ -1,5 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "react"],
-  "ignorePatterns": ["**/dist/**", "**/dist-web/**"]
+  "ignorePatterns": ["**/dist/**", "**/dist-web/**"],
+  "rules": {
+    // `const { [key]: _, ...rest } = obj` is how we omit a key.
+    "no-unused-vars": ["warn", { "ignoreRestSiblings": true }],
+    // React Compiler rules. The views run on Preact without the compiler, reset editable state from a new tool
+    // result in effects, and keep the latest props in refs on purpose.
+    "react/set-state-in-effect": "off",
+    "react/refs": "off",
+    "react/purity": "off"
+  }
 }

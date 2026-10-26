@@ -35,7 +35,7 @@ export function useOptions(app: App | null, source: ResourceSource, query: strin
     const timer = setTimeout(
       async () => {
         setError(null);
-        const args = { ...(params ?? {}), ...(searchParam && searchKey ? { [searchParam]: searchKey } : {}) };
+        const args = { ...params, ...(searchParam && searchKey ? { [searchParam]: searchKey } : {}) };
         try {
           const outcome = await callTool(app, toolName, args, controller.signal);
           if (controller.signal.aborted) return;
