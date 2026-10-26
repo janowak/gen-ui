@@ -166,74 +166,79 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
     }));
   }
 
+  // An environment can turn the built-in form and chart tools off; their views stay, since recipes render with the form view.
+  const builtIns = options.preview || snapshot?.catalog.builtIns !== false;
+
   const preview = options.preview
     ? "Preview for workspace admins, rendered with the workspace theme. Only inline data works here; data tools live on the customer's own server. "
     : "";
 
-  registerAppTool(
-    server,
-    formTool,
-    {
-      title: options.preview ? "Preview form" : `Show form${label}`,
-      description:
-        preview +
-        "Show an interactive form to the user inside the chat. Use it to collect structured input instead of asking question by question. " +
-        (dataTools
-          ? "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect, resource_select, resource_multiselect. " +
-            "resource_select / resource_multiselect load options by calling a tool (source.toolName) with source.params (fill the tool's required parameters) " +
-            "and send the user's search text in source.searchParam; map results with itemsPath, idPath, labelPath. " +
-            "With `submit`, the form calls submit.toolName with the field values (keyed by field name) merged into submit.params; field names must match that tool's parameters. " +
-            "If that tool takes an idempotency key (e.g. request_id), set submit.idempotencyParam to its name: the form passes one id per rendered form, so a repeated submit is ignored. " +
-            "Without `submit`, the values are sent back to the conversation. Do not call the submit tool yourself."
-          : "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect. " +
-            "This server has no data tools: give options inline and leave out `submit`. The values are sent back to the conversation, where you can act on them."),
-      inputSchema: FormSpec,
-      _meta: { ui: { resourceUri: views.form.uri } },
-    },
-    async (spec) => {
-      const uses = dataTools ? [] : toolUses(spec);
-      if (uses.length) return noDataTools(uses, formTool);
-      const fields = `${spec.fields.length} field${spec.fields.length === 1 ? "" : "s"}`;
-      const then = spec.submit
-        ? `When the user submits, the form calls ${spec.submit.toolName} and you receive the submitted values and result in context.`
-        : "When the user submits, the values arrive as a message.";
-      return {
-        content: [{ type: "text", text: `Showing form${spec.title ? ` "${spec.title}"` : ""} (${fields}). ${then}` }],
-        ...(await rendered()),
-      };
-    },
-  );
+  if (builtIns) {
+    registerAppTool(
+      server,
+      formTool,
+      {
+        title: options.preview ? "Preview form" : `Show form${label}`,
+        description:
+          preview +
+          "Show an interactive form to the user inside the chat. Use it to collect structured input instead of asking question by question. " +
+          (dataTools
+            ? "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect, resource_select, resource_multiselect. " +
+              "resource_select / resource_multiselect load options by calling a tool (source.toolName) with source.params (fill the tool's required parameters) " +
+              "and send the user's search text in source.searchParam; map results with itemsPath, idPath, labelPath. " +
+              "With `submit`, the form calls submit.toolName with the field values (keyed by field name) merged into submit.params; field names must match that tool's parameters. " +
+              "If that tool takes an idempotency key (e.g. request_id), set submit.idempotencyParam to its name: the form passes one id per rendered form, so a repeated submit is ignored. " +
+              "Without `submit`, the values are sent back to the conversation. Do not call the submit tool yourself."
+            : "Field types: text, textarea, email, number, date, checkbox, switch, radio, select, multiselect. " +
+              "This server has no data tools: give options inline and leave out `submit`. The values are sent back to the conversation, where you can act on them."),
+        inputSchema: FormSpec,
+        _meta: { ui: { resourceUri: views.form.uri } },
+      },
+      async (spec) => {
+        const uses = dataTools ? [] : toolUses(spec);
+        if (uses.length) return noDataTools(uses, formTool);
+        const fields = `${spec.fields.length} field${spec.fields.length === 1 ? "" : "s"}`;
+        const then = spec.submit
+          ? `When the user submits, the form calls ${spec.submit.toolName} and you receive the submitted values and result in context.`
+          : "When the user submits, the values arrive as a message.";
+        return {
+          content: [{ type: "text", text: `Showing form${spec.title ? ` "${spec.title}"` : ""} (${fields}). ${then}` }],
+          ...(await rendered()),
+        };
+      },
+    );
 
-  registerAppTool(
-    server,
-    chartTool,
-    {
-      title: options.preview ? "Preview chart" : `Show chart${label}`,
-      description:
-        preview +
-        "Show a chart (line, bar, area, pie, donut) inside the chat. " +
-        (dataTools
-          ? "Three ways to pass data: " +
-            "data.rows (rows you already have; map them with `x` and `series`), " +
-            "data.categories + data.series (chart-native values for small charts), or " +
-            "data.source (the chart calls a tool itself; use for ~200+ rows or live data, optionally with refreshSeconds). "
-          : "Two ways to pass data: " +
-            "data.rows (rows you already have; map them with `x` and `series`), or " +
-            "data.categories + data.series (chart-native values for small charts). This server has no data tools, so data.source is not available. ") +
-        "Pie and donut plot the first series.",
-      inputSchema: ChartSpec,
-      _meta: { ui: { resourceUri: views.chart.uri } },
-    },
-    async (spec) => {
-      const uses = dataTools ? [] : toolUses(spec);
-      if (uses.length) return noDataTools(uses, chartTool);
-      const what = "source" in spec.data ? `data from ${spec.data.source.toolName}` : "the provided data";
-      return {
-        content: [{ type: "text", text: `Showing ${spec.type} chart${spec.title ? ` "${spec.title}"` : ""} with ${what}.` }],
-        ...(await rendered()),
-      };
-    },
-  );
+    registerAppTool(
+      server,
+      chartTool,
+      {
+        title: options.preview ? "Preview chart" : `Show chart${label}`,
+        description:
+          preview +
+          "Show a chart (line, bar, area, pie, donut) inside the chat. " +
+          (dataTools
+            ? "Three ways to pass data: " +
+              "data.rows (rows you already have; map them with `x` and `series`), " +
+              "data.categories + data.series (chart-native values for small charts), or " +
+              "data.source (the chart calls a tool itself; use for ~200+ rows or live data, optionally with refreshSeconds). "
+            : "Two ways to pass data: " +
+              "data.rows (rows you already have; map them with `x` and `series`), or " +
+              "data.categories + data.series (chart-native values for small charts). This server has no data tools, so data.source is not available. ") +
+          "Pie and donut plot the first series.",
+        inputSchema: ChartSpec,
+        _meta: { ui: { resourceUri: views.chart.uri } },
+      },
+      async (spec) => {
+        const uses = dataTools ? [] : toolUses(spec);
+        if (uses.length) return noDataTools(uses, chartTool);
+        const what = "source" in spec.data ? `data from ${spec.data.source.toolName}` : "the provided data";
+        return {
+          content: [{ type: "text", text: `Showing ${spec.type} chart${spec.title ? ` "${spec.title}"` : ""} with ${what}.` }],
+          ...(await rendered()),
+        };
+      },
+    );
+  }
 
   // Registry components: render_<name>, each backed by its own content-hashed ui:// resource.
   function mountComponent(component: CatalogComponent, html: string) {
@@ -318,7 +323,7 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
         title: options.preview ? "Preview recipe" : `Use recipe${label}`,
         description:
           preview +
-          `Show one of this workspace's ready-made forms. Prefer it over ${formTool} whenever a recipe matches what the user wants. ` +
+          `Show one of this workspace's ready-made forms. ${builtIns ? `Prefer it over ${formTool} whenever a recipe matches what the user wants. ` : ""}` +
           "Pick the recipe and pre-fill the fields you already know from the conversation; the fields, validation and submit action are fixed. " +
           "Do not call the submit tool yourself.\nRecipes:\n" +
           list,

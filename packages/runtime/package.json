@@ -1,8 +1,17 @@
 {
   "name": "@genui/runtime",
   "version": "0.1.0",
+  "description": "genui end-user tools on an MCP server: forms, charts, recipes and your components",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",
+  "homepage": "https://app-mcp.com",
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "genui",
+    "claude",
+    "chatgpt"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -11,6 +20,10 @@
     "./local": {
       "types": "./dist/local.d.ts",
       "default": "./dist/local.js"
+    },
+    "./serve": {
+      "types": "./dist/serve.d.ts",
+      "default": "./dist/serve.js"
     }
   },
   "files": [
@@ -22,15 +35,22 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@genui/format": "workspace:*",
+    "@genui/format": "workspace:^",
+    "@genui/ui": "workspace:^",
+    "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@modelcontextprotocol/server": "^2.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@genui/ui": "workspace:*",
     "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^24.0.0",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

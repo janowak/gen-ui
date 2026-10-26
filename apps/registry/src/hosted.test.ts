@@ -147,6 +147,25 @@ describe("hosted end-user MCP", () => {
     expect((await again.getPrompt({ name: "add_item_staging", arguments: {} })).messages[0]?.content).toMatchObject({ text: expect.stringContaining("call use_recipe_staging") });
   });
 
+  it("leaves out the built-in form and chart, and components it stopped serving", async () => {
+    await store.createEnvironment(acme, "lean");
+    await store.deployVersion(acme, "rating", "1.1.0", "lean");
+    await store.saveRecipe(acme, "lean", { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" }] } });
+    await store.setBuiltIns(acme, "lean", false);
+    expect((await store.catalog(acme, "lean")).builtIns).toBe(false);
+
+    const tools = (await (await mcpClient(`/w/${acme}/lean/mcp`)).listTools()).tools;
+    expect(tools.map((t) => t.name).sort()).toEqual(["render_rating_lean", "use_recipe_lean"]);
+    expect(tools.find((t) => t.name === "use_recipe_lean")?.description).not.toContain("render_form");
+
+    await store.removeComponent(acme, "rating", "lean");
+    expect((await (await mcpClient(`/w/${acme}/lean/mcp`)).listTools()).tools.map((t) => t.name)).toEqual(["use_recipe_lean"]);
+    await expect(store.removeComponent(acme, "rating", "lean")).rejects.toThrow(`lean doesn't serve "rating"`);
+    // Its versions stay published: serving one again needs no rebuild.
+    expect((await store.deployVersion(acme, "rating", "1.1.0", "lean")).environments).toMatchObject({ lean: "1.1.0" });
+    await store.deleteEnvironment(acme, "lean");
+  });
+
   it("answers 404 for an environment that doesn't exist", async () => {
     const res = await fetch(`${base}/w/${acme}/stagng/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(res.status).toBe(404);

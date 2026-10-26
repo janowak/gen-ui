@@ -21,7 +21,7 @@ const denied = (required: Scope, got: Scope) => `Requires ${required === "admin"
 const PublishBody = z.object({ manifest: ComponentManifest, html: z.string().min(1), environment: EnvironmentName.default(DEFAULT_ENVIRONMENT) });
 const DeployBody = z.object({ version: z.string().regex(SEMVER, "x.y.z") });
 const EnvironmentBody = z.object({ name: EnvironmentName });
-const EnvironmentSettingsBody = z.object({ refreshUrl: z.url().nullable() });
+const EnvironmentSettingsBody = z.object({ refreshUrl: z.url().nullable().optional(), builtIns: z.boolean().optional() });
 const TokenBody = z.object({
   scope: z.enum(["server", "publish", "admin"]),
   name: z.string().min(1),
@@ -35,16 +35,19 @@ type Env = { Variables: { caller: TokenInfo } };
 export function createApi(store: Store, options: Pick<RegistryAppOptions, "allowPrivateWebhooks"> = {}): Hono<Env> {
   const api = new Hono<Env>();
 
-  function auth(required: Scope) {
+  function auth(required: Scope, scopes = ALLOWED[required]) {
     return async (c: Context<Env>, next: Next) => {
       const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
       const resolved = token ? await store.resolveToken(token) : undefined;
       if (!resolved) return c.json({ error: "Invalid or missing token" }, 401);
-      if (!ALLOWED[required].includes(resolved.scope)) return c.json({ error: denied(required, resolved.scope) }, 403);
+      if (!scopes.includes(resolved.scope)) return c.json({ error: denied(required, resolved.scope) }, 403);
       c.set("caller", resolved);
       await next();
     };
   }
+
+  /** What's served where: every token may read it, so `genui list` works with the publish token that published. */
+  const anyToken = () => auth("server", ["server", "publish", "admin"]);
 
   const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
   const ws = (c: Context<Env>) => c.get("caller").workspaceId;
@@ -62,7 +65,7 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     if (allowed && !allowed.includes(environment)) throw new RegistryError(403, `This token can't publish to ${environment} (allowed: ${allowed.join(", ")})`);
   }
 
-  api.get("/components", auth("server"), async (c) => c.json({ components: await store.listComponents(ws(c)) }));
+  api.get("/components", anyToken(), async (c) => c.json({ components: await store.listComponents(ws(c)) }));
 
   // CI: publish an immutable version and point an environment (default prod) at it, older versions included.
   // The same version with the same content again is a no-op (200), so jobs can be re-run.
@@ -83,18 +86,30 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     return c.json(await store.deployVersion(ws(c), String(c.req.param("name")), version, environment));
   });
 
+  // Stop serving a component in an environment; its versions stay published.
+  api.delete("/components/:name/environments/:environment", auth("publish"), async (c) => {
+    const environment = EnvironmentName.parse(c.req.param("environment"));
+    allowPublish(c, environment);
+    const name = String(c.req.param("name"));
+    await store.removeComponent(ws(c), name, environment);
+    return c.json({ removed: name, environment });
+  });
+
   // Environments: each serves what was last published or saved to it, at its own end-user MCP.
   const describe = (workspaceId: string, info: EnvironmentInfo) => ({ ...info, path: endUserPath(workspaceId, info.name) });
 
-  api.get("/environments", auth("server"), async (c) => c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }));
+  api.get("/environments", anyToken(), async (c) => c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }));
 
-  // Admin: the company server's refresh endpoint (@genui/sdk), called after every change to what the environment serves.
+  // Admin: the company server's refresh endpoint (@genui/sdk), called after every change to what the environment
+  // serves, and whether the built-in render_form and render_chart are on. Settings left out stay as they are.
   api.put("/environments/:name", auth("admin"), async (c) => {
     const name = String(c.req.param("name"));
-    const { refreshUrl } = EnvironmentSettingsBody.parse(await body(c));
+    const { refreshUrl, builtIns } = EnvironmentSettingsBody.parse(await body(c));
     const invalid = refreshUrl && webhookUrlError(refreshUrl, options.allowPrivateWebhooks, "refresh URL");
     if (invalid) throw new RegistryError(400, invalid);
-    await store.setRefreshUrl(ws(c), name, refreshUrl);
+    if (refreshUrl !== undefined) await store.setRefreshUrl(ws(c), name, refreshUrl);
+    if (builtIns !== undefined) await store.setBuiltIns(ws(c), name, builtIns);
+    await store.requireEnvironment(ws(c), name);
     return c.json(describe(ws(c), (await store.environment(ws(c), name))!));
   });
 

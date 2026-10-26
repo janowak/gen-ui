@@ -61,6 +61,7 @@
         </a>
         <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
           <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#start">Get started</a>
           <a class="btn btn-ghost text-muted-foreground" href="#features">What you can build</a>
           <a class="btn btn-ghost text-muted-foreground" href="#data">Your data</a>
           <a class="btn btn-ghost text-muted-foreground" href="#self-host">Self-host</a>
@@ -70,7 +71,7 @@
             <svg class="dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
             <svg class="hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
           </button>
-          <a class="btn" href="#early-access">Get early access</a>
+          <a class="btn" href="#start">Get started</a>
         </div>
       </div>
     </header>
@@ -88,7 +89,7 @@
             and other MCP Apps hosts. UX that fits the job, not a generic chat reply. No MCP server needed to start.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
-            <a class="btn btn-lg" href="#early-access">Get early access</a>
+            <a class="btn btn-lg" href="#start">Get started</a>
             <a class="btn btn-lg btn-outline" href="#how">See how it works</a>
           </div>
           <p class="mt-6 text-sm text-muted-foreground">
@@ -189,8 +190,8 @@
                 Sign in with GitHub, Google or your company's login. You get a workspace and an MCP address your
                 customers can connect to.
               </p>
-              <pre class="code"><code><span class="s">https://app-mcp.com</span>
-  /w/acme/mcp</code></pre>
+              <pre class="code"><code><span class="s">https://api.app-mcp.com</span>
+  /w/&lt;workspace&gt;/mcp</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
@@ -230,11 +231,78 @@
                 <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#data">Connect your data.</a>
               </p>
               <pre class="code"><code>Settings → Connectors → Add
-<span class="s">https://app-mcp.com</span>
-  /w/acme/mcp</code></pre>
+<span class="s">https://api.app-mcp.com</span>
+  /w/&lt;workspace&gt;/mcp</code></pre>
             </li>
           </ol>
 
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="start" aria-labelledby="start-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started</h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Everything runs through two connectors: genui's, where you manage your workspace, and your workspace's own,
+            the one your customers add. Custom connectors need a paid Claude plan or ChatGPT's developer mode.
+          </p>
+          <div class="mt-8 flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 p-4 ring-1 ring-foreground/10">
+            <span class="text-sm text-muted-foreground">genui's connector</span>
+            <code class="font-mono text-sm text-foreground">https://api.app-mcp.com/mcp</code>
+            <button class="btn btn-outline ml-auto" type="button" data-copy="https://api.app-mcp.com/mcp">Copy</button>
+          </div>
+          <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-10 md:gap-y-12">
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">1</span>
+                Add genui and sign in
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                In Claude: Settings → Connectors → Add custom connector, with the address above. Connect, then sign in
+                with Google or GitHub. You get a workspace.
+              </p>
+              <pre class="code"><code>Settings → Connectors → Add custom connector
+<span class="s">https://api.app-mcp.com/mcp</span></code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">2</span>
+                Try the built-ins
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Ask Claude to open your genui workspace. It shows your workspace's MCP address: add it as a second
+                connector, then ask for a form or a chart.
+              </p>
+              <pre class="code"><code><span class="k">"Open my genui workspace"</span>
+→ <span class="s">https://api.app-mcp.com/w/&lt;workspace&gt;/mcp</span></code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
+                Build your component
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Start one with <code class="font-mono text-[0.9em] text-foreground">genui init</code>, then try it in a local host with live props and theme. It's
+                TypeScript with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code>; use any framework you like.
+              </p>
+              <pre class="code"><code>$ <span class="k">npx @genui/cli init</span> my_poll
+$ cd my_poll &amp;&amp; npm install
+$ <span class="k">npm run dev</span></code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">4</span>
+                Publish it
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Create a publish token in the workspace view and publish. Your workspace's connector now offers
+                <code class="font-mono text-[0.9em] text-foreground">render_my_poll</code>. Remove components or turn off the built-in forms and charts under Manage
+                components.
+              </p>
+              <pre class="code"><code>$ GENUI_TOKEN=gnu_publish_… <span class="k">npm run genui:publish</span>
+# Published my_poll@0.1.0 to prod</code></pre>
+            </li>
+          </ol>
         </div>
       </section>
 
@@ -358,7 +426,7 @@
               </p>
               <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
   genui: connectGenUI({
-    url: <span class="s">"…/w/acme/mcp"</span>,
+    url: <span class="s">"…/w/&lt;workspace&gt;/mcp"</span>,
     token,
   }),
 });</code></pre>
@@ -444,11 +512,12 @@
               Put your flows inside the chat
             </h2>
             <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-              We're opening genui to a small group of teams first. Tell us the flow you want your customers to finish in
-              the chat, and we'll help you ship the first component.
+              Tell us the flow you want your customers to finish in the chat, and we'll help you ship the first
+              component.
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-              <a class="btn btn-lg" href="mailto:hello@app-mcp.com?subject=genui%20early%20access">Get early access</a>
+              <a class="btn btn-lg" href="#start">Get started</a>
+              <a class="btn btn-lg btn-outline" href="mailto:hello@app-mcp.com?subject=genui%20first%20flow">Talk to us</a>
               <span class="text-sm text-muted-foreground">
                 or write to
                 <a class="font-medium text-foreground underline-offset-4 hover:underline" href="mailto:hello@app-mcp.com"

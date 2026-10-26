@@ -56,6 +56,8 @@ export interface Catalog {
   /** The end-user MCP's server instructions. */
   instructions: string | null;
   prompts: WorkflowPrompt[];
+  /** Whether the end-user MCP offers the built-in render_form and render_chart. Default true. */
+  builtIns?: boolean;
 }
 
 /** Max bundle size accepted by the registry. D1 stores at most 2 MB per row; the rest is room for the manifest. */

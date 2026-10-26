@@ -143,8 +143,10 @@ describe("management MCP", () => {
     expect(Object.keys(byName)).toEqual(
       expect.arrayContaining(["manage_components", "use_environment", "open_theme_controller", "preview_form", "preview_chart", "preview_rating", "theme_save"]),
     );
-    expect(Object.keys(byName).filter((n) => n.startsWith("component_"))).toEqual([]);
-    expect((byName.theme_save?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    // Publishing stays with CI; stopping a component and the built-ins switch are clicks in the view.
+    for (const name of ["theme_save", "component_remove", "built_ins_set"]) {
+      expect((byName[name]?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    }
     expect(byName.preview_rating?.title).toBe("Preview rating 1.0.0 (prod)");
 
     const listed = await admin.callTool({ name: "manage_components", arguments: {} });
@@ -153,6 +155,7 @@ describe("management MCP", () => {
       environment: "prod",
       environments: ["prod", "staging"],
       components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" }, versions: ["1.1.0", "1.0.0"] }],
+      builtIns: true,
     });
 
     // Switching changes only this person's previews, theme and recipes, and holds across connections.
@@ -211,6 +214,24 @@ describe("management MCP", () => {
     const preview = await again.callTool({ name: "preview_recipe", arguments: { recipe: "add_item", prefill: { name: "Mug" } } });
     expect(preview.isError).toBeFalsy();
     expect((preview._meta?.["genui/form"] as { fields: { defaultValue?: unknown }[] }).fields[0]?.defaultValue).toBe("Mug");
+  });
+
+  it("lets admins stop serving a component and turn the built-ins off, by clicking in the view", async () => {
+    await store.invite(workspaceId, "omar@acme.test", "admin");
+    const cookie = await signUp("omar@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "omar@acme.test");
+    const admin = await mcpClient(await accessToken(cookie));
+    await store.createEnvironment(workspaceId, "qa");
+    await store.deployVersion(workspaceId, "rating", "1.0.0", "qa");
+
+    const off = await admin.callTool({ name: "built_ins_set", arguments: { enabled: false, environment: "qa" } });
+    expect(off.structuredContent).toMatchObject({ environment: "qa", builtIns: false });
+    expect((await store.catalog(workspaceId, "qa")).builtIns).toBe(false);
+
+    const removed = await admin.callTool({ name: "component_remove", arguments: { name: "rating", environment: "qa" } });
+    expect(removed.structuredContent).toMatchObject({ environment: "qa", components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" } }] });
+    expect((await admin.callTool({ name: "component_remove", arguments: { name: "rating", environment: "qa" } })).isError).toBe(true);
+    await store.deleteEnvironment(workspaceId, "qa");
   });
 
   it("gives later people member tools only", async () => {

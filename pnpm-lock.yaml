@@ -188,10 +188,10 @@ importers:
   packages/cli:
     dependencies:
       '@genui/format':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../format
       '@genui/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../runtime
     devDependencies:
       '@types/node':
@@ -211,7 +211,7 @@ importers:
   packages/kit:
     dependencies:
       '@genui/format':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../format
       '@modelcontextprotocol/client':
         specifier: ^2.3.1
@@ -248,8 +248,14 @@ importers:
   packages/runtime:
     dependencies:
       '@genui/format':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../format
+      '@genui/ui':
+        specifier: workspace:^
+        version: link:../ui
+      '@hono/node-server':
+        specifier: ^2.1.5
+        version: 2.1.5(hono@4.13.13)
       '@modelcontextprotocol/ext-apps':
         specifier: ^2.0.3
         version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)
@@ -260,9 +266,6 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@genui/ui':
-        specifier: workspace:*
-        version: link:../ui
       '@modelcontextprotocol/client':
         specifier: ^2.3.1
         version: 2.3.1
@@ -298,7 +301,7 @@ importers:
         version: 4.6.7
 
   packages/ui:
-    dependencies:
+    devDependencies:
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@date-fns/tz@1.5.0)(@preact/compat@18.3.2(preact@10.29.8))(@preact/compat@18.3.2(preact@10.29.8))(@types/react@19.3.0)(date-fns@4.4.0)
@@ -314,6 +317,18 @@ importers:
       '@modelcontextprotocol/ext-apps':
         specifier: ^2.0.3
         version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(@preact/compat@18.3.2(preact@10.29.8))(@preact/compat@18.3.2(preact@10.29.8))(zod@4.6.7)
+      '@preact/preset-vite':
+        specifier: ^2.10.6
+        version: 2.10.6(@babel/core@7.29.7)(preact@10.29.8)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -344,22 +359,6 @@ importers:
       shadcn:
         specifier: ^4.22.1
         version: 4.22.1
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@preact/preset-vite':
-        specifier: ^2.10.6
-        version: 2.10.6(@babel/core@7.29.7)(preact@10.29.8)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
-      '@tailwindcss/vite':
-        specifier: ^4.3.3
-        version: 4.3.3(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.2.0
-        version: 19.3.0(@types/react@19.3.0)
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -375,6 +374,9 @@ importers:
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
 packages:
 

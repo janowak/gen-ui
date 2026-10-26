@@ -3,9 +3,28 @@
 A local genui MCP for developers: one command, no registry, workspace, account, token or database. Add it to Claude Code, Claude Desktop, the playground or your own server and see forms, charts, recipes and your components working.
 
 **Status (2026-10-26)**
-- Step 1 done (2026-10-26): `@genui/runtime` extracted; `mountGenUI` returns `{ remove() }` and serves old versions through `CatalogSource.bundle`.
-- Step 2 done (2026-10-26): `readComponentDir` in `@genui/runtime/local` (Node-only subpath; the root export stays Worker-safe), used by `genui publish`. It also checks the bundle size before upload. Steps 3–9 not started.
-- The runtime keeps `node:crypto`: the Worker runs with `nodejs_compat`.
+- Built: steps 1–8. Step 9 checked with MCP clients, not yet in Claude Desktop or Claude Code themselves (see "Checked" below).
+- **Code:**
+  - `@genui/runtime`: `mountGenUI` returns `{ remove() }` and serves old versions through `CatalogSource.bundle`.
+  - `@genui/runtime/local`: `readComponentDir` (also used by `genui publish`) and `localCatalog`.
+  - `@genui/runtime/serve`: `startServe`, `createLocalMcp` and `watchPaths`.
+  - `@genui/kit/dev`: `watchBuild`.
+  - The CLI: `genui serve`.
+- **Differs from this plan:**
+  - Two directories with the same component name don't stop the server: the second is reported and skipped, like any other problem.
+  - `--guide <file>` serves the MCP's instructions and workflow prompts. Instructions only update when a client reconnects, because they're part of the server's initialize response.
+  - Remounting is debounced (`debouncedNotificationMethods`): one `list_changed` per kind instead of one per tool.
+  - Recipe `validate` webhooks (§6) aren't called locally. Direct clients get the values back in the conversation; SDK clients use the recipe's own submit tool.
+  - The runtime keeps `node:crypto`: the Worker runs with `nodejs_compat`.
+- **Checked:**
+  - 25 runtime tests: catalog, both modes, `/revision` and its ETag, live reload with `list_changed`, the Host check, unbuilt components.
+  - Manually:
+    - `genui serve examples/rating --recipes examples/recipes` over HTTP. Editing `component.ts` rebuilt it and the connected client got the new URI.
+    - The demo through `@genui/sdk` with token `local`: data tools on.
+    - `--stdio` from an MCP client: stdout stays clean while Vite builds.
+- **Left:**
+  - Try it in Claude Code and Claude Desktop, and record which hosts re-list on `list_changed`.
+  - `@genui/ui` ships the management views too (about 1 MB packed); `serve` only needs form and chart.
 
 **Principle: same runtime, different source.** `serve` and the registry's end-user MCP run the same `mountGenUI`. The only difference is where the catalog comes from: the registry reads its database, `serve` reads files on disk. Moving from `serve` to staging or prod only changes the URL and token.
 

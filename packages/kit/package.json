@@ -1,8 +1,17 @@
 {
   "name": "@genui/kit",
   "version": "0.1.0",
+  "description": "Build genui components for MCP Apps hosts like Claude and ChatGPT",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://app-mcp.com",
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "genui",
+    "claude",
+    "chatgpt"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -36,7 +45,7 @@
     "test": "pnpm build:harness && vitest run"
   },
   "dependencies": {
-    "@genui/format": "workspace:*",
+    "@genui/format": "workspace:^",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "vite-plugin-singlefile": "^2.3.4",
@@ -57,5 +66,11 @@
     "react": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

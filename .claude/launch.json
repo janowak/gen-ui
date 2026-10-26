@@ -2,6 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "serve",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "packages/cli/dist/cli.js",
+        "serve",
+        "examples/rating",
+        "--recipes",
+        "examples/recipes"
+      ],
+      "port": 4100
+    },
+    {
       "name": "demo",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
