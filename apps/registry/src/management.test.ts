@@ -235,6 +235,53 @@ describe("management MCP", () => {
     expect((await carol.listTools()).tools.map((t) => t.name)).toContain("theme_save");
   });
 
+  it("lets admins invite people, create and revoke tokens, and make the end-user MCP private, by clicking in the view", async () => {
+    store.invite(workspaceId, "frank@acme.test", "admin");
+    const cookie = await signUp("frank@acme.test");
+    db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("frank@acme.test");
+    const admin = await mcpClient(await accessToken(cookie));
+
+    const tools = (await admin.listTools()).tools;
+    for (const name of ["member_invite", "invite_cancel", "token_create", "token_revoke", "public_set"]) {
+      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    }
+
+    // The model can prefill an invite; only the click sends it.
+    const shown = await admin.callTool({ name: "manage_workspace", arguments: { invite: { email: "gina@acme.test", role: "admin" } } });
+    expect(shown.structuredContent).toMatchObject({ role: "admin", public: true, draftInvite: { email: "gina@acme.test", role: "admin" } });
+    expect((shown.structuredContent as { connectors: { url: string }[] }).connectors[0]?.url).toBe(`${base}/w/${workspaceId}/mcp`);
+    expect(store.listMembers(workspaceId).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+    await admin.callTool({ name: "member_invite", arguments: { email: "gina@acme.test", role: "admin" } });
+    expect(store.listMembers(workspaceId).invites).toContainEqual({ email: "gina@acme.test", role: "admin" });
+    await admin.callTool({ name: "invite_cancel", arguments: { email: "gina@acme.test" } });
+    expect(store.listMembers(workspaceId).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+
+    // The token goes to the view only, never into the text the model reads.
+    const created = await admin.callTool({ name: "token_create", arguments: { name: "prod server" } });
+    const { token } = (created.structuredContent as { created: { token: string } }).created;
+    expect(token).toMatch(/^gnu_server_/);
+    expect(JSON.stringify(created.content)).not.toContain(token);
+    expect(store.resolveToken(token)).toMatchObject({ workspaceId, scope: "server" });
+
+    // Private: no token, no MCP; the server token still works until it's revoked.
+    await admin.callTool({ name: "public_set", arguments: { enabled: false } });
+    const post = (headers: Record<string, string> = {}) =>
+      fetch(`${base}/w/${workspaceId}/revision`, { headers });
+    expect((await post()).status).toBe(404);
+    expect((await post({ authorization: `Bearer ${token}` })).status).toBe(200);
+    const listed = (await admin.callTool({ name: "manage_workspace", arguments: {} })).structuredContent as { tokens: { id: string; name: string }[] };
+    await admin.callTool({ name: "token_revoke", arguments: { id: listed.tokens.find((t) => t.name === "prod server")!.id } });
+    expect((await post({ authorization: `Bearer ${token}` })).status).toBe(401);
+    await admin.callTool({ name: "public_set", arguments: { enabled: true } });
+    expect((await post()).status).toBe(200);
+
+    // Members see people and addresses, not tokens.
+    const member = await mcpClient(await accessToken(await signUp("hank@acme.test")));
+    const view = (await member.callTool({ name: "manage_workspace", arguments: {} })).structuredContent;
+    expect(view).toMatchObject({ role: "member", public: true });
+    expect(view).not.toHaveProperty("tokens");
+  });
+
   it("rejects a token for another resource", async () => {
     const res = await fetch(`${base}/mcp`, {
       method: "POST",

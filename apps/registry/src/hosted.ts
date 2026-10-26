@@ -10,7 +10,7 @@ import type { Store } from "./store.js";
 import { validateWithWebhook } from "./webhook.js";
 
 /**
- * Who the end-user MCP serves. Public: anyone with the URL of a workspace that turned hosting on,
+ * Who the end-user MCP serves. Public: anyone with the URL of a workspace that didn't make it private,
  * with no data tools. Upstream: a company's own MCP server, forwarding genui's tools through
  * @genui/sdk with a server token; views call the company's data tools on that server.
  */
@@ -94,7 +94,7 @@ export async function createHostedMcp(store: Store, { workspace, environment, da
  * End-user MCP at /w/<workspace>/mcp (prod) and /w/<workspace>/<environment>/mcp. The URL alone picks
  * the environment, so what a connector serves never depends on who switched what.
  * - With a server token: upstream for the company's own MCP server (@genui/sdk), data tools on.
- * - Without: public, for workspaces that turned hosting on. Anyone with the URL can render the
+ * - Without: public, unless an admin made the workspace private. Anyone with the URL can render the
  *   workspace's forms, charts and components; form values go back to the conversation.
  */
 export function enableHosting(app: Hono, store: Store, options: RegistryAppOptions = {}): void {

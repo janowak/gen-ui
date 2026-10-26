@@ -26,6 +26,6 @@ await enableManagement(app, db, store, config);
 serve({ fetch: app.fetch, port: PORT }, () =>
   console.log(
     `genui registry on ${config.baseURL} (db: ${DATABASE})\n  MCP for Claude / ChatGPT: ${config.baseURL}/mcp\n` +
-      `  End-user MCP (server token, or public with hosting on): ${config.baseURL}/w/<workspace id>/mcp`,
+      `  End-user MCP (public unless an admin turns it off; server token for data tools): ${config.baseURL}/w/<workspace id>/mcp`,
   ),
 );

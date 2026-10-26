@@ -174,7 +174,9 @@ For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://lo
 
 - **One person, two providers.** Signing in with Google and with GitHub on the same email gives one person, when both providers report the email as verified. better-auth reads GitHub's own verified flag for that address. If it's unverified, the second provider's sign-in is refused and the person keeps using the first. Don't mark a provider as trusted to work around it: that would let an unverified GitHub email take over the Google account with that address.
 - **Sign-up gate.** Without `GENUI_ALLOWED_EMAILS`, anyone with Google or GitHub who finds `api.app-mcp.com` gets a workspace. With it, people not on the list sign in but get no workspace: the MCP answers 403 "Ask a workspace admin to invite your email". An invite lets them in on their next connect, and existing members are never locked out. Keep it set until quotas are in (V1-PLAN §9 Stage 0, step 6).
-- **Roles.** Everyone is admin of their own workspace. Invites, matched by verified email, add people to other workspaces.
+- **Roles and invites.** Everyone is admin of their own workspace. An admin invites people from the workspace view (`manage_workspace`). An invite, matched by verified email, wins at the next sign-in even over a workspace the person already has; an unused one (only them, nothing published, no recipes or tokens) is deleted. People in more than one workspace get the one they joined last.
+- **Server tokens.** Admins create and revoke them in the workspace view. A new token is shown once, in the view only: app-only tool results never reach the model.
+- **Public end-user MCP.** `/w/<workspace>/mcp` is public by default, anonymous, with no data tools. An admin who only uses it through their own server (server token) turns Public off in the workspace view. A login on the public MCP would be the customer's own identity provider, validated as JWTs per workspace, not genui's; not before someone needs it.
 
 ## 9. Code follow-ups
 

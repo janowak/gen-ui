@@ -178,14 +178,6 @@ describe("theme", () => {
   });
 });
 
-describe("invites", () => {
-  it("lets admins invite people by email", async () => {
-    expect((await call("POST", "/v1/invites", reader, { email: "x@acme.test" })).status).toBe(403);
-    const invited = await call("POST", "/v1/invites", admin, { email: "Carol@Acme.test", role: "admin" });
-    expect(invited).toEqual({ status: 201, body: { email: "Carol@Acme.test", role: "admin" } });
-  });
-});
-
 describe("sign-up gate", () => {
   const hosted = { mode: "hosted" as const, adminEmails: [], allowedEmails: ["ann@acme.test", "@partner.test"] };
   const person = (id: string, email: string, emailVerified = true) => ({ id, email, emailVerified, name: id });
@@ -208,6 +200,18 @@ describe("sign-up gate", () => {
     expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toBeUndefined();
     store.invite(ann.workspaceId, "bob@other.test", "member");
     expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "member" });
+    // An invite wins over a workspace made at an earlier sign-in; an unused one is deleted.
+    const pat = store.resolveMembership(person("pat", "pat@partner.test"), hosted)!;
+    store.invite(ann.workspaceId, "pat@partner.test", "admin");
+    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "admin" });
+    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)?.workspaceId).toBe(ann.workspaceId);
+    expect(store.workspace(pat.workspaceId)).toBeUndefined();
+    // A workspace in use is kept.
+    const zoe = store.resolveMembership(person("zoe", "zoe@partner.test"), hosted)!;
+    store.createToken(zoe.workspaceId, "server", "sdk");
+    store.invite(ann.workspaceId, "zoe@partner.test", "member");
+    expect(store.resolveMembership(person("zoe", "zoe@partner.test"), hosted)?.workspaceId).toBe(ann.workspaceId);
+    expect(store.workspace(zoe.workspaceId)).toBeDefined();
     // Narrowing the list later doesn't lock out members.
     expect(store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] })?.workspaceId).toBe(ann.workspaceId);
   });

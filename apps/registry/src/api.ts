@@ -27,7 +27,6 @@ const TokenBody = z.object({
   name: z.string().min(1),
   environments: z.array(EnvironmentName).min(1).optional(),
 });
-const InviteBody = z.object({ email: z.email(), role: z.enum(["member", "admin"]).default("member") });
 const HostingBody = z.object({ enabled: z.boolean() });
 
 type Env = { Variables: { caller: TokenInfo } };
@@ -159,13 +158,6 @@ export function createApi(store: Store, options: RegistryAppOptions = {}): Hono<
     const { scope, name, environments } = TokenBody.parse(await body(c));
     if (environments && scope !== "publish") throw new RegistryError(400, "Only publish tokens can be limited to environments");
     return c.json({ token: store.createToken(ws(c), scope, name, environments), scope, ...(environments ? { environments } : {}) }, 201);
-  });
-
-  // Admin: let someone manage this workspace from their AI assistant; claimed at their first sign-in.
-  api.post("/invites", auth("admin"), async (c) => {
-    const { email, role } = InviteBody.parse(await body(c));
-    store.invite(ws(c), email, role);
-    return c.json({ email, role }, 201);
   });
 
   api.onError((error, c) => {

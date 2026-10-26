@@ -136,7 +136,9 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 | `use_environment` | members, admins | Switches what your previews, theme and recipes show (default prod). Saved per person; end users are unaffected |
 | `open_theme_controller`, `manage_recipes`, `draft_recipe` | members (read-only), admins | The active environment's theme and recipes |
 | `preview_<name>` | members, admins | Renders the version the active environment serves, with sample props |
+| `manage_workspace` | members (read-only), admins | People and invites, each environment's end-user MCP address, whether it's public, and tokens (admins). The model can prefill an invite |
 | `theme_save`, `recipe_save`, `recipe_delete` | admins | App-only: run only when a person clicks in the views, never by the model |
+| `member_invite`, `invite_cancel`, `token_create`, `token_revoke`, `public_set` | admins | App-only, in the workspace view. A new token is shown once, in the view only: it never reaches the model |
 
 **Sign-in options (env):**
 - Social login: `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
@@ -149,7 +151,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 - `GENUI_MODE`:
   - `self-hosted` (default): everyone who can sign in joins the workspace. The first person is admin, plus anyone listed in `GENUI_ADMIN_EMAILS`.
   - `hosted`: each new person gets a personal workspace.
-- `genui invite <email> --role admin|member`: invite people. The invite is claimed at their first sign-in.
+- Invites: from the workspace view (`manage_workspace`). Claimed at the person's next sign-in with that verified email, even if they already have a workspace (an unused one is deleted).
 - `GENUI_ALLOWED_EMAILS`: sign-up gate, comma-separated emails and `@domain` entries. When set, only those verified emails get a workspace at first sign-in; anyone else is refused until invited. Existing members and invited people always get in.
 - Client registration: Claude and ChatGPT use Client ID Metadata Documents. `GENUI_ALLOW_DCR=true` enables open dynamic registration, for local dev or DCR-only clients.
 
@@ -157,7 +159,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 ## Use the SDK
 
-genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`) are served by genui's end-user MCP. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
+genui's tools (`render_form`, `render_chart`, `use_recipe`, `render_<component>`) are served by genui's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private in the workspace view (`manage_workspace`); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
 
 ```ts
 import { connectGenUI, mountGenUI } from "@genui/sdk";

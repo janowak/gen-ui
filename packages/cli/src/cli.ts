@@ -18,7 +18,6 @@ Commands:
   env set <name> --refresh-url <u>  Your server's refresh endpoint, called on changes ("" clears)    admin
   theme <file.json> | --clear       Set or clear an environment's theme                              admin
   token <scope> <name> [--env a,b]  Create a token (scope: server | publish | admin)                 admin
-  invite <email> [--role r]         Let someone manage the workspace in chat (member|admin)          admin
   recipe list                       List an environment's recipes
   recipe set <file.json>            Create or replace a recipe from a JSON file                      admin
   recipe rm <name>                  Delete a recipe                                                  admin
@@ -46,7 +45,6 @@ const { values, positionals } = parseArgs({
     url: { type: "string" },
     token: { type: "string" },
     env: { type: "string" },
-    role: { type: "string" },
     clear: { type: "boolean" },
     "refresh-url": { type: "string" },
     json: { type: "boolean" },
@@ -240,12 +238,6 @@ switch (command) {
     const environments = values.env?.split(",").map((e) => e.trim()).filter(Boolean);
     const result = await api<{ token: string }>("POST", "/v1/tokens", { scope, name, environments });
     console.log(result.token);
-    break;
-  }
-  case "invite": {
-    const email = args[0] ?? fail("usage: genui invite <email> [--role member|admin]");
-    const result = await api<{ email: string; role: string }>("POST", "/v1/invites", { email, role: values.role ?? "member" });
-    console.log(`Invited ${result.email} as ${result.role}. They get access at their first sign-in.`);
     break;
   }
   case "recipe": {

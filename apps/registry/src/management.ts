@@ -53,7 +53,7 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
   // A switch of environment changes the preview tools: open listen streams re-list.
   const mcp = createMcpHandler((ctx) =>
-    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, () => {
+    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, config.baseURL, () => {
       mcp.notify.toolsChanged();
       mcp.notify.resourcesChanged();
     }),

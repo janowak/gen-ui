@@ -79,7 +79,6 @@ beforeAll(async () => {
 
   other = store.createWorkspace("Other");
   store.publish(other, component("survey", "1.0.0"), html("survey"));
-  store.setHosted(other, true);
 
   server = serve({ fetch: created.app.fetch, port: 0 });
   await new Promise((r) => server.once("listening", r));
@@ -92,19 +91,22 @@ afterAll(() => {
 });
 
 describe("hosted end-user MCP", () => {
-  it("is off until an admin turns hosting on", async () => {
+  it("is public by default; an admin can make it private", async () => {
     const post = (path: string) => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    expect((await post(`/w/${acme}/mcp`)).status).toBe(404);
     expect((await post("/w/no-such-workspace/mcp")).status).toBe(404);
 
-    const off = await fetch(`${base}/v1/hosting`, { headers: { authorization: `Bearer ${admin}` } });
-    expect(await off.json()).toEqual({ hosted: false, paths: { prod: `/w/${acme}/mcp`, staging: `/w/${acme}/staging/mcp` } });
+    const current = await fetch(`${base}/v1/hosting`, { headers: { authorization: `Bearer ${admin}` } });
+    expect(await current.json()).toEqual({ hosted: true, paths: { prod: `/w/${acme}/mcp`, staging: `/w/${acme}/staging/mcp` } });
 
-    const on = await fetch(`${base}/v1/hosting`, {
-      method: "PUT",
-      headers: { authorization: `Bearer ${admin}`, "content-type": "application/json" },
-      body: JSON.stringify({ enabled: true }),
-    });
+    const set = (enabled: boolean) =>
+      fetch(`${base}/v1/hosting`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${admin}`, "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+    expect(((await (await set(false)).json()) as { hosted: boolean }).hosted).toBe(false);
+    expect((await post(`/w/${acme}/mcp`)).status).toBe(404);
+    const on = await set(true);
     expect(((await on.json()) as { hosted: boolean }).hosted).toBe(true);
   });
 
@@ -226,8 +228,9 @@ describe("upstream for a company's own server (server token)", () => {
     expect(recipe._meta?.["genui/form"]).toMatchObject({ submit: { toolName: "create_item" } });
   });
 
-  it("serves workspaces without hosting turned on", async () => {
+  it("serves private workspaces", async () => {
     const solo = store.createWorkspace("Solo");
+    store.setHosted(solo, false);
     store.publish(solo, component("poll", "1.0.0"), html("poll v1"));
     expect((await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(404);
 

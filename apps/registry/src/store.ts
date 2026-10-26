@@ -14,6 +14,26 @@ export interface Membership {
   environment: string;
 }
 
+export interface TokenSummary {
+  id: string;
+  name: string;
+  scope: Scope;
+  environments: string[] | null;
+  createdAt: string;
+}
+
+export interface MemberSummary {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  role: Role;
+}
+
+export interface InviteSummary {
+  email: string;
+  role: Role;
+}
+
 export interface TokenInfo {
   workspaceId: string;
   scope: Scope;
@@ -130,11 +150,11 @@ export class Store {
 
   // Workspaces and tokens
 
-  /** Creates the workspace with its prod environment. */
+  /** Creates the workspace with its prod environment. Its public end-user MCP is on until an admin turns it off. */
   createWorkspace(name: string): string {
     const id = randomUUID();
     const createdAt = now();
-    this.db.prepare("INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)").run(id, name, createdAt);
+    this.db.prepare("INSERT INTO workspaces (id, name, hosted, created_at) VALUES (?, ?, 1, ?)").run(id, name, createdAt);
     this.db.prepare("INSERT INTO environments (workspace_id, name, created_at) VALUES (?, ?, ?)").run(id, DEFAULT_ENVIRONMENT, createdAt);
     return id;
   }
@@ -180,6 +200,23 @@ export class Store {
       .prepare("INSERT INTO tokens (id, workspace_id, name, scope, environments, hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(randomUUID(), workspaceId, name, scope, environments ? JSON.stringify(environments) : null, sha256(token), now());
     return token;
+  }
+
+  listTokens(workspaceId: string): TokenSummary[] {
+    const rows = this.db.prepare("SELECT id, name, scope, environments, created_at FROM tokens WHERE workspace_id = ? ORDER BY created_at").all(workspaceId) as {
+      id: string;
+      name: string;
+      scope: Scope;
+      environments: string | null;
+      created_at: string;
+    }[];
+    return rows.map((r) => ({ id: r.id, name: r.name, scope: r.scope, environments: r.environments ? (JSON.parse(r.environments) as string[]) : null, createdAt: r.created_at }));
+  }
+
+  /** Servers and CI using the token get 401 from their next request. */
+  revokeToken(workspaceId: string, id: string): void {
+    const { changes } = this.db.prepare("DELETE FROM tokens WHERE workspace_id = ? AND id = ?").run(workspaceId, id);
+    if (!changes) throw new RegistryError(404, "No such token");
   }
 
   resolveToken(token: string): TokenInfo | undefined {
@@ -253,6 +290,7 @@ export class Store {
 
   // Members (people managing a workspace through the registry MCP)
 
+  /** Without a workspace: the one the person joined last, so an accepted invite wins over a personal workspace. */
   membership(userId: string, workspaceId?: string): Membership | undefined {
     // A deleted active environment falls back to prod.
     const select = `SELECT m.workspace_id, m.role, e.name AS environment FROM members m
@@ -260,7 +298,7 @@ export class Store {
     const row = (
       workspaceId
         ? this.db.prepare(`${select} AND m.workspace_id = ?`).get(userId, workspaceId)
-        : this.db.prepare(`${select} ORDER BY m.created_at LIMIT 1`).get(userId)
+        : this.db.prepare(`${select} ORDER BY m.created_at DESC LIMIT 1`).get(userId)
     ) as { workspace_id: string; role: Role; environment: string | null } | undefined;
     return row && { workspaceId: row.workspace_id, userId, role: row.role, environment: row.environment ?? DEFAULT_ENVIRONMENT };
   }
@@ -276,15 +314,45 @@ export class Store {
       .run(workspaceId, userId, role, now());
   }
 
+  /** Members with the name and email they signed in with; invites still waiting for a first sign-in. */
+  listMembers(workspaceId: string): { members: MemberSummary[]; invites: InviteSummary[] } {
+    const members = this.db
+      .prepare("SELECT m.user_id, m.role, u.name, u.email FROM members m LEFT JOIN user u ON u.id = m.user_id WHERE m.workspace_id = ? ORDER BY m.created_at")
+      .all(workspaceId) as { user_id: string; role: Role; name: string | null; email: string | null }[];
+    const invites = this.db.prepare("SELECT email, role FROM invites WHERE workspace_id = ? ORDER BY created_at").all(workspaceId) as unknown as InviteSummary[];
+    return { members: members.map((m) => ({ userId: m.user_id, name: m.name, email: m.email, role: m.role })), invites };
+  }
+
+  cancelInvite(workspaceId: string, email: string): void {
+    const { changes } = this.db.prepare("DELETE FROM invites WHERE workspace_id = ? AND email = ?").run(workspaceId, email.toLowerCase());
+    if (!changes) throw new RegistryError(404, `No pending invite for ${email}`);
+  }
+
   invite(workspaceId: string, email: string, role: Role): void {
     this.db
       .prepare("INSERT INTO invites (workspace_id, email, role, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO UPDATE SET role = excluded.role")
       .run(workspaceId, email.toLowerCase(), role, now());
   }
 
+  /** Deletes a workspace nobody used: one member, nothing published, no recipes, tokens or invites. */
+  private deleteIfUnused(workspaceId: string): void {
+    const used = this.db
+      .prepare(
+        `SELECT (SELECT COUNT(*) FROM members WHERE workspace_id = ?) > 1
+           OR EXISTS (SELECT 1 FROM components WHERE workspace_id = ?)
+           OR EXISTS (SELECT 1 FROM recipes WHERE workspace_id = ?)
+           OR EXISTS (SELECT 1 FROM tokens WHERE workspace_id = ?)
+           OR EXISTS (SELECT 1 FROM invites WHERE workspace_id = ?) AS used`,
+      )
+      .get(workspaceId, workspaceId, workspaceId, workspaceId, workspaceId) as { used: number };
+    if (used.used) return;
+    for (const table of ["members", "environments"]) this.db.prepare(`DELETE FROM ${table} WHERE workspace_id = ?`).run(workspaceId);
+    this.db.prepare("DELETE FROM workspaces WHERE id = ?").run(workspaceId);
+  }
+
   /**
    * Finds or creates the signed-in person's membership:
-   * existing membership → pending invite → sign-up gate → self-hosted single workspace → (hosted) a new personal workspace.
+   * pending invite → existing membership → sign-up gate → self-hosted single workspace → (hosted) a new personal workspace.
    * With `allowedEmails` set, only listed verified emails (or `@domain` entries) get past the gate; the rest get no
    * membership until someone invites them.
    */
@@ -293,9 +361,6 @@ export class Store {
     options: { mode: "hosted" | "self-hosted"; adminEmails: string[]; allowedEmails?: string[] },
   ): Membership | undefined {
     return this.transaction(() => {
-      const existing = this.membership(user.id);
-      if (existing) return existing;
-
       // Invites and admin emails grant access by email, so only a verified email (GitHub, Google,
       // company IdP) may claim them. Unverified password sign-ups never match.
       const email = user.emailVerified ? user.email.toLowerCase() : undefined;
@@ -304,11 +369,17 @@ export class Store {
             | { workspace_id: string; role: Role }
             | undefined)
         : undefined;
+      // An invite wins even for people who already have a workspace, e.g. one made at an earlier sign-in.
       if (invite && email) {
+        const previous = this.membership(user.id);
         this.addMember(invite.workspace_id, user.id, invite.role);
         this.db.prepare("DELETE FROM invites WHERE workspace_id = ? AND email = ?").run(invite.workspace_id, email);
+        if (previous && previous.workspaceId !== invite.workspace_id) this.deleteIfUnused(previous.workspaceId);
         return this.membership(user.id, invite.workspace_id);
       }
+
+      const existing = this.membership(user.id);
+      if (existing) return existing;
 
       const allowed = options.allowedEmails ?? [];
       if (allowed.length > 0) {

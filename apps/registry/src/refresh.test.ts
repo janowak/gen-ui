@@ -89,8 +89,11 @@ describe("revisions", () => {
 
     expect((await call("GET", `/w/${acme}/revision`, otherReader)).status).toBe(403);
     expect((await call("GET", `/w/${acme}/nope/revision`, reader)).status).toBe(404);
-    // Without a token only hosted workspaces answer, like their public MCP.
+    // Without a token only public workspaces answer, like their MCP.
+    expect((await call("GET", `/w/${acme}/revision`)).status).toBe(200);
+    store.setHosted(acme, false);
     expect((await call("GET", `/w/${acme}/revision`)).status).toBe(404);
+    store.setHosted(acme, true);
   });
 });
 

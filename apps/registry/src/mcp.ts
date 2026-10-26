@@ -6,18 +6,19 @@ import { mountGenUI } from "./runtime.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { endUserPath } from "./api.js";
 import { RegistryError, type Membership, type Store } from "./store.js";
 
 const require = createRequire(import.meta.url);
 
 /** Management views shipped with @genui/ui, read and hashed once per process. */
 const VIEWS = (() => {
-  const load = (name: "manager" | "theme" | "recipes") => {
+  const load = (name: "manager" | "theme" | "recipes" | "workspace") => {
     const html = readFileSync(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
     const hash = createHash("sha256").update(html).digest("hex").slice(0, 16);
     return { html, uri: `ui://genui-registry/${name}/${hash}` };
   };
-  return { manager: load("manager"), theme: load("theme"), recipes: load("recipes") };
+  return { manager: load("manager"), theme: load("theme"), recipes: load("recipes"), workspace: load("workspace") };
 })();
 
 const text = (value: string) => ({ type: "text" as const, text: value });
@@ -36,9 +37,10 @@ function failed(error: unknown) {
  * Members can browse, preview and pick the environment they look at; admins also get the
  * app-only tools that change what users see (save theme, save or delete recipes). Those are
  * never callable by the model: they run only when a person clicks a button in the management views.
+ * `baseURL` is the registry's public URL, for the end-user MCP addresses the workspace view shows.
  * `toolsChanged` tells open clients to re-list, after a switch changes the preview tools.
  */
-export async function createRegistryMcp(store: Store, member: Membership, toolsChanged: () => void = () => {}): Promise<McpServer> {
+export async function createRegistryMcp(store: Store, member: Membership, baseURL: string, toolsChanged: () => void = () => {}): Promise<McpServer> {
   const server = new McpServer({ name: "genui-registry", version: "0.1.0" });
   const isAdmin = member.role === "admin";
   const ws = member.workspaceId;
@@ -161,6 +163,44 @@ export async function createRegistryMcp(store: Store, member: Membership, toolsC
       }),
   );
 
+  // Who manages the workspace, how servers connect, and whether its end-user MCP is public.
+  // Admins change these only by clicking in the view (app-only tools below); server tokens never reach the model.
+  const workspaceState = (extra: Record<string, unknown> = {}) => ({
+    role: member.role,
+    workspace: store.workspace(ws),
+    ...store.listMembers(ws),
+    public: store.isHosted(ws),
+    connectors: store.listEnvironments(ws).map((environment) => ({ environment, url: `${baseURL}${endUserPath(ws, environment)}` })),
+    ...(isAdmin ? { tokens: store.listTokens(ws) } : {}),
+    ...extra,
+  });
+
+  const Invite = z.object({ email: z.email(), role: z.enum(["member", "admin"]).default("member") });
+
+  registerAppTool(
+    server,
+    "manage_workspace",
+    {
+      title: "Workspace",
+      description:
+        "Show the workspace's members and pending invites, the end-user MCP address of each environment, and whether it's public. " +
+        "Admins invite people, create server tokens for @genui/sdk and turn the public MCP on or off from the view. " +
+        "Pass `invite` to prefill an invite the admin then sends with a click.",
+      inputSchema: z.object({ invite: Invite.optional().describe("Someone to invite, prefilled in the view.") }),
+      _meta: { ui: { resourceUri: VIEWS.workspace.uri } },
+    },
+    async ({ invite }) => {
+      const state = workspaceState(invite ? { draftInvite: invite } : {});
+      const people = state.members.map((m) => `- ${m.name ?? m.email ?? m.userId} (${m.role})`);
+      const pending = state.invites.map((i) => `- ${i.email} (${i.role}, invited)`);
+      const access = state.public
+        ? "The end-user MCP is public: anyone with its address can use it, and servers with a server token too."
+        : "The end-user MCP is private: only servers with a server token can use it.";
+      const next = invite ? (isAdmin ? ` Click Invite to send the invite to ${invite.email}.` : " Only admins can invite.") : "";
+      return ok(`Members:\n${[...people, ...pending].join("\n")}\n${access}${next}`, state);
+    },
+  );
+
   // Preview the version the active environment serves of each component, rendered with props the model provides.
   for (const component of store.catalog(ws, env).components) {
     const html = store.bundle(ws, component.hash);
@@ -197,6 +237,93 @@ export async function createRegistryMcp(store: Store, member: Membership, toolsC
 
   // The views send the environment they show, so a save lands where the person saw it.
   const target = z.string().optional().describe("Environment; defaults to the active one.");
+
+  registerAppTool(
+    server,
+    "member_invite",
+    {
+      title: "Invite",
+      description: "Invite someone by email. They join at their next sign-in with that verified email, even if they already have a workspace.",
+      inputSchema: Invite,
+      _meta: appOnly(VIEWS.workspace.uri),
+    },
+    async ({ email, role }) => {
+      store.invite(ws, email, role);
+      return ok(`Invited ${email} as ${role}. They join when they next connect genui and sign in with that email.`, workspaceState());
+    },
+  );
+
+  registerAppTool(
+    server,
+    "invite_cancel",
+    {
+      title: "Cancel invite",
+      description: "Cancel a pending invite.",
+      inputSchema: z.object({ email: z.string() }),
+      _meta: appOnly(VIEWS.workspace.uri),
+    },
+    async ({ email }) => {
+      try {
+        store.cancelInvite(ws, email);
+        return ok(`Cancelled the invite for ${email}.`, workspaceState());
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "token_create",
+    {
+      title: "Create token",
+      description: "Create a token: server for @genui/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
+      inputSchema: z.object({ name: z.string().min(1).max(80), scope: z.enum(["server", "publish", "admin"]).default("server") }),
+      _meta: appOnly(VIEWS.workspace.uri),
+    },
+    async ({ name, scope }) => {
+      const token = store.createToken(ws, scope, name);
+      // The text stays token-free: only the view shows the token.
+      return ok(`Created the ${scope} token "${name}". Copy it now: it isn't shown again.`, workspaceState({ created: { name, scope, token } }));
+    },
+  );
+
+  registerAppTool(
+    server,
+    "token_revoke",
+    {
+      title: "Revoke token",
+      description: "Revoke a token. Servers or CI using it get 401 from their next request.",
+      inputSchema: z.object({ id: z.string() }),
+      _meta: appOnly(VIEWS.workspace.uri),
+    },
+    async ({ id }) => {
+      try {
+        store.revokeToken(ws, id);
+        return ok("Revoked the token.", workspaceState());
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "public_set",
+    {
+      title: "Public MCP",
+      description: "Turn the public end-user MCP on or off. Off: only servers with a server token can use it.",
+      inputSchema: z.object({ enabled: z.boolean() }),
+      _meta: appOnly(VIEWS.workspace.uri),
+    },
+    async ({ enabled }) => {
+      store.setHosted(ws, enabled);
+      return ok(
+        enabled ? "The end-user MCP is public: anyone with its address can use it." : "The end-user MCP is private: only servers with a server token can use it.",
+        workspaceState(),
+      );
+    },
+  );
 
   registerAppTool(
     server,
