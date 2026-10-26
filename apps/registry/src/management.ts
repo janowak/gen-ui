@@ -63,7 +63,7 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
     auth,
     async (request, claims) => {
       const member = claims.sub ? store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
-      if (!member) return Response.json({ error: "You are not a member of any genui workspace." }, { status: 403 });
+      if (!member) return Response.json({ error: "You are not a member of any genui workspace. Ask a workspace admin to invite your email." }, { status: 403 });
       return mcp.fetch(request, {
         authInfo: { token: "", clientId: String(claims.azp ?? claims.client_id ?? ""), scopes: String(claims.scope ?? "").split(" ").filter(Boolean), extra: { member } },
       });

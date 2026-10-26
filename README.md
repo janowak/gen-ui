@@ -150,6 +150,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
   - `self-hosted` (default): everyone who can sign in joins the workspace. The first person is admin, plus anyone listed in `GENUI_ADMIN_EMAILS`.
   - `hosted`: each new person gets a personal workspace.
 - `genui invite <email> --role admin|member`: invite people. The invite is claimed at their first sign-in.
+- `GENUI_ALLOWED_EMAILS`: sign-up gate, comma-separated emails and `@domain` entries. When set, only those verified emails get a workspace at first sign-in; anyone else is refused until invited. Existing members and invited people always get in.
 - Client registration: Claude and ChatGPT use Client ID Metadata Documents. `GENUI_ALLOW_DCR=true` enables open dynamic registration, for local dev or DCR-only clients.
 
 **Try it locally:** open `http://localhost:5173/?server=http://localhost:4000/mcp`. The playground runs the same OAuth flow a connector does: discovery → registration → sign-in → consent.

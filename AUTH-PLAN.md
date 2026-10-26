@@ -110,6 +110,7 @@ GOOGLE_CLIENT_ID=<genui prod client ID>
 GOOGLE_CLIENT_SECRET=<genui prod client secret>
 GITHUB_CLIENT_ID=<genui app client ID>
 GITHUB_CLIENT_SECRET=<genui app client secret>
+GENUI_ALLOWED_EMAILS=<you@example.com,@yourcompany.com>
 ```
 
 - Leave unset: `GENUI_OIDC_*`, `GENUI_PASSWORD_LOGIN`, `GENUI_ALLOW_DCR`.
@@ -172,7 +173,7 @@ For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://lo
 ## 8. Known behavior
 
 - **One person, two providers.** Signing in with Google and with GitHub on the same email gives one person, when both providers report the email as verified. better-auth reads GitHub's own verified flag for that address. If it's unverified, the second provider's sign-in is refused and the person keeps using the first. Don't mark a provider as trusted to work around it: that would let an unverified GitHub email take over the Google account with that address.
-- **Sign-ups are open.** In hosted mode, anyone with Google or GitHub who finds `api.app-mcp.com` gets a workspace. Fine while nobody knows the URL; add the gate (§9.2) before telling anyone outside the team.
+- **Sign-up gate.** Without `GENUI_ALLOWED_EMAILS`, anyone with Google or GitHub who finds `api.app-mcp.com` gets a workspace. With it, people not on the list sign in but get no workspace: the MCP answers 403 "Ask a workspace admin to invite your email". An invite lets them in on their next connect, and existing members are never locked out. Keep it set until quotas are in (V1-PLAN §9 Stage 0, step 6).
 - **Roles.** Everyone is admin of their own workspace. Invites, matched by verified email, add people to other workspaces.
 
 ## 9. Code follow-ups
@@ -180,7 +181,8 @@ For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://lo
 None block the first sign-in.
 
 1. **`/privacy` and `/terms` on the landing site.** Google's consent screen links to them. The text needs your input; the DPA (V1-PLAN §9) can reuse it.
-2. **Sign-up gate:** `GENUI_ALLOWED_EMAILS` (addresses and `@domain` entries), checked before better-auth creates a user, until quotas are in (V1-PLAN §9 Stage 0, step 6). Existing members and invited emails always get in.
+2. ~~Sign-up gate~~ Done (2026-10-26): `GENUI_ALLOWED_EMAILS`, see §6.1 and §8.
+3. **A sign-in page message for refused people.** Today the refusal shows up as the connector's 403. Showing it on `/sign-in` instead needs the check at consent time.
 
 ## 10. Where each secret goes
 

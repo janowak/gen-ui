@@ -99,7 +99,7 @@ beforeAll(async () => {
   server = serve({ fetch: (req) => created.app.fetch(req), port: 0 });
   await new Promise((r) => server.once("listening", r));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
-  auth = await enableManagement(created.app, db, store, { baseURL: base, secret: "test-secret-test-secret-test-secret", mode: "self-hosted", adminEmails: [], password: true });
+  auth = await enableManagement(created.app, db, store, { baseURL: base, secret: "test-secret-test-secret-test-secret", mode: "self-hosted", adminEmails: [], allowedEmails: [], password: true });
 
   // Stand-in for Claude's Client ID Metadata Document: a public client registered for the test.
   const owner = await signUp("owner@acme.test");

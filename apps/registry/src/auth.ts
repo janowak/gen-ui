@@ -19,6 +19,11 @@ export interface AuthConfig {
   mode: "hosted" | "self-hosted";
   /** Emails that become admins (self-hosted). The first person to sign in is always an admin. */
   adminEmails: string[];
+  /**
+   * Sign-up gate: when set, only these verified emails (and `@domain` entries) get a workspace at first
+   * sign-in. Existing members and invited emails always get in. Empty: anyone who can sign in.
+   */
+  allowedEmails: string[];
   github?: { clientId: string; clientSecret: string };
   google?: { clientId: string; clientSecret: string };
   /** Company identity provider (Okta, Entra, Google Workspace, Keycloak…) via OIDC discovery. */
@@ -36,13 +41,15 @@ export const SSO_PROVIDER_ID = "sso";
 
 export function authConfigFromEnv(env: NodeJS.ProcessEnv): AuthConfig {
   const pair = (id?: string, secret?: string) => (id && secret ? { clientId: id, clientSecret: secret } : undefined);
+  const emails = (list?: string) => (list ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   const secret = env.GENUI_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
   if (!secret) console.warn("[genui] GENUI_AUTH_SECRET is not set; using a random secret (sessions reset on restart).");
   return {
     baseURL: (env.GENUI_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`).replace(/\/$/, ""),
     secret: secret ?? randomBytes(32).toString("hex"),
     mode: env.GENUI_MODE === "hosted" ? "hosted" : "self-hosted",
-    adminEmails: (env.GENUI_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+    adminEmails: emails(env.GENUI_ADMIN_EMAILS),
+    allowedEmails: emails(env.GENUI_ALLOWED_EMAILS),
     github: pair(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
     google: pair(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
     oidc:
@@ -89,7 +96,7 @@ function authOptions(db: DatabaseSync, store: Store, config: AuthConfig) {
           if (!user) return {};
           const membership = store.resolveMembership(
             { id: user.id, email: user.email, emailVerified: Boolean(user.emailVerified), name: user.name },
-            { mode: config.mode, adminEmails: config.adminEmails },
+            { mode: config.mode, adminEmails: config.adminEmails, allowedEmails: config.allowedEmails },
           );
           return membership ? { [WORKSPACE_CLAIM]: membership.workspaceId } : {};
         },

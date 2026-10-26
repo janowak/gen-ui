@@ -186,6 +186,42 @@ describe("invites", () => {
   });
 });
 
+describe("sign-up gate", () => {
+  const hosted = { mode: "hosted" as const, adminEmails: [], allowedEmails: ["ann@acme.test", "@partner.test"] };
+  const person = (id: string, email: string, emailVerified = true) => ({ id, email, emailVerified, name: id });
+
+  it("gives workspaces only to listed verified emails and domains", () => {
+    const { store } = createRegistryApp(openDatabase(":memory:"));
+    expect(store.resolveMembership(person("ann", "Ann@Acme.test"), hosted)?.role).toBe("admin");
+    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)?.role).toBe("admin");
+    expect(store.resolveMembership(person("eve", "eve@evil.test"), hosted)).toBeUndefined();
+    expect(store.resolveMembership(person("pet", "pat@notpartner.test"), hosted)).toBeUndefined();
+    // Unverified emails can't claim a listed address.
+    expect(store.resolveMembership(person("fake", "ann@acme.test", false), hosted)).toBeUndefined();
+    expect(store.countWorkspaces()).toBe(2);
+  });
+
+  it("lets invited people and existing members in", () => {
+    const { store } = createRegistryApp(openDatabase(":memory:"));
+    const ann = store.resolveMembership(person("ann", "ann@acme.test"), hosted)!;
+    // Refused once, then invited: the next sign-in joins the inviting workspace.
+    expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toBeUndefined();
+    store.invite(ann.workspaceId, "bob@other.test", "member");
+    expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "member" });
+    // Narrowing the list later doesn't lock out members.
+    expect(store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] })?.workspaceId).toBe(ann.workspaceId);
+  });
+
+  it("lets listed admins into a self-hosted workspace; no list lets everyone in", () => {
+    const { store } = createRegistryApp(openDatabase(":memory:"));
+    store.createWorkspace("default");
+    const selfHosted = { mode: "self-hosted" as const, adminEmails: ["root@acme.test"], allowedEmails: ["@acme.test"] };
+    expect(store.resolveMembership(person("root", "root@acme.test"), { ...selfHosted, allowedEmails: ["@elsewhere.test"] })?.role).toBe("admin");
+    expect(store.resolveMembership(person("eve", "eve@evil.test"), selfHosted)).toBeUndefined();
+    expect(store.resolveMembership(person("eve", "eve@evil.test"), { ...selfHosted, allowedEmails: [] })?.role).toBe("member");
+  });
+});
+
 describe("recipes", () => {
   const recipe = {
     when: "The user wants to add an item.",

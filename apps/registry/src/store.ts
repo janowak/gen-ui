@@ -284,11 +284,13 @@ export class Store {
 
   /**
    * Finds or creates the signed-in person's membership:
-   * existing membership → pending invite → self-hosted single workspace → (hosted) a new personal workspace.
+   * existing membership → pending invite → sign-up gate → self-hosted single workspace → (hosted) a new personal workspace.
+   * With `allowedEmails` set, only listed verified emails (or `@domain` entries) get past the gate; the rest get no
+   * membership until someone invites them.
    */
   resolveMembership(
     user: { id: string; email: string; emailVerified: boolean; name?: string },
-    options: { mode: "hosted" | "self-hosted"; adminEmails: string[] },
+    options: { mode: "hosted" | "self-hosted"; adminEmails: string[]; allowedEmails?: string[] },
   ): Membership | undefined {
     return this.transaction(() => {
       const existing = this.membership(user.id);
@@ -306,6 +308,12 @@ export class Store {
         this.addMember(invite.workspace_id, user.id, invite.role);
         this.db.prepare("DELETE FROM invites WHERE workspace_id = ? AND email = ?").run(invite.workspace_id, email);
         return this.membership(user.id, invite.workspace_id);
+      }
+
+      const allowed = options.allowedEmails ?? [];
+      if (allowed.length > 0) {
+        const listed = email !== undefined && (allowed.includes(email) || allowed.includes(email.slice(email.lastIndexOf("@"))));
+        if (!listed && !(email !== undefined && options.adminEmails.includes(email))) return undefined;
       }
 
       if (options.mode === "self-hosted") {
