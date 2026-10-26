@@ -36,6 +36,7 @@ interface Session {
   server: McpServer;
   mounted: Mounted;
   dataTools: boolean;
+  transport?: WebStandardStreamableHTTPServerTransport;
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -76,7 +77,14 @@ export function createLocalMcp(options: LocalMcpOptions) {
 
   async function open(dataTools: boolean): Promise<Session> {
     const instructions = catalog.instructions();
-    const server = new McpServer({ name: "genui-local", title: "genui (local)", version: "0.1.0" }, instructions ? { instructions } : {});
+    const server = new McpServer(
+      { name: "genui-local", title: "genui (local)", version: "0.1.0" },
+      {
+        ...(instructions ? { instructions } : {}),
+        // A remount removes and adds every tool: one notification per kind, not one per tool.
+        debouncedNotificationMethods: ["notifications/tools/list_changed", "notifications/resources/list_changed", "notifications/prompts/list_changed"],
+      },
+    );
     return { server, mounted: await mount(server, dataTools), dataTools };
   }
 
@@ -85,7 +93,7 @@ export function createLocalMcp(options: LocalMcpOptions) {
     if (id) {
       const session = sessions.get(id);
       if (!session) return rpcError(404, "Session not found. Reconnect.");
-      return (session.server.server.transport as WebStandardStreamableHTTPServerTransport).handleRequest(request);
+      return session.transport!.handleRequest(request);
     }
     if (request.method !== "POST") return rpcError(400, "Missing mcp-session-id. Start with initialize.");
 
@@ -95,6 +103,7 @@ export function createLocalMcp(options: LocalMcpOptions) {
       onsessioninitialized: (sessionId) => void sessions.set(sessionId, session),
       onsessionclosed: (sessionId) => void sessions.delete(sessionId),
     });
+    session.transport = transport;
     transport.onclose = () => {
       if (transport.sessionId) sessions.delete(transport.sessionId);
     };

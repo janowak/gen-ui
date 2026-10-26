@@ -132,15 +132,37 @@ describe("publishing to environments", () => {
       { name: "rating", environments: { prod: "1.1.0", staging: "1.3.0" }, versions: ["1.3.0", "1.2.0", "1.1.0", "1.0.0", "0.9.0"] },
     ]);
     expect((await call("GET", "/v1/components", otherReader)).body.components).toEqual([]);
+    // The publish token CI or a developer published with can see the result.
+    expect((await call("GET", "/v1/components", previewer)).status).toBe(200);
   });
 });
 
 describe("environments", () => {
   it("lists them, prod first, with their end-user MCP paths and refresh settings", async () => {
     expect((await call("GET", "/v1/environments", reader)).body.environments).toEqual([
-      { name: "prod", path: `/w/${workspace}/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null },
-      { name: "staging", path: `/w/${workspace}/staging/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null },
+      { name: "prod", path: `/w/${workspace}/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
+      { name: "staging", path: `/w/${workspace}/staging/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
     ]);
+  });
+
+  it("lets admins turn the built-in form and chart off, leaving other settings as they are", async () => {
+    expect((await call("PUT", "/v1/environments/staging", publisher, { builtIns: false })).status).toBe(403);
+    expect((await call("PUT", "/v1/environments/qa", admin, { builtIns: false })).status).toBe(404);
+    expect((await call("PUT", "/v1/environments/staging", admin, { builtIns: false })).body).toMatchObject({ name: "staging", builtIns: false, refreshUrl: null });
+    expect((await call("PUT", "/v1/environments/staging", admin, { builtIns: true })).body).toMatchObject({ builtIns: true });
+  });
+
+  it("stops serving a component in an environment; its versions stay", async () => {
+    expect((await call("PUT", "/v1/environments/dev", admin, { builtIns: true })).status).toBe(404);
+    expect((await call("POST", "/v1/environments", admin, { name: "qa" })).status).toBe(201);
+    expect((await deploy(publisher, "rating", "1.0.0", "qa")).status).toBe(200);
+    expect((await call("DELETE", "/v1/components/rating/environments/qa", previewer)).status).toBe(403);
+    expect((await call("DELETE", "/v1/components/rating/environments/qa", reader)).status).toBe(403);
+    expect((await call("DELETE", "/v1/components/rating/environments/qa", publisher)).body).toEqual({ removed: "rating", environment: "qa" });
+    expect((await call("DELETE", "/v1/components/rating/environments/qa", publisher)).status).toBe(404);
+    expect(await environments()).not.toHaveProperty("qa");
+    expect((await call("GET", "/v1/components", reader)).body.components[0].versions).toContain("1.0.0");
+    expect((await call("DELETE", "/v1/environments/qa", admin)).status).toBe(200);
   });
 
   it("lets admins create and delete them; prod stays", async () => {

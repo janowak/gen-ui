@@ -81,12 +81,14 @@ export function sniffIcon(bytes: Uint8Array): IconType | undefined {
 const now = () => new Date().toISOString();
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-type EnvironmentRow = { name: string; revision: number; refresh_url: string | null; last_refresh: string | null };
+type EnvironmentRow = { name: string; revision: number; refresh_url: string | null; last_refresh: string | null; built_ins: number };
+const ENVIRONMENT_COLUMNS = "name, revision, refresh_url, last_refresh, built_ins";
 const environmentInfo = (row: EnvironmentRow): EnvironmentInfo => ({
   name: row.name,
   revision: row.revision,
   refreshUrl: row.refresh_url,
   lastRefresh: row.last_refresh ? (JSON.parse(row.last_refresh) as LastRefresh) : null,
+  builtIns: Boolean(row.built_ins),
 });
 
 export interface ComponentSummary {
@@ -122,6 +124,8 @@ export interface EnvironmentInfo {
   /** The company's server endpoint genui calls on each change (@genui/sdk's refresh handler). */
   refreshUrl: string | null;
   lastRefresh: LastRefresh | null;
+  /** Whether the end-user MCP offers the built-in render_form and render_chart. */
+  builtIns: boolean;
 }
 
 /** A committed change to what an environment serves: versions, theme, instructions or workflows. */
@@ -352,7 +356,7 @@ export class Store {
 
   async environment(workspaceId: string, name: string): Promise<EnvironmentInfo | undefined> {
     const row = await this.db.get<EnvironmentRow>(
-      "SELECT name, revision, refresh_url, last_refresh FROM environments WHERE workspace_id = ? AND name = ?",
+      `SELECT ${ENVIRONMENT_COLUMNS} FROM environments WHERE workspace_id = ? AND name = ?`,
       workspaceId,
       name,
     );
@@ -362,7 +366,7 @@ export class Store {
   /** The workspace's environments with their refresh settings, prod first. */
   async listEnvironmentInfo(workspaceId: string): Promise<EnvironmentInfo[]> {
     const rows = await this.db.all<EnvironmentRow>(
-      "SELECT name, revision, refresh_url, last_refresh FROM environments WHERE workspace_id = ? ORDER BY name != ?, name",
+      `SELECT ${ENVIRONMENT_COLUMNS} FROM environments WHERE workspace_id = ? ORDER BY name != ?, name`,
       workspaceId,
       DEFAULT_ENVIRONMENT,
     );
@@ -373,6 +377,12 @@ export class Store {
   async setRefreshUrl(workspaceId: string, name: string, url: string | null): Promise<void> {
     await this.requireEnvironment(workspaceId, name);
     await this.db.run("UPDATE environments SET refresh_url = ?, last_refresh = NULL WHERE workspace_id = ? AND name = ?", url, workspaceId, name);
+  }
+
+  /** Turns the built-in render_form and render_chart on or off in an environment's end-user MCP. */
+  async setBuiltIns(workspaceId: string, name: string, enabled: boolean): Promise<void> {
+    await this.requireEnvironment(workspaceId, name);
+    await this.change(workspaceId, name, [statement("UPDATE environments SET built_ins = ? WHERE workspace_id = ? AND name = ?", enabled ? 1 : 0, workspaceId, name)]);
   }
 
   async setLastRefresh(workspaceId: string, name: string, result: LastRefresh): Promise<void> {
@@ -713,6 +723,24 @@ export class Store {
     return this.deploy(workspaceId, name, environment, { id: row.id, manifest: JSON.parse(row.manifest) as ComponentManifest }, { version, hash: row.hash, created: false });
   }
 
+  /**
+   * Stops serving a component in an environment. Its versions stay published, so it can be served again
+   * with `publish <name>@<version>`, and old messages keep rendering.
+   */
+  async removeComponent(workspaceId: string, name: string, environment: string): Promise<void> {
+    await this.requireEnvironment(workspaceId, environment);
+    const served = await this.db.get(
+      "SELECT 1 FROM deployments d JOIN components co ON co.id = d.component_id WHERE co.workspace_id = ? AND co.name = ? AND d.environment = ?",
+      workspaceId,
+      name,
+      environment,
+    );
+    if (!served) throw new RegistryError(404, `${environment} doesn't serve "${name}"`);
+    await this.change(workspaceId, environment, [
+      statement("DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ? AND name = ?)", environment, workspaceId, name),
+    ]);
+  }
+
   async listComponents(workspaceId: string): Promise<ComponentSummary[]> {
     // Three queries for the whole workspace, not three per component: each one is a round trip on D1.
     const [components, versions, deployments] = await Promise.all([
@@ -740,7 +768,7 @@ export class Store {
   }
 
   async catalog(workspaceId: string, environment: string): Promise<Catalog> {
-    const [rows, theme, instructions, workflows] = await Promise.all([
+    const [rows, theme, instructions, workflows, settings] = await Promise.all([
       this.db.all<{ name: string; version: string; hash: string; manifest: string }>(
         `SELECT co.name, v.version, v.hash, v.manifest FROM deployments d
          JOIN components co ON co.id = d.component_id
@@ -752,9 +780,10 @@ export class Store {
       this.getTheme(workspaceId, environment),
       this.getInstructions(workspaceId, environment),
       this.listWorkflows(workspaceId, environment),
+      this.environment(workspaceId, environment),
     ]);
     const components: CatalogComponent[] = rows.map((r) => ({ name: r.name, version: r.version, hash: r.hash, manifest: JSON.parse(r.manifest) }));
-    return { environment, theme, components, instructions, workflows };
+    return { environment, theme, components, instructions, workflows, builtIns: settings?.builtIns ?? true };
   }
 
   /** Bundles are looked up within the caller's workspace only: no cross-tenant sharing by hash. */

@@ -84,6 +84,7 @@ export async function createRegistryMcp(
     environment,
     environments: await store.listEnvironments(ws),
     components: await store.listComponents(ws),
+    builtIns: (await store.environment(ws, environment))?.builtIns ?? true,
   });
 
   registerAppTool(
@@ -92,7 +93,8 @@ export async function createRegistryMcp(
     {
       title: "Manage components",
       description:
-        "Show the workspace's genui components and the version each environment (prod, staging, …) serves. CI publishes versions to environments; nothing moves between them here.",
+        "Show the workspace's genui components and the version each environment (prod, staging, …) serves, and whether the built-in forms and charts are on. " +
+        "CI publishes versions to environments; nothing moves between them here. Admins can stop serving a component or turn the built-ins off from the view.",
       inputSchema: z.object({}),
       _meta: { ui: { resourceUri: VIEWS.manager.uri } },
     },
@@ -101,7 +103,7 @@ export async function createRegistryMcp(
       const lines = state.components.map(
         (c) => `- ${c.name}: ${state.environments.map((e) => `${e} ${c.environments[e] ?? "—"}`).join(", ")}`,
       );
-      const active = `Previews, theme, instructions and workflows show ${env}.`;
+      const active = `Previews, theme, instructions and workflows show ${env}. Built-in forms and charts are ${state.builtIns ? "on" : "off"} in ${env}.`;
       return ok(state.components.length ? `Components:\n${lines.join("\n")}\n${active}` : `No components published yet. ${active}`, state);
     },
   );
@@ -314,6 +316,50 @@ export async function createRegistryMcp(
 
   // The views send the environment they show, so a save lands where the person saw it.
   const target = z.string().optional().describe("Environment; defaults to the active one.");
+
+  registerAppTool(
+    server,
+    "component_remove",
+    {
+      title: "Stop serving component",
+      description: "Stop serving a component in an environment. Its versions stay published; `genui publish <name>@<version>` serves one again.",
+      inputSchema: z.object({ name: z.string(), environment: target }),
+      _meta: appOnly(VIEWS.manager.uri),
+    },
+    async ({ name, environment = env }) => {
+      try {
+        await store.removeComponent(ws, name, environment);
+        if (environment === env) toolsChanged();
+        return ok(`${environment} no longer serves ${name}. Its connectors drop render_${name} on their next refresh.`, await componentsState(environment));
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "built_ins_set",
+    {
+      title: "Built-in forms and charts",
+      description: "Turn the built-in render_form and render_chart on or off in an environment's end-user MCP.",
+      inputSchema: z.object({ enabled: z.boolean(), environment: target }),
+      _meta: appOnly(VIEWS.manager.uri),
+    },
+    async ({ enabled, environment = env }) => {
+      try {
+        await store.setBuiltIns(ws, environment, enabled);
+        return ok(
+          enabled
+            ? `${environment} offers the built-in forms and charts again.`
+            : `${environment} no longer offers the built-in forms and charts: only your components.`,
+          await componentsState(environment),
+        );
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
 
   registerAppTool(
     server,

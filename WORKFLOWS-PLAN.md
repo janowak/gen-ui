@@ -3,8 +3,8 @@
 Recipes go away. An environment has **instructions** (the overview) and **workflows** (editable playbooks in the customer's own words). A workflow with params becomes a slash command; one without params is guidance the model always has.
 
 **Status (2026-10-26)**
-- Done on branch `workflows` (on top of `cloudflare-d1`): §2–§10 plus §13 (code path). Recipes, `guide.ts`, `GuideView` and the validation webhook are gone.
-- `genui serve` (`localCatalog`) reads workflow files and `--instructions` too; its CLI flags still need switching from `--recipes`/`--guide`.
+- Done and on `master`: §2–§10 plus §13 (code path). Recipes, `guide.ts`, `GuideView` and the validation webhook are gone.
+- `genui serve` reads workflow files from its dirs and takes `--instructions <file.md>`; `--recipes` and `--guide` are gone.
 - Dev mode: no migration of existing recipes, no compat aliases. Local databases get recreated.
 
 **Principle: one concept, the model builds the UI.** Components describe themselves and `render_form` builds any form, so a workflow only needs to say *what to do*. No business-owned fixed forms, no validation webhook. If a customer needs a guaranteed form later, it comes back as an optional part of a workflow, not as its own concept.

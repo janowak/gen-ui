@@ -1,8 +1,17 @@
 {
   "name": "@genui/sdk",
   "version": "0.1.0",
+  "description": "Put genui forms, charts and components on your own MCP server",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://app-mcp.com",
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "genui",
+    "claude",
+    "chatgpt"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -29,5 +38,11 @@
     "@types/node": "^24",
     "vitest": "^5.0.5",
     "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

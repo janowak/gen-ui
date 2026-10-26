@@ -10,8 +10,8 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
 | `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
 | `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
-| `packages/cli` | `genui` CLI: publish (components and workflows, to an environment) / list / env / theme / workflow / instructions / token |
-| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, components and workflow prompts from a `CatalogSource`; `@genui/runtime/local` reads component dirs and workflow files). Used by the registry; `genui serve` next ([DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md)) |
+| `packages/cli` | `genui` CLI: serve (a local MCP) / dev / publish (components and workflows, to an environment) / list / env / theme / workflow / instructions / token |
+| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, components and workflow prompts from a `CatalogSource`). Used by the registry and by `genui serve` (`@genui/runtime/serve`); `@genui/runtime/local` reads component dirs and workflow files |
 | `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme, instructions and workflows), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@genui/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
@@ -23,16 +23,31 @@ Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/com
 
 ## Run locally
 
+`genui serve` is a local genui MCP: forms, charts and your components with their workflows, with no registry, account or token.
+
 ```bash
-pnpm install
-pnpm build
-pnpm --filter @genui/registry start     # http://localhost:4000; first start prints an admin token and the end-user MCP URL
-GENUI_URL=http://localhost:4000 GENUI_TOKEN=<admin> genui token server demo   # a server token for the demo
-pnpm --filter @genui/demo start         # MCP server on http://localhost:3001/mcp
-pnpm --filter @genui/playground dev     # host on http://localhost:5173
+pnpm install && pnpm build
+pnpm exec genui serve examples/rating   # http://localhost:4100/mcp
 ```
 
-The demo reads `.env.local` (gitignored) for `GENUI_MCP_URL` (`http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment) and `GENUI_MCP_TOKEN` (the server token). Without them it serves its company tools only.
+Then use it from one of these:
+- **Claude Code:** `claude mcp add --transport http genui http://localhost:4100/mcp`
+- **Claude Desktop, or any host that starts the MCP as a command:** `genui serve --stdio …` as the command, with absolute paths.
+- **The playground:** `pnpm --filter @genui/playground dev` (http://localhost:5173), with the URL above.
+- **Your own MCP server, through `@genui/sdk`:** `connectGenUI({ url: "http://localhost:4100/mcp", token: "local" })`. The demo company server does this by default: `pnpm --filter @genui/demo start` serves it on http://localhost:3001/mcp.
+
+What `serve` does:
+- **Reloads on save.** Components with a `vite.config` are rebuilt; theme, instructions and workflow files are re-read. Connected clients get `list_changed` and the new tools. A rebuilt component gets a new `ui://` URI, and earlier versions keep loading for old messages.
+- **Two modes**, as on the registry:
+  - Without a token (Claude talking to it directly), it only renders: forms that call tools are rejected, and form values go back to the conversation.
+  - With any token (`@genui/sdk`), views call your server's tools.
+- **Keeps serving.** A component or file that doesn't load is reported and skipped.
+
+Flags: `--theme`, `--instructions`, `--port`, `--host`, `--stdio`, `--suffix`, `--refresh-url`, `--no-build` (`genui --help`). Plan and status: [DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md).
+
+**With the registry** (workspaces, environments, publishing): start it with `pnpm --filter @genui/registry start` (http://localhost:4000; first start prints an admin token). Create a server token with `genui token server demo`. Then point the demo at it in `.env.local` (gitignored):
+- `GENUI_MCP_URL`: `http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment.
+- `GENUI_MCP_TOKEN`: the server token.
 
 ## Database and migrations
 
@@ -58,7 +73,10 @@ Before the first deploy, set the secrets from `apps/registry`:
 wrangler secret put GENUI_AUTH_SECRET
 ```
 
-Also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` the same way. `GENUI_AUTH_SECRET` comes from `openssl rand -hex 32`; keep it in the password manager, because changing it breaks every session and connector.
+Also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` the same way. `GENUI_AUTH_SECRET` comes from `openssl rand -hex 32`; keep it in the password manager, because changing it breaks every session and connector. Without a provider nobody can sign in: `curl https://api.app-mcp.com/auth/options` shows which are on.
+- **Google:** a Google Cloud OAuth client of type "Web application", redirect URI `https://api.app-mcp.com/api/auth/callback/google`.
+- **GitHub:** an OAuth App with callback URL `https://api.app-mcp.com/api/auth/callback/github`.
+- **Sign-up gate (optional):** `GENUI_ALLOWED_EMAILS`, as a secret or a var, limits who gets a workspace (see [Management](#management-in-claude--chatgpt)).
 
 Deploy: builds the sign-in pages, applies new migrations to the D1 database, then deploys the Worker.
 
@@ -104,6 +122,8 @@ GENUI_TOKEN=<admin> genui token server demo                            # SDK: th
 GENUI_TOKEN=<publish> genui publish examples/rating --env staging      # → staging
 GENUI_TOKEN=<publish> genui publish rating@1.2.0 --env prod            # prod serves 1.2.0, no rebuild
 GENUI_TOKEN=<publish> genui publish examples/rating                    # → prod (the default), component and its workflows
+GENUI_TOKEN=<publish> genui remove rating --env staging               # staging stops serving rating; versions stay
+GENUI_TOKEN=<admin> genui env set prod --built-ins off                 # prod: only your components, no render_form / render_chart
 GENUI_TOKEN=<admin> genui theme theme.json --env staging               # staging's theme
 GENUI_TOKEN=<admin> genui instructions instructions.md --env staging  # staging's MCP instructions
 ```
@@ -112,6 +132,9 @@ GENUI_TOKEN=<admin> genui instructions instructions.md --env staging  # staging'
 - Re-publishing the same version with the same bundle and manifest is a no-op, so CI jobs can be re-run. Different content under an existing version is rejected; publish `<name>@<version>` to serve an existing version in another environment.
 - A breaking props change (a removed prop or a newly required one) against what the environment served before is a warning, not an error.
 - `--json` prints the registry's response, for scripts.
+- `remove` stops serving a component in an environment. Its versions stay published, so `publish <name>@<version>` serves one again and old messages keep rendering.
+- Built-in forms and charts (`render_form`, `render_chart`) are on in every environment until an admin turns them off (`env set --built-ins off`, or the switch under `manage_components`).
+- The CLI talks to genui cloud (`https://api.app-mcp.com`) unless `--url` or `GENUI_URL` names another registry. Publish tokens can also run `list` and `env list`.
 
 **Workflows sit next to components.** A workflow is a playbook for the model in your own words: `<name>.workflow.md` in a component dir or its `workflows/`, with YAML frontmatter and the steps as the body. `genui publish <dir>` sends the dir's component and workflows to the environment, with the same publish token (a dir may hold only workflows). `genui workflow set|rm|list` handles single ones; admins can also edit them from the `manage_workflows` view.
 
@@ -158,6 +181,8 @@ jobs:
 
 ## Build a component
 
+Start one outside this repo with `npx @genui/cli init my_poll`: a vanilla TypeScript component (no tools, so it works on the public MCP) with `dev`, `build`, `serve` and `genui:publish` scripts. The rest of this section is what's inside.
+
 `@genui/kit` hides the MCP Apps plumbing behind one contract. Describe the component once:
 
 ```ts
@@ -199,18 +224,20 @@ Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--gen
 - **Log:** tool calls, model context updates, chat messages and saved state from the component.
 - **Live reload:** saving any file re-renders the view with the same props and view id.
 
+To try it in a real host, run `genui serve` in the component directory and add http://localhost:4100/mcp to Claude (see [Run locally](#run-locally)). The component is rebuilt on save, and the host gets the new version without reconnecting.
+
 ## Management in Claude / ChatGPT
 
 The registry serves its own MCP server at `/mcp`. Add it as a custom connector. People sign in with OAuth (better-auth); tokens are bound to `<GENUI_PUBLIC_URL>/mcp`.
 
 | Tool | Who | What |
 |---|---|---|
-| `manage_components` | members, admins | The version each environment serves, with a picker for the active environment |
+| `manage_components` | members, admins | The version each environment serves, with a picker for the active environment, and whether the built-in forms and charts are on |
 | `use_environment` | members, admins | Switches what your previews, theme, instructions and workflows show (default prod). Saved per person; end users are unaffected |
 | `open_theme_controller`, `manage_instructions`, `draft_instructions`, `manage_workflows`, `draft_workflow` | members (read-only), admins | The active environment's theme, instructions and workflows |
 | `preview_<name>` | members, admins | Renders the version the active environment serves, with sample props |
 | `manage_workspace` | members (read-only), admins | People and invites, each environment's end-user MCP address, whether it's public, and tokens (admins). The model can prefill an invite |
-| `theme_save`, `instructions_save`, `workflow_save`, `workflow_delete` | admins | App-only: run only when a person clicks in the views, never by the model |
+| `theme_save`, `instructions_save`, `workflow_save`, `workflow_delete`, `component_remove`, `built_ins_set` | admins | App-only: run only when a person clicks in the views, never by the model |
 | `member_invite`, `invite_cancel`, `token_create`, `token_revoke`, `public_set` | admins | App-only, in the workspace view. A new token is shown once, in the view only: it never reaches the model |
 
 **Sign-in options (env):**
@@ -229,6 +256,16 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 - Client registration: Claude and ChatGPT use Client ID Metadata Documents. `GENUI_ALLOW_DCR=true` enables open dynamic registration, for local dev or DCR-only clients.
 
 **Try it locally:** open `http://localhost:5173/?server=http://localhost:4000/mcp`. The playground runs the same OAuth flow a connector does: discovery → registration → sign-in → consent.
+
+## Publish the npm packages
+
+`@genui/cli`, `@genui/kit` and `@genui/sdk` are what users install; they depend on `@genui/format`, `@genui/runtime` and `@genui/ui`, so all six go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `genui` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
+
+```bash
+pnpm build && pnpm -r --filter "./packages/*" publish --access public --dry-run
+```
+
+Drop `--dry-run` to publish; pnpm refuses on uncommitted changes or a branch other than master. To try a release without publishing, `pnpm pack` each package and point a test project at the tarballs (`file:` dependencies plus `overrides` for the internal ones).
 
 ## Use the SDK
 

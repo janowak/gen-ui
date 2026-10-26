@@ -1,8 +1,17 @@
 {
   "name": "@genui/format",
   "version": "0.1.0",
+  "description": "Schemas for genui forms, charts, workflows, themes and component manifests",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://app-mcp.com",
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "genui",
+    "claude",
+    "chatgpt"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -23,5 +32,11 @@
   },
   "devDependencies": {
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

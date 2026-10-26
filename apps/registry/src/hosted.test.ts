@@ -125,6 +125,21 @@ describe("hosted end-user MCP", () => {
     });
   });
 
+  it("leaves out the built-in form and chart, and components it stopped serving", async () => {
+    await store.createEnvironment(acme, "lean");
+    await store.deployVersion(acme, "rating", "1.1.0", "lean");
+    await store.setBuiltIns(acme, "lean", false);
+    expect((await store.catalog(acme, "lean")).builtIns).toBe(false);
+    expect((await (await mcpClient(`/w/${acme}/lean/mcp`)).listTools()).tools.map((t) => t.name)).toEqual(["render_rating_lean"]);
+
+    await store.removeComponent(acme, "rating", "lean");
+    expect((await (await mcpClient(`/w/${acme}/lean/mcp`)).listTools()).tools).toEqual([]);
+    await expect(store.removeComponent(acme, "rating", "lean")).rejects.toThrow(`lean doesn't serve "rating"`);
+    // Its versions stay published: serving one again needs no rebuild.
+    expect((await store.deployVersion(acme, "rating", "1.1.0", "lean")).environments).toMatchObject({ lean: "1.1.0" });
+    await store.deleteEnvironment(acme, "lean");
+  });
+
   it("answers 404 for an environment that doesn't exist", async () => {
     const res = await fetch(`${base}/w/${acme}/stagng/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(res.status).toBe(404);

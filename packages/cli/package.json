@@ -1,19 +1,38 @@
 {
   "name": "@genui/cli",
   "version": "0.1.0",
+  "description": "genui CLI: start, develop, serve and publish MCP Apps components",
   "type": "module",
   "license": "MIT",
-  "bin": { "genui": "./dist/cli.js" },
-  "files": ["dist"],
+  "homepage": "https://app-mcp.com",
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "genui",
+    "claude",
+    "chatgpt"
+  ],
+  "bin": {
+    "genui": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@genui/format": "workspace:*",
-    "@genui/runtime": "workspace:*"
+    "@genui/format": "workspace:^",
+    "@genui/runtime": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
