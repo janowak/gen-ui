@@ -9,13 +9,20 @@ Make type-checking, building, linting and formatting faster in both repos, using
 Vite+ itself was tried on gen-ui and dropped (see "Why not Vite+"). All work happens on `master` in each repo, one commit per step, with no worktrees.
 
 **Status (2026-10-26)**
-- **gen-ui Steps 0 and 1 are done**, but not committed. gen-ui is on TypeScript 7.0.2, and `.pnpmfile.cjs` slims the registry image. Next is gen-ui Step 2 (Oxfmt and Oxlint). geogeo hasn't started.
+- **gen-ui is done**, committed on `master` and not pushed:
+  - `0fd73bd`: TypeScript 7 and the registry image fix
+  - `79c2b71`, `44b1beb`, `bcd9e28`: Oxfmt and Oxlint settings, install and scripts
+  - `88418f8`: the reformat
+  - `227dcdd`: lint fixes and `.git-blame-ignore-revs`
 
-  | gen-ui, `pnpm -r …` | TS 5.9 | TS 7 |
+  geogeo hasn't started.
+
+  | gen-ui | TS 5.9 | Now |
   |---|---|---|
-  | `build` | 10.3 s | 5.5–8.0 s ¹ |
-  | `typecheck` | 6.5 s | 1.7–1.9 s |
-  | `test` (185 tests pass) | 9.5 s | 9.8–11.9 s ² |
+  | `pnpm build` | 10.3 s | 5.5–8.0 s ¹ |
+  | `pnpm typecheck` | 6.5 s | 1.7–1.9 s |
+  | `pnpm test` (185 tests pass) | 9.5 s | 9.4–11.9 s ² |
+  | `pnpm check` (Oxfmt + Oxlint on the whole repo) | No lint or format | 0.5 s |
   | Registry image `node_modules` | 122 MB | 56 MB ³ |
 
   ¹ The range covers back-to-back runs on a busy machine.
@@ -124,7 +131,7 @@ Vite+ 1.4 was tried as gen-ui Step 2, checked fully, and reverted. The step-1 lo
 ### Step 0: baseline (done)
 On TS 5.9: `pnpm -r build` 10.3 s, `pnpm -r typecheck` 6.5 s, `pnpm -r test` 9.5 s.
 
-### Step 1: TypeScript 7 and a slimmer registry image (done, not committed)
+### Step 1: TypeScript 7 and a slimmer registry image (done: `0fd73bd`)
 - **TypeScript 7:**
   - `typescript` is now `^7.0.2` in the root `package.json`.
   - `baseUrl` is gone from `packages/ui/tsconfig.json`. `paths` (`"@/*": ["./src/*"]`) resolves relative to the tsconfig.
@@ -141,7 +148,40 @@ On TS 5.9: `pnpm -r build` 10.3 s, `pnpm -r typecheck` 6.5 s, `pnpm -r test` 9.5
   - The `dist/` diff (see Status).
   - The Docker image builds and `/health` returns ok.
 
-### Step 2: Oxfmt and Oxlint (next; two commits)
+### Step 2: Oxfmt and Oxlint (done: `79c2b71`, `44b1beb`, `bcd9e28`, `88418f8`, `227dcdd`)
+**Setup:**
+- `oxfmt` 0.74 and `oxlint` 1.89 at the root.
+- Root scripts:
+  - `lint`: `oxlint`
+  - `format`: `oxfmt`
+  - `check`: `oxfmt --check && oxlint --deny-warnings`
+
+**Differs from the plan below:**
+- **Oxfmt also skips `.claude/` and `packages/sdk-python/`.**
+  - The Claude app writes `.claude/launch.json` and `settings.json`, so formatting them would churn.
+  - The Python SDK's `pyproject.toml` belongs to Python tooling.
+- **`.oxlintrc.json` turns off three React Compiler rules:** `set-state-in-effect` (8 findings), `refs` (2) and `purity` (1). The views run on Preact without the compiler and use those patterns on purpose:
+  - effects that reset editable state from a new tool result
+  - latest-value refs
+  - `new Date()` as date-fns' reference date
+- **`no-unused-vars` allows `{ [key]: _, ...rest }`.**
+
+**The reformat (`88418f8`) is formatting only:**
+- 92 files: TS/TSX, HTML, CSS, JSON/JSONC.
+- Every build output was rebuilt and compared:
+  - The 22 changed JS files are identical after esbuild minification.
+  - The 6 HTML pages keep the same tags and text. Only whitespace at the edges of `p`, `h2`, `li` and `button` content changed, which doesn't render, and no script reads those elements' text.
+  - In two ui views, a JSX text `"… "` became `"…"` + `" "`.
+- typecheck and all tests passed before the commit.
+
+**Lint fixes (`227dcdd`):**
+- 12 `(x?.y as T).z` changed to `x!.y`, in `management.ts` and 11 test lines. The failure stays the same, and the assumption is now stated.
+- 4 `?? {}` removed from object spreads.
+- One justified `oxlint-disable-next-line` for the listener snapshot in `kit/src/state.ts`.
+
+`git blame` skips `88418f8` once `blame.ignoreRevsFile` is set: `git config blame.ignoreRevsFile .git-blame-ignore-revs`. GitHub reads the file on its own.
+
+**Original plan for this step:**
 - Add `oxfmt` and `oxlint` as root dev dependencies.
 - **`.oxfmtrc.json`:**
   - `printWidth: 140` (decision 2).
@@ -162,8 +202,13 @@ On TS 5.9: `pnpm -r build` 10.3 s, `pnpm -r typecheck` 6.5 s, `pnpm -r test` 9.5
   - an unused `_` parameter in `FormView.tsx`
 - **Done when:** `pnpm check`, build, typecheck and test pass.
 
-### Step 3: measure
-Record the time for `pnpm check` and for a full `pnpm -r build/typecheck/test`.
+### Step 3: measure (done)
+| Command | Time |
+|---|---|
+| `pnpm check` | 0.5 s (`oxfmt --check` 0.4 s on 200 files; `oxlint` 0.2 s on 148 files with 124 rules) |
+| `pnpm typecheck` | 1.9 s |
+| `pnpm build` | 5.5 s |
+| `pnpm test` | 9.4 s |
 
 ---
 
