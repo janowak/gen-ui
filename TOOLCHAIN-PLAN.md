@@ -15,7 +15,7 @@ Vite+ itself was tried on gen-ui and dropped (see "Why not Vite+"). All work hap
   - `88418f8`: the reformat
   - `227dcdd`: lint fixes and `.git-blame-ignore-revs`
 
-  geogeo hasn't started.
+- **geogeo is done** too, in 9 commits on its `master`, not pushed: `2788353` … `b3c3482`. See section 5.
 
   | gen-ui | TS 5.9 | Now |
   |---|---|---|
@@ -213,6 +213,52 @@ On TS 5.9: `pnpm -r build` 10.3 s, `pnpm -r typecheck` 6.5 s, `pnpm -r test` 9.5
 ---
 
 ## 5. geogeo
+
+**Done (2026-10-26).** geogeo now uses the same setup as gen-ui: TS 7, plain Vite 8, Oxlint and Oxfmt.
+
+| geogeo | Before | After |
+|---|---|---|
+| `pnpm -r typecheck` | 11.5 s, failing (34 errors) | 2.7 s, passing |
+| app build | 8.0 s | 2.9–3.3 s |
+| landing build | 3.7 s | 2.2 s |
+| admin build | 2.2 s | 0.7 s |
+| Lint and format | ESLint 3.0 s and Prettier 4.4 s, both failing (1,413 ESLint errors; 229 unformatted files) | `pnpm check` 0.5 s, passing |
+
+| Commit | Step |
+|---|---|
+| `2788353` | g0: `packageManager` pnpm@9.14.2, no `bun.lock` or `workspaces`, `.nvmrc` 24.11.1 |
+| `bc0dac9` | g1: typecheck passes. Includes the combobox fix (`"itemPress"` → `"item-press"`) |
+| `3219615` | g2: TypeScript 7 through a catalog. The root stayed on 5.9 until g4 |
+| `65756a0` | g3: Vite 8 |
+| `73611e8`, `bd8c885` | g4: Oxlint and Oxfmt configs, scripts, ESLint and Prettier removed, `AGENTS.md` |
+| `52b7018` | g4: the reformat |
+| `aa15c42` | g4: `curly` braces (582) |
+| `b3c3482` | g4: the remaining lint fixes and `.git-blame-ignore-revs` |
+
+**g3 (Vite 8):**
+- `vite-plugin-pwa` went to 1.3.0, the smallest version that supports Vite 8, instead of 2.0.0. It needs `workbox-window` and `workbox-build` 7.4.1, which are now explicit.
+- `vite-plugin-mkcert` stays on 1.17.10. It already supports Vite 8, while 2.x needs Node 22.19+.
+- `manualChunks` keeps its function form, which Vite 8 still runs without a warning.
+- CSS grew 6–18%. Lightning CSS now honors the `safari15` target and lowers `oklch()` colors to `lab()` with hex fallbacks; before, Safari 15.0–15.3 got colors it can't render.
+- Rolldown merged a few small chunks, and the PWA precache list went from 85 to 80 entries.
+- Checked:
+  - typecheck and the three builds
+  - dev servers with `NO_TLS`, and the Pages Functions mocks
+  - the HTTPS preview with mkcert certs (your `.env` sets `NO_TLS=1`, so it's off locally by default)
+  - the landing and app production builds in Chrome: the map, trails and Paraglide work, with no console errors
+
+**g4 (Oxlint and Oxfmt):**
+- Same plugins as gen-ui, plus geogeo's own `curly: all` and `^_` unused-variable patterns.
+- Rules that are off:
+  - The React Compiler rules, as in gen-ui.
+  - `react-hooks/exhaustive-deps`. ESLint never loaded it, and its 25 findings need review, because adding dependencies changes when effects re-run.
+- Oxfmt skips `packages/*/public` (vendored emoji CSS) and `project.inlang`.
+- The reformat and the `curly` commit are proven mechanical: every changed file compiles to identical minified output. The one exception is three JSX text runs split differently around a space, which render the same text.
+
+**Not done or not checked:**
+- **`pnpm deploy:dev`.** Deploys build on the VPS, so first check that its Node is 20.19+ or 22.12+ (Vite 8's requirement).
+- **`packages/map`'s own `vite build`.** It fails because `icons.html` points at `src/icons-main.tsx`, which was deleted in `3987bbd`. It was already broken before this work, and no deploy builds `map`.
+- **The `better-auth` peer warnings** (drizzle-orm ≥ 0.41, drizzle-kit ≥ 0.31). They predate this work.
 
 ### Step g0: housekeeping and baseline (one commit)
 - Add `"packageManager": "pnpm@<version the VPS runs>"`.
