@@ -1,9 +1,9 @@
 # Host adapter plan
 
-Every interaction between a genui view and its host goes through one contract, `GenUIHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. Another host (a company's own webchat, say) would be another implementation of the same contract; that isn't planned yet.
+Every interaction between a genui view and its host goes through one contract, `GenUIHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. A company's own chat is the second implementation: `createHost` in `@genui/element`, rendering views in a shadow root (CUSTOM-CHAT-PLAN.md).
 
-**Status (2026-10-24)**
-- Proposed. Iframes only: views keep running in an MCP Apps iframe.
+**Status (2026-10-26)**
+- Proposed. This plan keeps views in MCP Apps iframes. CUSTOM-CHAT-PLAN.md builds on it, and replaces §4's `mount(…, { host })` with `view(component, setup)`.
 - Builds on VIEW-STATE-PLAN.md: its state backends become the adapter's `state` (§3). Its phases 4–6 are being built on `App` right now; finish and commit them first, then move them onto the contract (§6, step 2).
 
 **Principle: the contract is MCP Apps as a JavaScript interface.** Render events, tool calls and results keep their MCP shapes, so the adapter stays thin. The contract adds only what views need on top: capabilities up front, a model bridge with a fallback, and per-render state.
