@@ -6,7 +6,8 @@ import cors from "cors";
 import type { Request, Response } from "express";
 import { registerCompanyTools } from "./tools.js";
 
-const PORT = Number(process.env.PORT ?? 3001);
+// Not PORT: the registry reads that from the same .env files.
+const PORT = Number(process.env.GENUI_DEMO_PORT ?? 3001);
 
 // genui's end-user MCP and a server token for it. By default `genui serve` on this machine, which
 // takes any token. On the registry, the URL picks the environment: /w/<workspace>/mcp for prod,

@@ -14,11 +14,12 @@
     "build": "pnpm build:web && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "test": "vitest run && GENUI_TEST_DB=d1 vitest run",
-    "start": "node --env-file-if-exists=../../.env.local --disable-warning=ExperimentalWarning --import tsx src/main.ts",
+    "start": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx src/main.ts",
+    "seed": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx scripts/seed.ts",
     "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web",
     "auth-schema": "node --disable-warning=ExperimentalWarning --import tsx scripts/auth-schema.ts",
     "dev:worker": "wrangler d1 migrations apply genui --local && wrangler dev",
-    "deploy": "pnpm build:web && wrangler d1 migrations apply genui --remote && wrangler deploy --tag $(git rev-parse --short HEAD)"
+    "deploy": "node ../../scripts/main-checkout-only.ts && pnpm build:web && wrangler d1 migrations apply genui --remote && wrangler deploy --tag $(git rev-parse --short HEAD)"
   },
   "dependencies": {
     "@better-auth/cimd": "1.7.12",

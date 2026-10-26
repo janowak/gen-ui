@@ -7,6 +7,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "dev:setup": "node scripts/dev-setup.ts",
+    "genui": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.worktree packages/cli/dist/cli.js",
     "deploy:site": "pnpm --filter @genui/site run deploy",
     "deploy:registry": "pnpm --filter @genui/registry run deploy"
   },

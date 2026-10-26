@@ -7,6 +7,7 @@ dist
 .genui-cache.json
 .data
 .env.local
+.env.worktree
 dist-web
 .idea/
 .wrangler

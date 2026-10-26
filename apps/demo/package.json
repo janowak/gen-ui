@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node --env-file-if-exists=../../.env.local --import tsx src/main.ts",
-    "dev": "node --env-file-if-exists=../../.env.local --watch --import tsx src/main.ts"
+    "start": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --import tsx src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --watch --import tsx src/main.ts"
   },
   "dependencies": {
     "@genui/sdk": "workspace:*",

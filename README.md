@@ -49,6 +49,15 @@ Flags: `--theme`, `--instructions`, `--port`, `--host`, `--stdio`, `--suffix`, `
 - `GENUI_MCP_URL`: `http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment.
 - `GENUI_MCP_TOKEN`: the server token.
 
+**In a worktree** (several agents, or you, running the stack side by side): run `pnpm dev:setup` in it.
+- **Ports:** it picks a free block for the worktree: registry 40000+10n, then serve, demo, playground and site on the next four ports.
+- **Database and data:** the registry gets its own SQLite file, seeded with a workspace, a password user and `examples/rating`.
+- **Config:** everything that differs goes in `.env.worktree`, which the registry, the demo and `pnpm genui` load after `.env.local`. Claude Code copies `.env.local` into the worktrees it creates (`.worktreeinclude`); setup copies it for `git worktree add`.
+- **Services:** `.claude/launch.json` gets the worktree's ports, so services start by name as usual.
+- **Not in worktrees:** wrangler, tunnels and deploys. `pnpm test` covers D1. The deploy scripts refuse to run outside the main checkout.
+
+In the main checkout, `pnpm dev:setup` only installs and builds. Agents follow `.claude/skills/worktree`.
+
 ## Database and migrations
 
 The registry runs on SQLite either way: a file through `node:sqlite` on Node, or Cloudflare D1 on Workers. Both use the same SQL through one async interface (`apps/registry/src/db.ts`). D1 has no interactive transactions, so writes that belong together run in one atomic `batch`.
