@@ -32,12 +32,7 @@ export function readToolResult(result: ToolResultLike): ToolCallOutcome {
 }
 
 /** Calls a tool on the view's own server. Protocol errors become `isError` outcomes. */
-export async function callTool(
-  app: App,
-  name: string,
-  args: Record<string, unknown>,
-  signal?: AbortSignal,
-): Promise<ToolCallOutcome> {
+export async function callTool(app: App, name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolCallOutcome> {
   try {
     const result = await app.callServerTool({ name, arguments: args }, { signal });
     return readToolResult(result as ToolResultLike);

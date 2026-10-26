@@ -79,7 +79,11 @@ describe("localCatalog", () => {
     await write("flows/contact.workflow.md", workflow("Contact us.", withParam));
     await write("theme.json", { light: { primary: "#4f46e5" } });
     await write("instructions.md", "Help with orders.\n");
-    const catalog = await localCatalog({ dirs: [join(dir, "rating"), join(dir, "flows")], theme: join(dir, "theme.json"), instructions: join(dir, "instructions.md") });
+    const catalog = await localCatalog({
+      dirs: [join(dir, "rating"), join(dir, "flows")],
+      theme: join(dir, "theme.json"),
+      instructions: join(dir, "instructions.md"),
+    });
 
     const snapshot = (await catalog.snapshot("prod"))!;
     expect(snapshot.catalog.components.map((c) => `${c.name}@${c.version}`)).toEqual(["rating@1.0.0"]);
@@ -87,7 +91,9 @@ describe("localCatalog", () => {
     expect(snapshot.catalog.theme).toEqual({ light: { primary: "#4f46e5" } });
     expect(snapshot.catalog.workflows.map((w) => w.name)).toEqual(["contact", "feedback", "signup"]);
     expect(snapshot.catalog.instructions).toBe("Help with orders.");
-    expect(catalog.instructions()).toMatch(/^Help with orders\.\n\n## Workflows[\s\S]*### feedback\nWhen: After an order\.\nSteps for After an order\.$/);
+    expect(catalog.instructions()).toMatch(
+      /^Help with orders\.\n\n## Workflows[\s\S]*### feedback\nWhen: After an order\.\nSteps for After an order\.$/,
+    );
     expect(catalog.problems()).toEqual([]);
   });
 
@@ -96,7 +102,10 @@ describe("localCatalog", () => {
     await write("theme.json", "{ broken");
     const catalog = await localCatalog({ dirs: [join(dir, "rating"), join(dir, "poll")], theme: join(dir, "theme.json") });
     expect(catalog.components().map((c) => c.manifest.name)).toEqual(["rating"]);
-    expect(catalog.problems().map((p) => p.message)).toEqual([expect.stringContaining("no genui.component.json"), expect.stringContaining("invalid JSON")]);
+    expect(catalog.problems().map((p) => p.message)).toEqual([
+      expect.stringContaining("no genui.component.json"),
+      expect.stringContaining("invalid JSON"),
+    ]);
 
     await component("poll", "poll", "0.1.0");
     const reload = await catalog.reload();
@@ -144,7 +153,10 @@ describe("workflow files", () => {
 
   it("reads frontmatter and takes the body as instructions; the name defaults to the file name", () => {
     const workflow = parseWorkflowFile(
-      file("title: New order\ndescription: Create an order.\nparams:\n  - name: customer\n    description: Customer name\n    required: true", "1. Look up.\n2. Show the form."),
+      file(
+        "title: New order\ndescription: Create an order.\nparams:\n  - name: customer\n    description: Customer name\n    required: true",
+        "1. Look up.\n2. Show the form.",
+      ),
       "/repo/create_order.workflow.md",
     );
     expect(workflow).toEqual({

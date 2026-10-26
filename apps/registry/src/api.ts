@@ -1,4 +1,15 @@
-import { Branding, ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_BUNDLE_BYTES, MAX_ENVIRONMENT_INSTRUCTIONS, MAX_ICON_BYTES, SEMVER, Theme, Workflow } from "@genui/format";
+import {
+  Branding,
+  ComponentManifest,
+  DEFAULT_ENVIRONMENT,
+  EnvironmentName,
+  MAX_BUNDLE_BYTES,
+  MAX_ENVIRONMENT_INSTRUCTIONS,
+  MAX_ICON_BYTES,
+  SEMVER,
+  Theme,
+  Workflow,
+} from "@genui/format";
 import { Hono, type Context, type Next } from "hono";
 import { z } from "zod";
 import type { RegistryAppOptions } from "./app.js";
@@ -18,7 +29,11 @@ export const endUserPath = (workspaceId: string, environment: string) =>
 
 const denied = (required: Scope, got: Scope) => `Requires ${required === "admin" ? "an" : "a"} ${required} token (got ${got})`;
 
-const PublishBody = z.object({ manifest: ComponentManifest, html: z.string().min(1), environment: EnvironmentName.default(DEFAULT_ENVIRONMENT) });
+const PublishBody = z.object({
+  manifest: ComponentManifest,
+  html: z.string().min(1),
+  environment: EnvironmentName.default(DEFAULT_ENVIRONMENT),
+});
 const DeployBody = z.object({ version: z.string().regex(SEMVER, "x.y.z") });
 const EnvironmentBody = z.object({ name: EnvironmentName });
 const EnvironmentSettingsBody = z.object({ refreshUrl: z.url().nullable().optional(), builtIns: z.boolean().optional() });
@@ -63,7 +78,8 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   /** Publish tokens can be limited to some environments; admin tokens reach all of them. */
   function allowPublish(c: Context<Env>, environment: string) {
     const allowed = c.get("caller").environments;
-    if (allowed && !allowed.includes(environment)) throw new RegistryError(403, `This token can't publish to ${environment} (allowed: ${allowed.join(", ")})`);
+    if (allowed && !allowed.includes(environment))
+      throw new RegistryError(403, `This token can't publish to ${environment} (allowed: ${allowed.join(", ")})`);
   }
 
   api.get("/components", anyToken(), async (c) => c.json({ components: await store.listComponents(ws(c)) }));
@@ -73,7 +89,8 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   api.post("/components", auth("publish"), async (c) => {
     const { manifest, html, environment } = PublishBody.parse(await body(c));
     allowPublish(c, environment);
-    if (new TextEncoder().encode(html).byteLength > MAX_BUNDLE_BYTES) throw new RegistryError(413, `Bundle exceeds ${MAX_BUNDLE_BYTES} bytes`);
+    if (new TextEncoder().encode(html).byteLength > MAX_BUNDLE_BYTES)
+      throw new RegistryError(413, `Bundle exceeds ${MAX_BUNDLE_BYTES} bytes`);
     if (!/<html[\s>]/i.test(html)) throw new RegistryError(400, "Bundle must be a single-file HTML document");
     const result = await store.publish(ws(c), manifest, html, environment);
     return c.json(result, result.created ? 201 : 200);
@@ -99,7 +116,9 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   // Environments: each serves what was last published or saved to it, at its own end-user MCP.
   const describe = (workspaceId: string, info: EnvironmentInfo) => ({ ...info, path: endUserPath(workspaceId, info.name) });
 
-  api.get("/environments", anyToken(), async (c) => c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }));
+  api.get("/environments", anyToken(), async (c) =>
+    c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }),
+  );
 
   // Admin: the company server's refresh endpoint (@genui/sdk), called after every change to what the environment
   // serves, and whether the built-in render_form and render_chart are on. Settings left out stay as they are.
@@ -205,7 +224,10 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   api.post("/tokens", auth("admin"), async (c) => {
     const { scope, name, environments } = TokenBody.parse(await body(c));
     if (environments && scope !== "publish") throw new RegistryError(400, "Only publish tokens can be limited to environments");
-    return c.json({ token: await store.createToken(ws(c), scope, name, environments), scope, ...(environments ? { environments } : {}) }, 201);
+    return c.json(
+      { token: await store.createToken(ws(c), scope, name, environments), scope, ...(environments ? { environments } : {}) },
+      201,
+    );
   });
 
   api.onError((error, c) => {

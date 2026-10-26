@@ -29,8 +29,20 @@ const hashed = new WeakMap<Assets, ManagementViews>();
 function managementViews(assets: Assets): ManagementViews {
   let views = hashed.get(assets);
   if (!views) {
-    const load = (name: ManagementViewName) => ({ html: assets.views[name], uri: `ui://genui-registry/${name}/${contentHash(assets.views[name])}` });
-    hashed.set(assets, (views = { manager: load("manager"), theme: load("theme"), workflows: load("workflows"), workspace: load("workspace"), instructions: load("instructions") }));
+    const load = (name: ManagementViewName) => ({
+      html: assets.views[name],
+      uri: `ui://genui-registry/${name}/${contentHash(assets.views[name])}`,
+    });
+    hashed.set(
+      assets,
+      (views = {
+        manager: load("manager"),
+        theme: load("theme"),
+        workflows: load("workflows"),
+        workspace: load("workspace"),
+        instructions: load("instructions"),
+      }),
+    );
   }
   return views;
 }
@@ -145,8 +157,14 @@ export async function createRegistryMcp(
     async () => ok(`Showing the ${env} theme controller.`, { role: member.role, environment: env, theme: await store.getTheme(ws, env) }),
   );
 
-  const workflowsState = async (environment = env) => ({ mode: "list", role: member.role, environment, workflows: await store.listWorkflows(ws, environment) });
-  const describeWorkflow = (w: Workflow) => (isCommand(w) ? `- /${w.name} (${w.params.map((p) => p.name).join(", ")}): ${w.description}` : `- ${w.name}: ${w.description}`);
+  const workflowsState = async (environment = env) => ({
+    mode: "list",
+    role: member.role,
+    environment,
+    workflows: await store.listWorkflows(ws, environment),
+  });
+  const describeWorkflow = (w: Workflow) =>
+    isCommand(w) ? `- /${w.name} (${w.params.map((p) => p.name).join(", ")}): ${w.description}` : `- ${w.name}: ${w.description}`;
 
   registerAppTool(
     server,
@@ -161,7 +179,12 @@ export async function createRegistryMcp(
     },
     async () => {
       const state = await workflowsState();
-      return ok(state.workflows.length ? `Workflows in ${env}:\n${state.workflows.map(describeWorkflow).join("\n")}` : `No workflows in ${env} yet.`, state);
+      return ok(
+        state.workflows.length
+          ? `Workflows in ${env}:\n${state.workflows.map(describeWorkflow).join("\n")}`
+          : `No workflows in ${env} yet.`,
+        state,
+      );
     },
   );
 
@@ -179,13 +202,16 @@ export async function createRegistryMcp(
       _meta: { ui: { resourceUri: VIEWS.workflows.uri } },
     },
     async (workflow) =>
-      ok(`Drafted ${isCommand(workflow) ? `/${workflow.name}` : workflow.name} for ${env}. ${isAdmin ? `Click Save to make it live in ${env}.` : "An admin must save it."}`, {
-        mode: "draft",
-        role: member.role,
-        environment: env,
-        workflow,
-        replaces: Boolean(await store.getWorkflow(ws, env, workflow.name)),
-      }),
+      ok(
+        `Drafted ${isCommand(workflow) ? `/${workflow.name}` : workflow.name} for ${env}. ${isAdmin ? `Click Save to make it live in ${env}.` : "An admin must save it."}`,
+        {
+          mode: "draft",
+          role: member.role,
+          environment: env,
+          workflow,
+          replaces: Boolean(await store.getWorkflow(ws, env, workflow.name)),
+        },
+      ),
   );
 
   // How the end-user MCP presents itself in hosts' connector lists.
@@ -202,7 +228,10 @@ export async function createRegistryMcp(
     branding: await brandingState(),
     ...(await store.listMembers(ws)),
     public: await store.isHosted(ws),
-    connectors: (await store.listEnvironments(ws)).map((environment) => ({ environment, url: `${baseURL}${endUserPath(ws, environment)}` })),
+    connectors: (await store.listEnvironments(ws)).map((environment) => ({
+      environment,
+      url: `${baseURL}${endUserPath(ws, environment)}`,
+    })),
     ...(isAdmin ? { tokens: await store.listTokens(ws) } : {}),
     ...extra,
   });
@@ -261,7 +290,12 @@ export async function createRegistryMcp(
     },
     async () => {
       const state = await instructionsState();
-      return ok(state.served ? `What hosts get from ${env} (${state.served.length}/${MAX_INSTRUCTIONS} characters):\n${state.served}` : `No instructions or workflows in ${env} yet.`, state);
+      return ok(
+        state.served
+          ? `What hosts get from ${env} (${state.served.length}/${MAX_INSTRUCTIONS} characters):\n${state.served}`
+          : `No instructions or workflows in ${env} yet.`,
+        state,
+      );
     },
   );
 
@@ -277,7 +311,10 @@ export async function createRegistryMcp(
       _meta: { ui: { resourceUri: VIEWS.instructions.uri } },
     },
     async ({ instructions }) =>
-      ok(`Drafted instructions for ${env}. ${isAdmin ? `Click Save to make them live in ${env}.` : "An admin must save them."}`, await instructionsState(env, instructions)),
+      ok(
+        `Drafted instructions for ${env}. ${isAdmin ? `Click Save to make them live in ${env}.` : "An admin must save them."}`,
+        await instructionsState(env, instructions),
+      ),
   );
 
   // Preview the version the active environment serves of each component, rendered with props the model provides.
@@ -322,7 +359,8 @@ export async function createRegistryMcp(
     "component_remove",
     {
       title: "Stop serving component",
-      description: "Stop serving a component in an environment. Its versions stay published; `genui publish <name>@<version>` serves one again.",
+      description:
+        "Stop serving a component in an environment. Its versions stay published; `genui publish <name>@<version>` serves one again.",
       inputSchema: z.object({ name: z.string(), environment: target }),
       _meta: appOnly(VIEWS.manager.uri),
     },
@@ -330,7 +368,10 @@ export async function createRegistryMcp(
       try {
         await store.removeComponent(ws, name, environment);
         if (environment === env) toolsChanged();
-        return ok(`${environment} no longer serves ${name}. Its connectors drop render_${name} on their next refresh.`, await componentsState(environment));
+        return ok(
+          `${environment} no longer serves ${name}. Its connectors drop render_${name} on their next refresh.`,
+          await componentsState(environment),
+        );
       } catch (error) {
         return failed(error);
       }
@@ -366,7 +407,8 @@ export async function createRegistryMcp(
     "member_invite",
     {
       title: "Invite",
-      description: "Invite someone by email. They join at their next sign-in with that verified email, even if they already have a workspace.",
+      description:
+        "Invite someone by email. They join at their next sign-in with that verified email, even if they already have a workspace.",
       inputSchema: Invite,
       _meta: appOnly(VIEWS.workspace.uri),
     },
@@ -400,14 +442,18 @@ export async function createRegistryMcp(
     "token_create",
     {
       title: "Create token",
-      description: "Create a token: server for @genui/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
+      description:
+        "Create a token: server for @genui/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
       inputSchema: z.object({ name: z.string().min(1).max(80), scope: z.enum(["server", "publish", "admin"]).default("server") }),
       _meta: appOnly(VIEWS.workspace.uri),
     },
     async ({ name, scope }) => {
       const token = await store.createToken(ws, scope, name);
       // The text stays token-free: only the view shows the token.
-      return ok(`Created the ${scope} token "${name}". Copy it now: it isn't shown again.`, await workspaceState({ created: { name, scope, token } }));
+      return ok(
+        `Created the ${scope} token "${name}". Copy it now: it isn't shown again.`,
+        await workspaceState({ created: { name, scope, token } }),
+      );
     },
   );
 
@@ -442,7 +488,9 @@ export async function createRegistryMcp(
     async ({ enabled }) => {
       await store.setHosted(ws, enabled);
       return ok(
-        enabled ? "The end-user MCP is public: anyone with its address can use it." : "The end-user MCP is private: only servers with a server token can use it.",
+        enabled
+          ? "The end-user MCP is public: anyone with its address can use it."
+          : "The end-user MCP is private: only servers with a server token can use it.",
         await workspaceState(),
       );
     },
@@ -453,8 +501,16 @@ export async function createRegistryMcp(
     "branding_save",
     {
       title: "Save branding",
-      description: "Set how the end-user MCP shows in hosts: title, description and website (unset ones are cleared). `icon`: base64 image to replace the icon, null to remove it; leave out to keep it.",
-      inputSchema: z.object({ branding: Branding, icon: z.string().max(Math.ceil(MAX_ICON_BYTES / 3) * 4).nullable().optional() }),
+      description:
+        "Set how the end-user MCP shows in hosts: title, description and website (unset ones are cleared). `icon`: base64 image to replace the icon, null to remove it; leave out to keep it.",
+      inputSchema: z.object({
+        branding: Branding,
+        icon: z
+          .string()
+          .max(Math.ceil(MAX_ICON_BYTES / 3) * 4)
+          .nullable()
+          .optional(),
+      }),
       _meta: appOnly(VIEWS.workspace.uri),
     },
     async ({ branding, icon }) => {
@@ -480,7 +536,10 @@ export async function createRegistryMcp(
     async ({ instructions, environment = env }) => {
       try {
         await store.setInstructions(ws, environment, instructions);
-        return ok(`Saved the instructions in ${environment}. Hosts get them on their next connection.`, { ...(await instructionsState(environment)), saved: true });
+        return ok(`Saved the instructions in ${environment}. Hosts get them on their next connection.`, {
+          ...(await instructionsState(environment)),
+          saved: true,
+        });
       } catch (error) {
         return failed(error);
       }
@@ -544,7 +603,11 @@ export async function createRegistryMcp(
     async ({ theme, environment = env }) => {
       try {
         await store.setTheme(ws, environment, theme);
-        return ok(theme ? `Saved the ${environment} theme.` : `Cleared the ${environment} theme.`, { role: member.role, environment, theme });
+        return ok(theme ? `Saved the ${environment} theme.` : `Cleared the ${environment} theme.`, {
+          role: member.role,
+          environment,
+          theme,
+        });
       } catch (error) {
         return failed(error);
       }

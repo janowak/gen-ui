@@ -41,7 +41,11 @@ const MANAGED = new Set([...HOST_TOKENS.map(([token]) => token), ...CHART_VARS])
  * shadcn defaults (styles.css) → host style variables → workspace theme.
  * Dark mode uses shadcn's `.dark` class.
  */
-export function applyTheme(options: { mode: "light" | "dark"; hostVariables?: Record<string, string | undefined>; workspace?: unknown }): void {
+export function applyTheme(options: {
+  mode: "light" | "dark";
+  hostVariables?: Record<string, string | undefined>;
+  workspace?: unknown;
+}): void {
   const root = document.documentElement;
   root.classList.toggle("dark", options.mode === "dark");
   for (const name of MANAGED) root.style.removeProperty(name);

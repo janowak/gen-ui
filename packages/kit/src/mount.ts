@@ -40,8 +40,10 @@ export function mount<P extends z.ZodObject, T extends string>(
 
   const runtime = createRuntime(app, component, update, options);
   update();
-  app.connect().then(update, (cause: unknown) =>
-    runtime.fail(`Could not connect to the chat host: ${cause instanceof Error ? cause.message : String(cause)}`),
-  );
+  app
+    .connect()
+    .then(update, (cause: unknown) =>
+      runtime.fail(`Could not connect to the chat host: ${cause instanceof Error ? cause.message : String(cause)}`),
+    );
   return runtime.context;
 }

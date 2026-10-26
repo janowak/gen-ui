@@ -57,8 +57,7 @@ themeSelect.onchange = () => (document.body.dataset.theme = themeSelect.value);
 
 // Servers that require OAuth (the registry MCP) trigger the sign-in flow on 401, like Claude's connectors.
 const oauth = new PlaygroundOAuth(SERVER_URL);
-const transport = () =>
-  new StreamableHTTPClientTransport(new URL(SERVER_URL), { authProvider: oauth });
+const transport = () => new StreamableHTTPClientTransport(new URL(SERVER_URL), { authProvider: oauth });
 if (callback) await transport().finishAuth(callback);
 $<HTMLButtonElement>("signout").onclick = () => {
   oauth.signOut();
@@ -143,7 +142,10 @@ async function show(replay: boolean) {
     return {};
   };
   bridge.onmessage = async (params) => {
-    write("→ chat message (sendMessage)", params.content.map((c) => ("text" in c ? c.text : c)));
+    write(
+      "→ chat message (sendMessage)",
+      params.content.map((c) => ("text" in c ? c.text : c)),
+    );
     return {};
   };
   bridge.onrequestdisplaymode = async ({ mode }) => {

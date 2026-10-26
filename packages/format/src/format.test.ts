@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ChartSpec, FormSpec, SubmitResult, Workflow, getPath, inlineSeries, rowsToSeries, serverInstructions, toOptions, workflowMessage } from "./index.js";
+import {
+  ChartSpec,
+  FormSpec,
+  SubmitResult,
+  Workflow,
+  getPath,
+  inlineSeries,
+  rowsToSeries,
+  serverInstructions,
+  toOptions,
+  workflowMessage,
+} from "./index.js";
 
 describe("getPath", () => {
   it("reads nested and indexed paths", () => {
@@ -21,10 +32,17 @@ describe("toOptions", () => {
 
 describe("charts", () => {
   it("maps rows with x and series", () => {
-    const data = rowsToSeries([{ m: "Jan", v: 10 }, { m: "Feb", v: "12" }, { m: "Mar", v: null }], {
-      x: "m",
-      series: [{ path: "v", name: "Revenue" }],
-    });
+    const data = rowsToSeries(
+      [
+        { m: "Jan", v: 10 },
+        { m: "Feb", v: "12" },
+        { m: "Mar", v: null },
+      ],
+      {
+        x: "m",
+        series: [{ path: "v", name: "Revenue" }],
+      },
+    );
     expect(data.categories).toEqual(["Jan", "Feb", "Mar"]);
     expect(data.series[0]).toMatchObject({ name: "Revenue", values: [10, 12, null] });
   });
@@ -63,9 +81,16 @@ describe("workflows", () => {
     title: "Return an order",
     description: "The user wants to return an order.",
     instructions: "Ask for the order, then show a form with the reason and call create_return.",
-    params: [{ name: "order_id", description: "The order number", required: true }, { name: "reason", description: "Why" }],
+    params: [
+      { name: "order_id", description: "The order number", required: true },
+      { name: "reason", description: "Why" },
+    ],
   });
-  const faq = Workflow.parse({ name: "shipping", description: "Questions about shipping.", instructions: "Look up the order with get_order first." });
+  const faq = Workflow.parse({
+    name: "shipping",
+    description: "Questions about shipping.",
+    instructions: "Look up the order with get_order first.",
+  });
 
   it("adds the workflows to the server instructions; full steps only for those without params", () => {
     const text = serverInstructions("Acme support.", [ret, faq])!;

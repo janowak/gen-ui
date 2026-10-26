@@ -4,16 +4,56 @@
     <meta charset="UTF-8" />
     <title>Star rating</title>
     <style>
-      :root { color-scheme: light dark; }
-      html, body { margin: 0; background: transparent; font-family: var(--font-sans, system-ui, sans-serif); color: var(--color-text-primary, #141413); }
-      .card { margin: 1px; padding: 16px; border-radius: 12px; border: 1px solid var(--color-border-primary, #e5e5e5); background: var(--color-background-primary, #fff); }
-      p { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
-      .stars { display: flex; gap: 4px; }
-      button { all: unset; cursor: pointer; font-size: 28px; line-height: 1; color: var(--color-border-primary, #d4d4d4); transition: transform 0.1s; }
-      button:hover { transform: scale(1.1); }
-      button[data-on] { color: var(--genui-primary, #f59e0b); }
-      button:disabled { cursor: default; transform: none; }
-      .status { margin-top: 10px; font-size: 13px; color: var(--color-text-secondary, #737373); min-height: 1em; }
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        font-family: var(--font-sans, system-ui, sans-serif);
+        color: var(--color-text-primary, #141413);
+      }
+      .card {
+        margin: 1px;
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid var(--color-border-primary, #e5e5e5);
+        background: var(--color-background-primary, #fff);
+      }
+      p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .stars {
+        display: flex;
+        gap: 4px;
+      }
+      button {
+        all: unset;
+        cursor: pointer;
+        font-size: 28px;
+        line-height: 1;
+        color: var(--color-border-primary, #d4d4d4);
+        transition: transform 0.1s;
+      }
+      button:hover {
+        transform: scale(1.1);
+      }
+      button[data-on] {
+        color: var(--genui-primary, #f59e0b);
+      }
+      button:disabled {
+        cursor: default;
+        transform: none;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--color-text-secondary, #737373);
+        min-height: 1em;
+      }
     </style>
   </head>
   <body>

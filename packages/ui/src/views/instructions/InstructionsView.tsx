@@ -59,7 +59,10 @@ export function InstructionsView() {
     if (!app || !state) return;
     setBusy(true);
     setMessage(null);
-    const outcome = await callTool(app, "instructions_save", { instructions: state.instructions?.trim() || null, environment: state.environment });
+    const outcome = await callTool(app, "instructions_save", {
+      instructions: state.instructions?.trim() || null,
+      environment: state.environment,
+    });
     setBusy(false);
     const next = parseState(outcome.data);
     if (next) {
@@ -67,7 +70,10 @@ export function InstructionsView() {
       setEdited(false);
     }
     setMessage({ text: outcome.text, error: outcome.isError });
-    if (!outcome.isError) await app.updateModelContext({ content: [{ type: "text", text: `The user saved the instructions: ${outcome.text}` }] }).catch(() => {});
+    if (!outcome.isError)
+      await app
+        .updateModelContext({ content: [{ type: "text", text: `The user saved the instructions: ${outcome.text}` }] })
+        .catch(() => {});
   }
 
   const pending = state.mode === "draft" || edited;
@@ -79,7 +85,9 @@ export function InstructionsView() {
           Instructions <Badge variant="outline">{state.environment}</Badge>
           {pending && !state.saved && <Badge variant="secondary">{state.mode === "draft" ? "draft" : "edited"}</Badge>}
         </CardTitle>
-        <CardDescription>What the AI is told when someone adds this connector. Workflows without params are added after it.</CardDescription>
+        <CardDescription>
+          What the AI is told when someone adds this connector. Workflows without params are added after it.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <section className="flex flex-col gap-2">
@@ -100,7 +108,8 @@ export function InstructionsView() {
           )}
           {isAdmin && (
             <p className="text-xs text-muted-foreground">
-              {(state.instructions ?? "").length} / {MAX_ENVIRONMENT_INSTRUCTIONS}. Hosts add the instructions to every conversation that uses the connector, so keep them short.
+              {(state.instructions ?? "").length} / {MAX_ENVIRONMENT_INSTRUCTIONS}. Hosts add the instructions to every conversation that
+              uses the connector, so keep them short.
             </p>
           )}
         </section>
@@ -114,7 +123,9 @@ export function InstructionsView() {
                 {pending && !state.saved ? ", as last saved" : ""})
               </span>
             </h3>
-            <pre className="max-h-64 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap text-muted-foreground">{state.served}</pre>
+            <pre className="max-h-64 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap text-muted-foreground">
+              {state.served}
+            </pre>
           </section>
         )}
       </CardContent>

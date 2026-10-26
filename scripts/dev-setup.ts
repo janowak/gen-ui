@@ -22,7 +22,8 @@ const run = (command: string, args: string[]) => {
     process.exit(1);
   }
 };
-const readEnv = (path: string): Record<string, string> => (existsSync(path) ? (parseEnv(readFileSync(path, "utf8")) as Record<string, string>) : {});
+const readEnv = (path: string): Record<string, string> =>
+  existsSync(path) ? (parseEnv(readFileSync(path, "utf8")) as Record<string, string>) : {};
 
 const SERVICES = ["registry", "serve", "demo", "playground", "site"] as const;
 type Ports = Record<(typeof SERVICES)[number], number>;
@@ -32,10 +33,16 @@ const slotPorts = (slot: number) => Object.fromEntries(SERVICES.map((service, i)
 const [gitDir, commonDir] = git("rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir").split("\n");
 if (gitDir === commonDir) {
   // Nothing to override here; the file only stops Node's "not found" notice on every start.
-  if (!existsSync(join(root, ".env.worktree"))) writeFileSync(join(root, ".env.worktree"), "# Main checkout: nothing overrides .env.local. In a worktree, pnpm dev:setup writes its ports, URLs and tokens here.\n");
+  if (!existsSync(join(root, ".env.worktree")))
+    writeFileSync(
+      join(root, ".env.worktree"),
+      "# Main checkout: nothing overrides .env.local. In a worktree, pnpm dev:setup writes its ports, URLs and tokens here.\n",
+    );
   run("pnpm", ["install"]);
   run("pnpm", ["build"]);
-  console.log("\nMain checkout ready: start services from .claude/launch.json (registry 4000, serve 4100, demo 3001, playground 5173, site 5180).");
+  console.log(
+    "\nMain checkout ready: start services from .claude/launch.json (registry 4000, serve 4100, demo 3001, playground 5173, site 5180).",
+  );
   process.exit(0);
 }
 
@@ -119,7 +126,12 @@ const vite = (filter: string, port: number) => pnpm(filter, "exec", "vite", "--p
 const launch = {
   version: "0.0.1",
   configurations: [
-    { name: "serve", runtimeExecutable: "node", runtimeArgs: ["packages/cli/dist/cli.js", "serve", "examples/rating", "--port", String(ports.serve)], port: ports.serve },
+    {
+      name: "serve",
+      runtimeExecutable: "node",
+      runtimeArgs: ["packages/cli/dist/cli.js", "serve", "examples/rating", "--port", String(ports.serve)],
+      port: ports.serve,
+    },
     { name: "demo", ...pnpm("@genui/demo", "start"), port: ports.demo },
     { name: "playground", ...vite("@genui/playground", ports.playground), port: ports.playground },
     { name: "registry", ...pnpm("@genui/registry", "start"), port: ports.registry },
@@ -133,7 +145,11 @@ run("pnpm", ["install"]);
 run("pnpm", ["build"]);
 
 console.log("\n$ pnpm --filter @genui/registry run seed");
-const seeded = execFileSync("pnpm", ["--filter", "@genui/registry", "run", "seed"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+const seeded = execFileSync("pnpm", ["--filter", "@genui/registry", "run", "seed"], {
+  cwd: root,
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "inherit"],
+});
 Object.assign(values, JSON.parse(seeded.trim().split("\n").at(-1)!) as Record<string, string>);
 writeEnv();
 

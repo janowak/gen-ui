@@ -46,7 +46,11 @@ export type MetadataFetch = CimdOptions["fetchClientMetadataResource"];
 /** Settings from environment variables: `process.env` on Node, the Worker's env (vars and secrets) on Cloudflare. */
 export function authConfigFromEnv(env: Record<string, string | undefined>): AuthConfig {
   const pair = (id?: string, secret?: string) => (id && secret ? { clientId: id, clientSecret: secret } : undefined);
-  const emails = (list?: string) => (list ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const emails = (list?: string) =>
+    (list ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
   const secret = env.GENUI_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
   if (!secret) console.warn("[genui] GENUI_AUTH_SECRET is not set; using a random secret (sessions reset on restart).");
   return {
@@ -59,7 +63,12 @@ export function authConfigFromEnv(env: Record<string, string | undefined>): Auth
     google: pair(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
     oidc:
       env.GENUI_OIDC_ISSUER && env.GENUI_OIDC_CLIENT_ID && env.GENUI_OIDC_CLIENT_SECRET
-        ? { name: env.GENUI_OIDC_NAME ?? "SSO", issuer: env.GENUI_OIDC_ISSUER.replace(/\/$/, ""), clientId: env.GENUI_OIDC_CLIENT_ID, clientSecret: env.GENUI_OIDC_CLIENT_SECRET }
+        ? {
+            name: env.GENUI_OIDC_NAME ?? "SSO",
+            issuer: env.GENUI_OIDC_ISSUER.replace(/\/$/, ""),
+            clientId: env.GENUI_OIDC_CLIENT_ID,
+            clientSecret: env.GENUI_OIDC_CLIENT_SECRET,
+          }
         : undefined,
     password: env.GENUI_PASSWORD_LOGIN === "true",
     dynamicRegistration: env.GENUI_ALLOW_DCR === "true",

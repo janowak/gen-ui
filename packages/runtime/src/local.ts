@@ -1,6 +1,15 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { ComponentManifest, MAX_BUNDLE_BYTES, MAX_ENVIRONMENT_INSTRUCTIONS, MAX_INSTRUCTIONS, serverInstructions, Theme, Workflow, type Catalog } from "@genui/format";
+import {
+  ComponentManifest,
+  MAX_BUNDLE_BYTES,
+  MAX_ENVIRONMENT_INSTRUCTIONS,
+  MAX_INSTRUCTIONS,
+  serverInstructions,
+  Theme,
+  Workflow,
+  type Catalog,
+} from "@genui/format";
 import { parse as parseYaml } from "yaml";
 import type { z } from "zod";
 import type { CatalogSource, Snapshot } from "./runtime.js";
@@ -163,7 +172,12 @@ interface State {
 
 /** What's served, without paths or HTML, so a rebuild with the same output doesn't count as a change. */
 const signature = (state: State) =>
-  JSON.stringify({ components: state.components.map((c) => [c.manifest, c.hash]), theme: state.theme, instructions: state.instructions, workflows: state.workflows });
+  JSON.stringify({
+    components: state.components.map((c) => [c.manifest, c.hash]),
+    theme: state.theme,
+    instructions: state.instructions,
+    workflows: state.workflows,
+  });
 
 async function load(options: LocalCatalogOptions): Promise<State> {
   const problems: Problem[] = [];
@@ -174,7 +188,8 @@ async function load(options: LocalCatalogOptions): Promise<State> {
     try {
       for (const { workflow, path } of await readWorkflowDir(dir)) {
         hasWorkflows = true;
-        if (workflows.some((w) => w.name === workflow.name)) problems.push({ path, message: `workflow "${workflow.name}" is defined twice; skipped` });
+        if (workflows.some((w) => w.name === workflow.name))
+          problems.push({ path, message: `workflow "${workflow.name}" is defined twice; skipped` });
         else workflows.push(workflow);
       }
     } catch (cause) {
@@ -209,12 +224,18 @@ async function load(options: LocalCatalogOptions): Promise<State> {
     const text = await readFile(options.instructions, "utf8").catch(() => undefined);
     if (text === undefined) problems.push({ path: resolve(options.instructions), message: `${options.instructions} not found` });
     else if (text.trim().length > MAX_ENVIRONMENT_INSTRUCTIONS)
-      problems.push({ path: resolve(options.instructions), message: `${options.instructions} is over ${MAX_ENVIRONMENT_INSTRUCTIONS} characters; the registry rejects it` });
+      problems.push({
+        path: resolve(options.instructions),
+        message: `${options.instructions} is over ${MAX_ENVIRONMENT_INSTRUCTIONS} characters; the registry rejects it`,
+      });
     instructions = text?.trim() || null;
   }
   const length = serverInstructions(instructions, workflows)?.length ?? 0;
   if (length > MAX_INSTRUCTIONS) {
-    problems.push({ path: resolve(options.instructions ?? "."), message: `the server instructions are ${length} characters; the registry allows ${MAX_INSTRUCTIONS}. Shorten them or give workflows params` });
+    problems.push({
+      path: resolve(options.instructions ?? "."),
+      message: `the server instructions are ${length} characters; the registry allows ${MAX_INSTRUCTIONS}. Shorten them or give workflows params`,
+    });
   }
 
   workflows.sort((a, b) => a.name.localeCompare(b.name));
@@ -227,11 +248,14 @@ function describe(before: State, after: State): string[] {
   for (const c of after.components) {
     const old = before.components.find((b) => b.manifest.name === c.manifest.name);
     if (!old) lines.push(`${c.manifest.name}@${c.manifest.version} added (${c.hash})`);
-    else if (old.hash !== c.hash || JSON.stringify(old.manifest) !== JSON.stringify(c.manifest)) lines.push(`${c.manifest.name}@${c.manifest.version} reloaded (${c.hash})`);
+    else if (old.hash !== c.hash || JSON.stringify(old.manifest) !== JSON.stringify(c.manifest))
+      lines.push(`${c.manifest.name}@${c.manifest.version} reloaded (${c.hash})`);
   }
-  for (const b of before.components) if (!after.components.some((c) => c.manifest.name === b.manifest.name)) lines.push(`${b.manifest.name} removed`);
+  for (const b of before.components)
+    if (!after.components.some((c) => c.manifest.name === b.manifest.name)) lines.push(`${b.manifest.name} removed`);
   if (JSON.stringify(before.theme) !== JSON.stringify(after.theme)) lines.push("theme reloaded");
-  if (JSON.stringify(before.workflows) !== JSON.stringify(after.workflows)) lines.push(`workflows reloaded (${after.workflows.map((w) => w.name).join(", ") || "none"})`);
+  if (JSON.stringify(before.workflows) !== JSON.stringify(after.workflows))
+    lines.push(`workflows reloaded (${after.workflows.map((w) => w.name).join(", ") || "none"})`);
   if (before.instructions !== after.instructions) lines.push("instructions reloaded");
   for (const p of after.problems) {
     if (!before.problems.some((b) => b.path === p.path && b.message === p.message)) lines.push(`problem: ${p.message}`);

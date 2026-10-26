@@ -46,7 +46,14 @@ describe("genui() Vite plugin", () => {
     expect(html).toContain("fixture_badge");
 
     const manifest = JSON.parse(await readFile(join(outDir, "genui.component.json"), "utf8"));
-    expect(manifest).toMatchObject({ name: "fixture_badge", version: "2.1.0", title: "Badge", tools: ["lookup"], contract: 1, bundle: "index.html" });
+    expect(manifest).toMatchObject({
+      name: "fixture_badge",
+      version: "2.1.0",
+      title: "Badge",
+      tools: ["lookup"],
+      contract: 1,
+      bundle: "index.html",
+    });
     expect(manifest.props.required).toEqual(["label"]);
   }, 60_000);
 });

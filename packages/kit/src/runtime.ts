@@ -229,8 +229,7 @@ export function createRuntime<P extends z.ZodObject, T extends string>(
       status = "error";
       error = readToolResult(`render_${component.name}`, result).text || "The server could not render this component.";
     }
-    blocked =
-      meta[PREVIEW_META_KEY] === true ? "Tools don't run in previews." : result.isError === true ? "The render failed." : undefined;
+    blocked = meta[PREVIEW_META_KEY] === true ? "Tools don't run in previews." : result.isError === true ? "The render failed." : undefined;
     settle();
     onChange();
   };

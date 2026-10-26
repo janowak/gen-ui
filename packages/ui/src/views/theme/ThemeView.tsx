@@ -36,7 +36,19 @@ const SAMPLE = {
 /** A hex value for <input type="color">, which only accepts #rrggbb. */
 const asHex = (value: string | undefined) => (value && /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000");
 
-function ColorField({ id, label, value, disabled, onChange }: { id: string; label: string; value?: string; disabled: boolean; onChange: (v: string | undefined) => void }) {
+function ColorField({
+  id,
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value?: string;
+  disabled: boolean;
+  onChange: (v: string | undefined) => void;
+}) {
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
@@ -49,7 +61,13 @@ function ColorField({ id, label, value, disabled, onChange }: { id: string; labe
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
         />
-        <Input id={id} value={value ?? ""} placeholder="host default" disabled={disabled} onChange={(e) => onChange(e.target.value || undefined)} />
+        <Input
+          id={id}
+          value={value ?? ""}
+          placeholder="host default"
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        />
       </div>
     </Field>
   );
@@ -108,7 +126,9 @@ export function ThemeView() {
     setMessage({ text: outcome.text, error: outcome.isError });
     if (!outcome.isError) {
       setSaved(draft);
-      await app.updateModelContext({ content: [{ type: "text", text: `The user saved the ${environment} theme: ${JSON.stringify(draft)}` }] }).catch(() => {});
+      await app
+        .updateModelContext({ content: [{ type: "text", text: `The user saved the ${environment} theme: ${JSON.stringify(draft)}` }] })
+        .catch(() => {});
     }
   }
 
@@ -119,10 +139,17 @@ export function ThemeView() {
           <CardTitle className="flex items-center gap-2">
             Theme <Badge variant="outline">{environment}</Badge>
           </CardTitle>
-          <CardDescription>{canEdit ? "Unset values follow the host (Claude, ChatGPT…)." : "Read-only: ask an admin to change the theme."}</CardDescription>
+          <CardDescription>
+            {canEdit ? "Unset values follow the host (Claude, ChatGPT…)." : "Read-only: ask an admin to change the theme."}
+          </CardDescription>
         </div>
         {canFullscreen && app && (
-          <Button size="icon-sm" variant="ghost" aria-label="Expand" onClick={() => app.requestDisplayMode({ mode: "fullscreen" }).catch(() => {})}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Expand"
+            onClick={() => app.requestDisplayMode({ mode: "fullscreen" }).catch(() => {})}
+          >
             <Maximize2Icon />
           </Button>
         )}
@@ -136,7 +163,14 @@ export function ThemeView() {
             </TabsList>
           </Tabs>
           {TOKENS.map(({ key, label }) => (
-            <ColorField key={`${mode}-${key}`} id={`${mode}-${key}`} label={label} value={tokens[key]} disabled={!canEdit} onChange={(v) => setToken(key, v)} />
+            <ColorField
+              key={`${mode}-${key}`}
+              id={`${mode}-${key}`}
+              label={label}
+              value={tokens[key]}
+              disabled={!canEdit}
+              onChange={(v) => setToken(key, v)}
+            />
           ))}
           <Field>
             <FieldLabel>Chart palette</FieldLabel>

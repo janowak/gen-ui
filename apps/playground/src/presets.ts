@@ -54,7 +54,15 @@ export const PRESETS: Record<string, { tool: string; args: Record<string, unknow
             { id: "docs", label: "Docs" },
           ],
         },
-        { name: "plan", label: "Plan", type: "radio", options: [{ id: "free", label: "Free" }, { id: "pro", label: "Pro" }] },
+        {
+          name: "plan",
+          label: "Plan",
+          type: "radio",
+          options: [
+            { id: "free", label: "Free" },
+            { id: "pro", label: "Pro" },
+          ],
+        },
         { name: "contact", label: "You may contact me", type: "switch" },
         { name: "terms", label: "I accept the terms", type: "checkbox", required: true },
       ],
@@ -91,7 +99,11 @@ export const PRESETS: Record<string, { tool: string; args: Record<string, unknow
   },
   "Plan mix (inline series, donut)": {
     tool: "render_chart",
-    args: { type: "donut", title: "Accounts by plan", data: { categories: ["Free", "Pro", "Team", "Enterprise"], series: [{ name: "Accounts", values: [620, 210, 70, 12] }] } },
+    args: {
+      type: "donut",
+      title: "Accounts by plan",
+      data: { categories: ["Free", "Pro", "Team", "Enterprise"], series: [{ name: "Accounts", values: [620, 210, 70, 12] }] },
+    },
   },
   "Rating (registry component)": {
     tool: "render_rating",

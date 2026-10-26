@@ -19,11 +19,13 @@
   "workers_dev": false,
   "routes": [{ "pattern": "api.app-mcp.com", "custom_domain": true }],
   // Created with: wrangler d1 create genui --jurisdiction eu (data stays in the EU)
-  "d1_databases": [{ "binding": "DB", "database_name": "genui", "database_id": "06af2a5c-2d2d-48e1-9393-37b3854eb81d", "migrations_dir": "migrations" }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "genui", "database_id": "06af2a5c-2d2d-48e1-9393-37b3854eb81d", "migrations_dir": "migrations" },
+  ],
   // Secrets (wrangler secret put): GENUI_AUTH_SECRET, GOOGLE_CLIENT_ID and _SECRET, GITHUB_CLIENT_ID and _SECRET.
   // Local development reads .dev.vars instead (see .dev.vars.example).
   "vars": {
     "GENUI_MODE": "hosted",
     "GENUI_PUBLIC_URL": "https://api.app-mcp.com",
-  }
+  },
 }

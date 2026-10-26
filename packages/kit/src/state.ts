@@ -42,7 +42,9 @@ export const MAX_SAVED_BYTES = 64 * 1024;
 
 function isSaved(value: unknown): value is Saved {
   const saved = value as Saved | null | undefined;
-  return typeof saved === "object" && saved !== null && typeof saved.at === "number" && typeof saved.values === "object" && saved.values !== null;
+  return (
+    typeof saved === "object" && saved !== null && typeof saved.at === "number" && typeof saved.values === "object" && saved.values !== null
+  );
 }
 
 /** `localStorage` (or any `Storage`): one entry per render, `genui:<scope>:<render id>`. */
@@ -209,7 +211,9 @@ export function createViewStore({ backend = defaultBackend(), debounceMs = 300 }
     }
     writing = writing
       .then(() => backend.save(key, saved))
-      .catch((error: unknown) => console.warn(`[genui] could not save view state: ${error instanceof Error ? error.message : String(error)}`));
+      .catch((error: unknown) =>
+        console.warn(`[genui] could not save view state: ${error instanceof Error ? error.message : String(error)}`),
+      );
     return writing;
   }
 

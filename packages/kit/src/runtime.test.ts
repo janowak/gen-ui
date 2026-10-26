@@ -129,8 +129,9 @@ describe("component runtime", () => {
 
   it("keeps state per render id, so a re-rendered message comes back as left", async () => {
     const storage = memoryStorage();
-    const stars = (ctx: { useState: (initial: number, key?: string) => [number, (n: number) => void, { restored: boolean; persistence: string }] }) =>
-      ctx.useState(0, "stars");
+    const stars = (ctx: {
+      useState: (initial: number, key?: string) => [number, (n: number) => void, { restored: boolean; persistence: string }];
+    }) => ctx.useState(0, "stars");
 
     const first = await host({ storage });
     await first.bridge.sendToolInput({ arguments: { question: "Q" } });

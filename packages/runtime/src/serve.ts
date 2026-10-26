@@ -82,7 +82,11 @@ export function createLocalMcp(options: LocalMcpOptions) {
       {
         ...(instructions ? { instructions } : {}),
         // A remount removes and adds every tool: one notification per kind, not one per tool.
-        debouncedNotificationMethods: ["notifications/tools/list_changed", "notifications/resources/list_changed", "notifications/prompts/list_changed"],
+        debouncedNotificationMethods: [
+          "notifications/tools/list_changed",
+          "notifications/resources/list_changed",
+          "notifications/prompts/list_changed",
+        ],
       },
     );
     return { server, mounted: await mount(server, dataTools), dataTools };
@@ -118,7 +122,10 @@ export function createLocalMcp(options: LocalMcpOptions) {
     /** HTTP: the MCP at /mcp and its revision at /revision (what @genui/sdk checks). */
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
-      if (!options.anyHost && !LOCAL_HOSTS.has(url.hostname)) return withCors(Response.json({ error: `Host ${url.host} is not allowed; start with --host to serve other names.` }, { status: 403 }));
+      if (!options.anyHost && !LOCAL_HOSTS.has(url.hostname))
+        return withCors(
+          Response.json({ error: `Host ${url.host} is not allowed; start with --host to serve other names.` }, { status: 403 }),
+        );
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
       if (url.pathname === "/mcp") return withCors(await handleMcp(request));
       if (url.pathname === "/revision" && request.method === "GET") {
@@ -160,7 +167,11 @@ export type LocalMcp = ReturnType<typeof createLocalMcp>;
  * Calls `onChange` (debounced) when a watched path changes. Component directories are watched
  * whole, without node_modules; files through their directory, since builds replace them.
  */
-export function watchPaths(paths: { dirs: string[]; files: string[] }, onChange: () => void, onError: (message: string) => void): () => void {
+export function watchPaths(
+  paths: { dirs: string[]; files: string[] },
+  onChange: () => void,
+  onError: (message: string) => void,
+): () => void {
   const watchers: FSWatcher[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
   const changed = () => {
@@ -224,21 +235,32 @@ export async function startServe(options: ServeOptions): Promise<Served> {
 
   const catalog = await localCatalog(options);
   for (const problem of catalog.problems()) log(`problem: ${problem.message}`);
-  const mcp = createLocalMcp({ catalog, views: await loadViews(), suffix: options.suffix, anyHost: options.host !== undefined && options.host !== "127.0.0.1" && options.host !== "localhost" });
+  const mcp = createLocalMcp({
+    catalog,
+    views: await loadViews(),
+    suffix: options.suffix,
+    anyHost: options.host !== undefined && options.host !== "127.0.0.1" && options.host !== "localhost",
+  });
   closers.push(() => mcp.close());
 
   let reloading = Promise.resolve();
   const reload = () => {
     reloading = reloading.then(async () => {
       const { changed, lines } = await catalog.reload();
-      for (const line of lines) log(line.startsWith("instructions") || line.startsWith("workflows") ? `${line}; instructions update when a client reconnects` : line);
+      for (const line of lines)
+        log(
+          line.startsWith("instructions") || line.startsWith("workflows") ? `${line}; instructions update when a client reconnects` : line,
+        );
       if (!changed) return;
       await mcp.changed();
       if (options.refreshUrl) {
         const body = JSON.stringify({ type: "genui.refresh", environment: options.suffix ?? "prod", revision: catalog.revision() });
-        await fetch(options.refreshUrl, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(3000) }).catch((error: Error) =>
-          log(`refresh URL failed: ${error.message}`),
-        );
+        await fetch(options.refreshUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+          signal: AbortSignal.timeout(3000),
+        }).catch((error: Error) => log(`refresh URL failed: ${error.message}`));
       }
     });
   };

@@ -23,7 +23,12 @@ async function connect() {
 const form = {
   title: "New order",
   fields: [
-    { name: "customer", label: "Customer", type: "resource_select", source: { toolName: "search_customers", searchParam: "query", labelPath: "name" } },
+    {
+      name: "customer",
+      label: "Customer",
+      type: "resource_select",
+      source: { toolName: "search_customers", searchParam: "query", labelPath: "name" },
+    },
     { name: "notes", label: "Notes", type: "textarea" },
   ],
   submit: { toolName: "create_order" },
@@ -86,7 +91,8 @@ describe("mountGenUI", () => {
       ["render_chart_staging", "Show chart (staging)"],
     ]);
     // The views are the same bundles, so their ui:// URIs match prod's.
-    const prodUri = ((await client.listTools()).tools.find((t) => t.name === "render_form")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+    const prodUri = ((await client.listTools()).tools.find((t) => t.name === "render_form")?._meta as { ui: { resourceUri: string } }).ui
+      .resourceUri;
     expect((tools[0]?._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe(prodUri);
   });
 
@@ -113,10 +119,16 @@ describe("mountGenUI", () => {
     expect(rejected.isError).toBe(true);
     expect((rejected.content as { text: string }[])[0]?.text).toContain('field "customer" (search_customers), submit (create_order)');
 
-    const sourced = await renderOnly.callTool({ name: "render_chart", arguments: { type: "line", data: { source: { toolName: "get_revenue" } } } });
+    const sourced = await renderOnly.callTool({
+      name: "render_chart",
+      arguments: { type: "line", data: { source: { toolName: "get_revenue" } } },
+    });
     expect(sourced.isError).toBe(true);
 
-    const inline = await renderOnly.callTool({ name: "render_form", arguments: { fields: [{ name: "notes", label: "Notes", type: "textarea" }] } });
+    const inline = await renderOnly.callTool({
+      name: "render_form",
+      arguments: { fields: [{ name: "notes", label: "Notes", type: "textarea" }] },
+    });
     expect(inline.isError).toBeFalsy();
   });
 });
@@ -134,7 +146,10 @@ describe("workflows", () => {
   };
   const feedback = { name: "feedback", description: "After an order.", instructions: "Ask for a rating with render_rating.", params: [] };
   const source = (): CatalogSource => ({
-    snapshot: async () => ({ catalog: { environment: "prod", theme: null, instructions: null, workflows: [createOrder, feedback], components: [] }, bundles: {} }),
+    snapshot: async () => ({
+      catalog: { environment: "prod", theme: null, instructions: null, workflows: [createOrder, feedback], components: [] },
+      bundles: {},
+    }),
   });
 
   async function connectWith(options: { environment?: string; preview?: boolean } = {}) {
@@ -166,7 +181,9 @@ describe("workflows", () => {
   });
 
   it("suffixes command names outside prod and leaves them out of previews", async () => {
-    expect((await (await connectWith({ environment: "staging" })).listPrompts()).prompts.map((p) => [p.name, p.title])).toEqual([["create_order_staging", "New order (staging)"]]);
+    expect((await (await connectWith({ environment: "staging" })).listPrompts()).prompts.map((p) => [p.name, p.title])).toEqual([
+      ["create_order_staging", "New order (staging)"],
+    ]);
     const preview = await connectWith({ preview: true });
     expect(preview.getServerCapabilities()?.prompts).toBeUndefined();
   });
@@ -183,7 +200,13 @@ describe("components", () => {
   const bundles: Record<string, string> = { aaaa: "<p>rating 1.0.0</p>", bbbb: "<p>rating 1.1.0</p>" };
   const source = (hash: string, version: string): CatalogSource => ({
     snapshot: async () => ({
-      catalog: { environment: "prod", theme: null, instructions: null, workflows: [], components: [{ name: "rating", version, hash, manifest: manifest(version) }] },
+      catalog: {
+        environment: "prod",
+        theme: null,
+        instructions: null,
+        workflows: [],
+        components: [{ name: "rating", version, hash, manifest: manifest(version) }],
+      },
       bundles: { [hash]: bundles[hash]! },
     }),
     bundle: async (h) => bundles[h],

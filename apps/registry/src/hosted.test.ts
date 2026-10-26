@@ -27,7 +27,12 @@ const addItem = {
   instructions: "Show a form with the name and submit to create_item.",
   params: [{ name: "name", description: "Item name", required: false }],
 };
-const feedback = { name: "feedback", description: "After an item is added.", instructions: "Ask for a rating with render_rating.", params: [] };
+const feedback = {
+  name: "feedback",
+  description: "After an item is added.",
+  instructions: "Ask for a rating with render_rating.",
+  params: [],
+};
 
 async function mcpClient(path: string, headers?: Record<string, string>): Promise<Client> {
   const client = new Client({ name: "test-host", version: "1.0.0" });
@@ -141,7 +146,11 @@ describe("hosted end-user MCP", () => {
   });
 
   it("answers 404 for an environment that doesn't exist", async () => {
-    const res = await fetch(`${base}/w/${acme}/stagng/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const res = await fetch(`${base}/w/${acme}/stagng/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'No environment "stagng" in this workspace.' });
   });
@@ -154,7 +163,10 @@ describe("hosted end-user MCP", () => {
     });
     expect(withSubmit.isError).toBe(true);
 
-    const inline = await client.callTool({ name: "render_form", arguments: { fields: [{ name: "email", label: "Email", type: "email" }] } });
+    const inline = await client.callTool({
+      name: "render_form",
+      arguments: { fields: [{ name: "email", label: "Email", type: "email" }] },
+    });
     expect(inline.isError).toBeFalsy();
   });
 
@@ -192,7 +204,9 @@ describe("upstream for a company's own server (server token)", () => {
     const solo = await store.createWorkspace("Solo");
     await store.setHosted(solo, false);
     await store.publish(solo, component("poll", "1.0.0"), html("poll v1"));
-    expect((await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(404);
+    expect(
+      (await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status,
+    ).toBe(404);
 
     const client = await mcpClient(`/w/${solo}/mcp`, bearer(await store.createToken(solo, "server", "solo-mcp")));
     expect(client.getServerVersion()?.name).toBe("Solo");
@@ -205,13 +219,17 @@ describe("upstream for a company's own server (server token)", () => {
     expect(await resourceText(await mcpClient(`/w/${acme}/prod/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
     expect(await resourceText(await mcpClient(`/w/${acme}/staging/mcp`, bearer(token)), "render_rating_staging")).toBe(html("rating v1.1"));
     // The old channel header does nothing.
-    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, { ...bearer(token), "x-genui-channel": "staging" }), "render_rating")).toBe(html("rating v1"));
+    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, { ...bearer(token), "x-genui-channel": "staging" }), "render_rating")).toBe(
+      html("rating v1"),
+    );
   });
 
   it("keeps every component version readable for old messages", async () => {
     const token = await store.createToken(acme, "server", "versions");
     const staging = await mcpClient(`/w/${acme}/staging/mcp`, bearer(token));
-    const stagingUri = ((await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+    const stagingUri = (
+      (await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")?._meta as { ui: { resourceUri: string } }
+    ).ui.resourceUri;
 
     // Prod serves 1.0.0, yet still reads the 1.1.0 bundle by its hash.
     const prod = await mcpClient(`/w/${acme}/mcp`, bearer(token));
@@ -234,7 +252,10 @@ describe("branding and instructions", () => {
   const call = (method: string, path: string, body?: unknown) =>
     fetch(`${base}/v1${path}`, {
       method,
-      headers: { authorization: `Bearer ${admin}`, "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
+      headers: {
+        authorization: `Bearer ${admin}`,
+        "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json",
+      },
       body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
     });
   const instructions = "Acme handles returns. Look the order up with get_order first.";
@@ -246,13 +267,21 @@ describe("branding and instructions", () => {
   });
 
   it("presents the workspace's title, description, website and icon to hosts", async () => {
-    expect((await call("PUT", "/branding", { title: "Acme Support", description: "Orders and returns.", websiteUrl: "https://acme.test" })).status).toBe(200);
+    expect(
+      (await call("PUT", "/branding", { title: "Acme Support", description: "Orders and returns.", websiteUrl: "https://acme.test" }))
+        .status,
+    ).toBe(200);
     expect((await call("PUT", "/branding/icon", new TextEncoder().encode("not an image"))).status).toBe(400);
     const saved = (await (await call("PUT", "/branding/icon", png)).json()) as { icon: { type: string; hash: string } };
     expect(saved.icon.type).toBe("image/png");
 
     const info = (await mcpClient(`/w/${acme}/mcp`)).getServerVersion();
-    expect(info).toMatchObject({ name: "Acme", title: "Acme Support", description: "Orders and returns.", websiteUrl: "https://acme.test" });
+    expect(info).toMatchObject({
+      name: "Acme",
+      title: "Acme Support",
+      description: "Orders and returns.",
+      websiteUrl: "https://acme.test",
+    });
     expect(info?.icons).toEqual([{ src: `${base}/w/${acme}/icon?v=${saved.icon.hash}`, mimeType: "image/png" }]);
     expect((await mcpClient(`/w/${acme}/staging/mcp`)).getServerVersion()?.title).toBe("Acme Support (staging)");
 

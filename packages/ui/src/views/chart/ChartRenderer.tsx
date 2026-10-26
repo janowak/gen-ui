@@ -18,7 +18,12 @@ export function formatValue(value: number, format?: ValueFormat, unit?: string, 
   const notation = compact ? "compact" : "standard";
   if (format === "currency") {
     try {
-      return new Intl.NumberFormat(undefined, { style: "currency", currency: unit ?? "USD", notation, maximumFractionDigits: compact ? 1 : 2 }).format(value);
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: unit ?? "USD",
+        notation,
+        maximumFractionDigits: compact ? 1 : 2,
+      }).format(value);
     } catch {
       return `${value} ${unit ?? ""}`.trim();
     }
@@ -84,7 +89,14 @@ export function ChartRenderer({ type, data, stacked, horizontal }: Props) {
           {tooltip}
           {legend}
           {data.series.map((s) => (
-            <Bar key={s.key} dataKey={s.key} fill={`var(--color-${s.key})`} stackId={stackId} radius={stacked ? 0 : 4} isAnimationActive={false} />
+            <Bar
+              key={s.key}
+              dataKey={s.key}
+              fill={`var(--color-${s.key})`}
+              stackId={stackId}
+              radius={stacked ? 0 : 4}
+              isAnimationActive={false}
+            />
           ))}
         </BarChart>
       </ChartContainer>
@@ -126,7 +138,15 @@ export function ChartRenderer({ type, data, stacked, horizontal }: Props) {
         {tooltip}
         {legend}
         {data.series.map((s) => (
-          <Line key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line
+            key={s.key}
+            dataKey={s.key}
+            type="monotone"
+            stroke={`var(--color-${s.key})`}
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
         ))}
       </LineChart>
     </ChartContainer>

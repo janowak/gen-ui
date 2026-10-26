@@ -14,7 +14,9 @@ const PORT = Number(process.env.GENUI_DEMO_PORT ?? 3001);
 // /w/<workspace>/<environment>/mcp for the others.
 const genuiUrl = process.env.GENUI_MCP_URL ?? "http://localhost:4100/mcp";
 const genui = connectGenUI({ url: genuiUrl, token: process.env.GENUI_MCP_TOKEN ?? "local", refreshSeconds: 10 });
-console.log(`genui: ${genuiUrl}${process.env.GENUI_MCP_URL ? "" : " (genui serve; set GENUI_MCP_URL and GENUI_MCP_TOKEN in .env.local for a registry)"}`);
+console.log(
+  `genui: ${genuiUrl}${process.env.GENUI_MCP_URL ? "" : " (genui serve; set GENUI_MCP_URL and GENUI_MCP_TOKEN in .env.local for a registry)"}`,
+);
 
 async function createServer(): Promise<McpServer> {
   const server = new McpServer({ name: "genui-demo", version: "0.1.0" });
@@ -50,6 +52,4 @@ app.post("/genui/refresh", (req: Request, res: Response) => {
   res.status(202).json({ revision: genui.revision() ?? null });
 });
 
-app.listen(PORT, () =>
-  console.log(`genui demo MCP server on http://localhost:${PORT}/mcp (genui: ${genuiUrl})`),
-);
+app.listen(PORT, () => console.log(`genui demo MCP server on http://localhost:${PORT}/mcp (genui: ${genuiUrl})`));

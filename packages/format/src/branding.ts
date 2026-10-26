@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** How the workspace's connector presents itself to hosts (MCP serverInfo). The icon is uploaded separately. */
 export const Branding = z.object({
-  title: z.string().min(1).max(80).optional().describe("Display name, e.g. \"Acme Support\". Default: the workspace name."),
+  title: z.string().min(1).max(80).optional().describe('Display name, e.g. "Acme Support". Default: the workspace name.'),
   description: z.string().min(1).max(500).optional().describe("One or two sentences on what the connector does."),
   websiteUrl: z.url({ protocol: /^https?$/ }).optional(),
 });

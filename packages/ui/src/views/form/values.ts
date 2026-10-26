@@ -36,7 +36,8 @@ export function validate(fields: Field[], state: FormState): Record<string, stri
     if (field.type === "text" || field.type === "textarea" || field.type === "email") {
       const text = String(value);
       if (field.type === "email" && !EMAIL.test(text)) errors[field.name] = "Enter a valid email";
-      else if (field.minLength !== undefined && text.length < field.minLength) errors[field.name] = `At least ${field.minLength} characters`;
+      else if (field.minLength !== undefined && text.length < field.minLength)
+        errors[field.name] = `At least ${field.minLength} characters`;
       else if (field.maxLength !== undefined && text.length > field.maxLength) errors[field.name] = `At most ${field.maxLength} characters`;
       else if (field.pattern) {
         try {

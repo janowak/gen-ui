@@ -20,7 +20,10 @@ interface Env {
   DB: D1Binding;
 }
 
-const assets: Assets = { views: { form, chart, manager, theme, workflows, workspace, instructions }, pages: { "sign-in": signIn, consent } };
+const assets: Assets = {
+  views: { form, chart, manager, theme, workflows, workspace, instructions },
+  pages: { "sign-in": signIn, consent },
+};
 
 /**
  * Client ID Metadata Documents over plain fetch. A Worker has no private network behind it to reach,

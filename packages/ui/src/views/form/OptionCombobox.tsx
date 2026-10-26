@@ -108,7 +108,12 @@ export function OptionCombobox(props: OptionComboboxProps) {
                     {option.label}
                   </ComboboxChip>
                 ))}
-                <ComboboxChipsInput id={id} placeholder={values.length ? undefined : placeholder} aria-invalid={invalid || undefined} disabled={disabled} />
+                <ComboboxChipsInput
+                  id={id}
+                  placeholder={values.length ? undefined : placeholder}
+                  aria-invalid={invalid || undefined}
+                  disabled={disabled}
+                />
               </Fragment>
             )}
           </ComboboxValue>
@@ -120,7 +125,13 @@ export function OptionCombobox(props: OptionComboboxProps) {
 
   return (
     <Combobox {...shared} value={props.value ?? null} onValueChange={(value: Option | null) => props.onChange(value ?? undefined)}>
-      <ComboboxInput id={id} placeholder={placeholder ?? "Select…"} aria-invalid={invalid || undefined} disabled={disabled} showClear={Boolean(props.value)} />
+      <ComboboxInput
+        id={id}
+        placeholder={placeholder ?? "Select…"}
+        aria-invalid={invalid || undefined}
+        disabled={disabled}
+        showClear={Boolean(props.value)}
+      />
       {content}
     </Combobox>
   );

@@ -55,8 +55,10 @@ export function genui(options: GenUIPluginOptions = {}): PluginOption[] {
         }
 
         const bytes = Buffer.byteLength(page.source);
-        if (bytes > MAX_BUNDLE_BYTES) this.error(`genui: ${page.fileName} is ${kb(bytes)}; the registry accepts up to ${kb(MAX_BUNDLE_BYTES)}.`);
-        if (bytes > budget) this.warn(`${page.fileName} is ${kb(bytes)}, over the ${kb(budget)} budget. Large bundles render slowly in chat.`);
+        if (bytes > MAX_BUNDLE_BYTES)
+          this.error(`genui: ${page.fileName} is ${kb(bytes)}; the registry accepts up to ${kb(MAX_BUNDLE_BYTES)}.`);
+        if (bytes > budget)
+          this.warn(`${page.fileName} is ${kb(bytes)}, over the ${kb(budget)} budget. Large bundles render slowly in chat.`);
 
         let manifest: Awaited<ReturnType<typeof loadManifest>>;
         try {

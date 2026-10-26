@@ -5,8 +5,19 @@ import { createRegistryApp, type Refresher, type Store } from "./app.js";
 import { loadAssets, testDatabase } from "./testing.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
-const rating = (version: string) => ({ name: "rating", version, description: "Ask for a star rating.", props: { type: "object", properties: {} }, tools: [] });
-const workflow = { name: "add_item", description: "The user wants to add an item.", instructions: "Show a form and submit to create_item.", params: [] };
+const rating = (version: string) => ({
+  name: "rating",
+  version,
+  description: "Ask for a star rating.",
+  props: { type: "object", properties: {} },
+  tools: [],
+});
+const workflow = {
+  name: "add_item",
+  description: "The user wants to add an item.",
+  instructions: "Show a form and submit to create_item.",
+  params: [],
+};
 
 let app: ReturnType<typeof createRegistryApp>["app"];
 let store: Store;
@@ -120,7 +131,9 @@ describe("refresh URLs", () => {
     await refresher.idle();
     expect(received).toHaveLength(2);
 
-    const { environments } = (await (await call("GET", "/v1/environments", reader)).json()) as { environments: { name: string; lastRefresh: unknown }[] };
+    const { environments } = (await (await call("GET", "/v1/environments", reader)).json()) as {
+      environments: { name: string; lastRefresh: unknown }[];
+    };
     expect(environments.find((e) => e.name === "prod")?.lastRefresh).toMatchObject({ ok: true, status: 202 });
   });
 
@@ -149,10 +162,18 @@ describe("refresh URLs", () => {
     const ws = await strict.store.createWorkspace("strict");
     const token = await strict.store.createToken(ws, "admin", "test");
     const put = (body: unknown, as = token) =>
-      strict.app.request("/v1/environments/prod", { method: "PUT", headers: { authorization: `Bearer ${as}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+      strict.app.request("/v1/environments/prod", {
+        method: "PUT",
+        headers: { authorization: `Bearer ${as}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    expect(await (await put({ refreshUrl: "http://mcp.acme.test/genui/refresh" })).json()).toEqual({ error: "The refresh URL must use https." });
-    expect(await (await put({ refreshUrl: "https://127.0.0.1/genui/refresh" })).json()).toEqual({ error: "The refresh URL must be a public address." });
+    expect(await (await put({ refreshUrl: "http://mcp.acme.test/genui/refresh" })).json()).toEqual({
+      error: "The refresh URL must use https.",
+    });
+    expect(await (await put({ refreshUrl: "https://127.0.0.1/genui/refresh" })).json()).toEqual({
+      error: "The refresh URL must be a public address.",
+    });
     expect((await put({ refreshUrl: "https://mcp.acme.test/genui/refresh" })).status).toBe(200);
     expect((await put({ refreshUrl: null }, await strict.store.createToken(ws, "publish", "ci"))).status).toBe(403);
     expect((await call("PUT", "/v1/environments/nope", admin, { refreshUrl })).status).toBe(404);

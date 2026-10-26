@@ -13,7 +13,11 @@ const DATABASE = process.env.GENUI_DB ?? "genui-registry.sqlite";
 const db = openDatabase(DATABASE);
 const assets = await loadAssets();
 const config = authConfigFromEnv(process.env);
-const { app, store } = createRegistryApp(db, { assets, allowPrivateWebhooks: process.env.GENUI_ALLOW_PRIVATE_WEBHOOKS === "1", baseURL: config.baseURL });
+const { app, store } = createRegistryApp(db, {
+  assets,
+  allowPrivateWebhooks: process.env.GENUI_ALLOW_PRIVATE_WEBHOOKS === "1",
+  baseURL: config.baseURL,
+});
 
 // Self-host bootstrap: first start creates the workspace and prints an admin token once.
 // Hosted mode has none: everyone gets a personal workspace at first sign-in.

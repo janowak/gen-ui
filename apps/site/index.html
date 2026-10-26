@@ -34,8 +34,7 @@
           return null;
         }
       };
-      const applyTheme = () =>
-        document.documentElement.classList.toggle("dark", savedTheme() ? savedTheme() === "dark" : dark.matches);
+      const applyTheme = () => document.documentElement.classList.toggle("dark", savedTheme() ? savedTheme() === "dark" : dark.matches);
       applyTheme();
       dark.addEventListener("change", applyTheme);
       if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
@@ -68,8 +67,38 @@
         </nav>
         <div class="ml-auto flex items-center gap-2 md:ml-0">
           <button class="btn btn-ghost w-8 px-0" type="button" aria-label="Switch to dark theme" data-theme-toggle>
-            <svg class="dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
-            <svg class="hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
+            <svg
+              class="dark:hidden"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+            </svg>
+            <svg
+              class="hidden dark:block"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" />
+              <path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m6.34 17.66-1.41 1.41" />
+              <path d="m19.07 4.93-1.41 1.41" />
+            </svg>
           </button>
           <a class="btn" href="#start">Get started</a>
         </div>
@@ -85,17 +114,14 @@
             Your flows, in the chat.
           </h1>
           <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-            Build the components your customers' flows need, write the flows down in your own words, and publish them
-            to genui. They show up in Claude, ChatGPT and other MCP Apps hosts: UX that fits the job, not a generic chat
-            reply. No MCP server needed to start.
+            Build the components your customers' flows need, write the flows down in your own words, and publish them to genui. They show up
+            in Claude, ChatGPT and other MCP Apps hosts: UX that fits the job, not a generic chat reply. No MCP server needed to start.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a class="btn btn-lg" href="#start">Get started</a>
             <a class="btn btn-lg btn-outline" href="#how">See how it works</a>
           </div>
-          <p class="mt-6 text-sm text-muted-foreground">
-            Built on the MCP Apps standard and the official MCP TypeScript SDK.
-          </p>
+          <p class="mt-6 text-sm text-muted-foreground">Built on the MCP Apps standard and the official MCP TypeScript SDK.</p>
         </div>
 
         <figure
@@ -108,14 +134,25 @@
             <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
           </div>
           <ol class="flex list-none flex-col gap-4 p-4 sm:p-5">
-            <li
-              class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground"
-              data-reveal
-            >
+            <li class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground" data-reveal>
               Reorder the mailer boxes from last month, 400 of them, delivered by the 30th.
             </li>
             <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
-              <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M10 4v4" /><path d="M2 8h20" /><path d="M6 4v4" /></svg>
+              <svg
+                class="size-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M10 4v4" />
+                <path d="M2 8h20" />
+                <path d="M6 4v4" />
+              </svg>
               <span>Opened the <span class="font-medium text-foreground">New order</span> form</span>
             </li>
             <li data-reveal>
@@ -128,7 +165,18 @@
                   <div class="flex flex-col gap-2" data-field>
                     <span class="font-medium">Ship to</span>
                     <span class="input">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                      </svg>
                       <span class="truncate">Halden Coffee, Leeds</span>
                     </span>
                   </div>
@@ -146,31 +194,66 @@
                     <div class="flex flex-col gap-2" data-field>
                       <span class="font-medium">Delivery date</span>
                       <span class="input">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></svg>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M8 2v4" />
+                          <path d="M16 2v4" />
+                          <rect width="18" height="18" x="3" y="4" rx="2" />
+                          <path d="M3 10h18" />
+                        </svg>
                         <span class="truncate">Fri, Oct 30</span>
                       </span>
                     </div>
                   </div>
                   <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span class="btn" data-submit>
-                      <svg class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-spinner><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                      <svg
+                        class="animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                        data-spinner
+                      >
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
                       <span data-label>Place order</span>
                     </span>
                     <span class="flex items-center gap-1.5 text-muted-foreground" data-done>
-                      <svg class="size-4 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+                      <svg
+                        class="size-4 text-foreground"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
                       Order 4821 placed
                     </span>
                   </div>
                 </div>
               </div>
             </li>
-            <li class="text-sm" data-reveal>
-              Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.
-            </li>
+            <li class="text-sm" data-reveal>Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.</li>
           </ol>
           <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks
-            it and places the order.
+            A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks it and places the
+            order.
           </figcaption>
         </figure>
       </section>
@@ -184,25 +267,31 @@
           <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-6 md:gap-y-12 lg:grid-cols-4 lg:gap-y-4">
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">1</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >1</span
+                >
                 Register
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Sign in with GitHub, Google or your company's login. You get a workspace and an MCP address your
-                customers can connect to.
+                Sign in with GitHub, Google or your company's login. You get a workspace and an MCP address your customers can connect to.
               </p>
               <pre class="code"><code><span class="s">https://api.app-mcp.com</span>
   /w/&lt;workspace&gt;/mcp</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">2</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >2</span
+                >
                 Add your components
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Write them with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in TypeScript or
-                the framework you use, with workflows in Markdown next to them. Props are a Zod schema; the build is
-                one HTML file.
+                Write them with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in TypeScript or the framework you
+                use, with workflows in Markdown next to them. Props are a Zod schema; the build is one HTML file.
               </p>
               <pre class="code"><code><span class="k">defineComponent</span>({
   name: <span class="s">"rating"</span>,
@@ -211,24 +300,32 @@
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >3</span
+                >
                 Test them
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Publish, add your address as a connector in Claude or ChatGPT, and try the flow as your customers will.
-                Change it and publish again.
+                Publish, add your address as a connector in Claude or ChatGPT, and try the flow as your customers will. Change it and
+                publish again.
               </p>
               <pre class="code"><code>$ <span class="k">genui publish</span>
 # serves rating 1.3.0</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">4</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >4</span
+                >
                 Your customers use it
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Share the address. Customers add it as a connector, and new versions reach running chats without a
-                restart. Need it to act on your systems?
+                Share the address. Customers add it as a connector, and new versions reach running chats without a restart. Need it to act
+                on your systems?
                 <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#data">Connect your data.</a>
               </p>
               <pre class="code"><code>Settings → Connectors → Add
@@ -236,7 +333,6 @@
   /w/&lt;workspace&gt;/mcp</code></pre>
             </li>
           </ol>
-
         </div>
       </section>
 
@@ -244,8 +340,8 @@
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Everything runs through two connectors: genui's, where you manage your workspace, and your workspace's own,
-            the one your customers add. Custom connectors need a paid Claude plan or ChatGPT's developer mode.
+            Everything runs through two connectors: genui's, where you manage your workspace, and your workspace's own, the one your
+            customers add. Custom connectors need a paid Claude plan or ChatGPT's developer mode.
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 p-4 ring-1 ring-foreground/10">
             <span class="text-sm text-muted-foreground">genui's connector</span>
@@ -255,36 +351,49 @@
           <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-10 md:gap-y-12">
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">1</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >1</span
+                >
                 Add genui and sign in
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                In Claude: Settings → Connectors → Add custom connector, with the address above. Connect, then sign in
-                with Google or GitHub. You get a workspace.
+                In Claude: Settings → Connectors → Add custom connector, with the address above. Connect, then sign in with Google or
+                GitHub. You get a workspace.
               </p>
               <pre class="code"><code>Settings → Connectors → Add custom connector
 <span class="s">https://api.app-mcp.com/mcp</span></code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">2</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >2</span
+                >
                 Try the built-ins
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Ask Claude to open your genui workspace. It shows your workspace's MCP address: add it as a second
-                connector, then ask for a form or a chart.
+                Ask Claude to open your genui workspace. It shows your workspace's MCP address: add it as a second connector, then ask for a
+                form or a chart.
               </p>
               <pre class="code"><code><span class="k">"Open my genui workspace"</span>
 → <span class="s">https://api.app-mcp.com/w/&lt;workspace&gt;/mcp</span></code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >3</span
+                >
                 Build your component
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Start one with <code class="font-mono text-[0.9em] text-foreground">genui init</code>, then try it in a local host with live props and theme. It's
-                TypeScript with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code>; use any framework you like.
+                Start one with <code class="font-mono text-[0.9em] text-foreground">genui init</code>, then try it in a local host with live
+                props and theme. It's TypeScript with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code>; use any
+                framework you like.
               </p>
               <pre class="code"><code>$ <span class="k">npx @genui/cli init</span> my_poll
 $ cd my_poll &amp;&amp; npm install
@@ -292,13 +401,17 @@ $ <span class="k">npm run dev</span></code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">4</span>
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
+                  aria-hidden="true"
+                  >4</span
+                >
                 Publish it
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
                 Create a publish token in the workspace view and publish. Your workspace's connector now offers
-                <code class="font-mono text-[0.9em] text-foreground">render_my_poll</code>. Remove components or turn off the built-in forms and charts under Manage
-                components.
+                <code class="font-mono text-[0.9em] text-foreground">render_my_poll</code>. Remove components or turn off the built-in forms
+                and charts under Manage components.
               </p>
               <pre class="code"><code>$ GENUI_TOKEN=gnu_publish_… <span class="k">npm run genui:publish</span>
 # Published my_poll@0.1.0 to prod</code></pre>
@@ -309,60 +422,54 @@ $ <span class="k">npm run dev</span></code></pre>
 
       <section class="scroll-mt-14 border-t" id="features" aria-labelledby="features-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">
-            What you can build
-          </h2>
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">What you can build</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Whatever your customers' flows need. genui handles the plumbing around it, so your team writes the
-            component.
+            Whatever your customers' flows need. genui handles the plumbing around it, so your team writes the component.
           </p>
           <dl class="mt-12 divide-y border-y">
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Your components</dt>
               <dd class="max-w-xl text-muted-foreground">
-                A seat picker, a quote builder, a rating: anything your flow needs. Plain TypeScript or the framework
-                you use, with props as a Zod schema.
+                A seat picker, a quote builder, a rating: anything your flow needs. Plain TypeScript or the framework you use, with props as
+                a Zod schema.
               </dd>
               <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Workflows</dt>
               <dd class="max-w-xl text-muted-foreground">
-                Playbooks in your own words, kept next to your components and published with them. A workflow with
-                params is a slash command; one without is guidance the model always has.
+                Playbooks in your own words, kept next to your components and published with them. A workflow with params is a slash
+                command; one without is guidance the model always has.
               </dd>
               <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Forms and charts, built in</dt>
               <dd class="max-w-xl text-muted-foreground">
-                For everything you haven't built yet. Text, numbers, dates, switches and selects; line, bar, area and
-                pie charts.
+                For everything you haven't built yet. Text, numbers, dates, switches and selects; line, bar, area and pie charts.
               </dd>
               <dd><code class="badge badge-outline font-mono">render_form, render_chart</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Your theme</dt>
               <dd class="max-w-xl text-muted-foreground">
-                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and
-                chart colors for each environment, with a live preview in the chat.
+                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and chart colors for each
+                environment, with a live preview in the chat.
               </dd>
               <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Environments</dt>
               <dd class="max-w-xl text-muted-foreground">
-                Add staging or any other environment when you want one. Each has its own address, versions, theme and
-                workflows, so testers can keep it next to prod in the same chat. Publish a tested version to prod
-                without rebuilding it.
+                Add staging or any other environment when you want one. Each has its own address, versions, theme and workflows, so testers
+                can keep it next to prod in the same chat. Publish a tested version to prod without rebuilding it.
               </dd>
               <dd><code class="badge badge-outline font-mono">genui publish --env staging</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Loading states</dt>
               <dd class="max-w-xl text-muted-foreground">
-                Fields appear while the model is still writing. Submits can't fire twice, and failures tell the model
-                what went wrong.
+                Fields appear while the model is still writing. Submits can't fire twice, and failures tell the model what went wrong.
               </dd>
               <dd><code class="badge badge-outline font-mono">streaming → ready</code></dd>
             </div>
@@ -372,12 +479,9 @@ $ <span class="k">npm run dev</span></code></pre>
 
       <section class="scroll-mt-14 border-t" id="further" aria-labelledby="further-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="further-title">
-            Going further
-          </h2>
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="further-title">Going further</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Start hosted. Add your own data when a flow needs it, and run genui yourself when nothing may leave your
-            network.
+            Start hosted. Add your own data when a flow needs it, and run genui yourself when nothing may leave your network.
           </p>
           <ol class="mt-12 grid list-none gap-4 md:grid-cols-3">
             <li class="card px-5 ring-2 ring-primary">
@@ -393,16 +497,13 @@ $ <span class="k">npm run dev</span></code></pre>
             <li class="card px-5">
               <p class="font-medium">With your data</p>
               <p class="text-muted-foreground">
-                Plus your MCP server with the genui SDK. Views search, load and submit through your tools; genui never
-                sees the results.
+                Plus your MCP server with the genui SDK. Views search, load and submit through your tools; genui never sees the results.
               </p>
               <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#data">Connect your data</a>
             </li>
             <li class="card px-5">
               <p class="font-medium">Self-hosted</p>
-              <p class="text-muted-foreground">
-                Plus genui inside your network, with your own database and your company's sign-in.
-              </p>
+              <p class="text-muted-foreground">Plus genui inside your network, with your own database and your company's sign-in.</p>
               <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#self-host">Self-host</a>
             </li>
           </ol>
@@ -415,16 +516,16 @@ $ <span class="k">npm run dev</span></code></pre>
             Need your own data? Connect your MCP server
           </h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            When a flow needs your customers, orders or prices, mount genui in the MCP server you already run. Your
-            data stays on your server.
+            When a flow needs your customers, orders or prices, mount genui in the MCP server you already run. Your data stays on your
+            server.
           </p>
 
           <div class="mt-12 grid gap-12 md:grid-cols-2 md:gap-x-6">
             <div class="flex flex-col gap-4">
               <h3 class="font-medium">One call in your server</h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Your components, forms and charts become tools on your server, next to the ones you have, and your
-                workflows become its slash commands.
+                Your components, forms and charts become tools on your server, next to the ones you have, and your workflows become its
+                slash commands.
               </p>
               <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
   genui: connectGenUI({
@@ -436,8 +537,8 @@ $ <span class="k">npm run dev</span></code></pre>
             <div class="flex flex-col gap-4">
               <h3 class="font-medium">Views that use your tools</h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Selects search your tools as people type, charts load rows from your tools so private data stays out of
-                the model's context, and submit errors from your tool show next to the field.
+                Selects search your tools as people type, charts load rows from your tools so private data stays out of the model's context,
+                and submit errors from your tool show next to the field.
               </p>
               <pre class="code"><code>{
   <span class="s">"name"</span>: <span class="s">"customer"</span>,
@@ -468,8 +569,8 @@ $ <span class="k">npm run dev</span></code></pre>
             <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
               <p class="font-medium">genui</p>
               <p class="mt-1 text-muted-foreground">
-                Serves forms, charts, workflows and your components. It sees calls to its own tools, never your tools'
-                calls or their results.
+                Serves forms, charts, workflows and your components. It sees calls to its own tools, never your tools' calls or their
+                results.
               </p>
             </div>
           </div>
@@ -478,15 +579,14 @@ $ <span class="k">npm run dev</span></code></pre>
             <li>
               <h3 class="font-medium">Versions that never change</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                A published version is immutable and its bundle is kept, so old messages keep rendering the exact
-                version they were made with.
+                A published version is immutable and its bundle is kept, so old messages keep rendering the exact version they were made
+                with.
               </p>
             </li>
             <li>
               <h3 class="font-medium">People confirm, not the model</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Saving the theme, instructions or workflows is hidden from the model. It runs only from a click in the
-                view.
+                Saving the theme, instructions or workflows is hidden from the model. It runs only from a click in the view.
               </p>
             </li>
           </ul>
@@ -500,8 +600,8 @@ $ <span class="k">npm run dev</span></code></pre>
               Nothing may leave your network? Run genui yourself
             </h2>
             <p class="mt-3 text-muted-foreground">
-              The same registry as one container with a SQLite file, inside your network. People sign in with GitHub,
-              Google or your company's OIDC provider, and everything above works the same.
+              The same registry as one container with a SQLite file, inside your network. People sign in with GitHub, Google or your
+              company's OIDC provider, and everything above works the same.
             </p>
           </div>
           <a class="btn btn-lg btn-outline w-fit" href="mailto:hello@app-mcp.com?subject=genui%20self-hosting">Talk to us</a>
@@ -511,12 +611,9 @@ $ <span class="k">npm run dev</span></code></pre>
       <section class="scroll-mt-14 border-t" id="early-access" aria-labelledby="cta-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <div class="rounded-xl bg-muted/40 px-6 py-12 ring-1 ring-foreground/10 sm:px-12">
-            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="cta-title">
-              Put your flows inside the chat
-            </h2>
+            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="cta-title">Put your flows inside the chat</h2>
             <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-              Tell us the flow you want your customers to finish in the chat, and we'll help you ship the first
-              component.
+              Tell us the flow you want your customers to finish in the chat, and we'll help you ship the first component.
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
               <a class="btn btn-lg" href="#start">Get started</a>
@@ -534,9 +631,7 @@ $ <span class="k">npm run dev</span></code></pre>
     </main>
 
     <footer class="border-t">
-      <div
-        class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6"
-      >
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6">
         <span class="font-semibold tracking-tight text-foreground">genui</span>
         <span>Your components, in every AI chat.</span>
       </div>

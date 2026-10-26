@@ -40,7 +40,13 @@ export function FieldControl({ field, value, error, disabled, app, canCall, onCh
     const Control = field.type === "checkbox" ? Checkbox : Switch;
     return (
       <Field orientation="horizontal" data-invalid={invalid || undefined}>
-        <Control id={id} checked={value === true} disabled={disabled} aria-invalid={invalid || undefined} onCheckedChange={(checked) => onChange(checked)} />
+        <Control
+          id={id}
+          checked={value === true}
+          disabled={disabled}
+          aria-invalid={invalid || undefined}
+          onCheckedChange={(checked) => onChange(checked)}
+        />
         <FieldContent>
           <FieldLabel htmlFor={id}>{label}</FieldLabel>
           {description}
@@ -83,9 +89,28 @@ function Control({ id, field, value, invalid, disabled, app, canCall, onChange }
   switch (field.type) {
     case "text":
     case "email":
-      return <Input id={id} type={field.type} value={(value as string) ?? ""} placeholder={field.placeholder} disabled={disabled} aria-invalid={aria} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <Input
+          id={id}
+          type={field.type}
+          value={(value as string) ?? ""}
+          placeholder={field.placeholder}
+          disabled={disabled}
+          aria-invalid={aria}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
     case "textarea":
-      return <Textarea id={id} value={(value as string) ?? ""} placeholder={field.placeholder} disabled={disabled} aria-invalid={aria} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <Textarea
+          id={id}
+          value={(value as string) ?? ""}
+          placeholder={field.placeholder}
+          disabled={disabled}
+          aria-invalid={aria}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
     case "number":
       return (
         <Input
@@ -106,7 +131,10 @@ function Control({ id, field, value, invalid, disabled, app, canCall, onChange }
       return <DatePicker id={id} value={value as string | undefined} onChange={onChange} invalid={invalid} disabled={disabled} />;
     case "select": {
       // As in the shadcn select examples: a null item carries the placeholder label.
-      const items = [{ label: field.placeholder ?? "Select…", value: null as string | null }, ...field.options.map((o) => ({ label: o.label, value: o.id as string | null }))];
+      const items = [
+        { label: field.placeholder ?? "Select…", value: null as string | null },
+        ...field.options.map((o) => ({ label: o.label, value: o.id as string | null })),
+      ];
       return (
         <Select items={items} value={(value as string) ?? null} disabled={disabled} onValueChange={(next) => onChange(next ?? undefined)}>
           <SelectTrigger id={id} className="w-full" aria-invalid={aria}>

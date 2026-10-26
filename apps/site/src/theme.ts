@@ -5,8 +5,7 @@ const system = matchMedia("(prefers-color-scheme: dark)");
 
 export function setupThemeToggle(button: HTMLButtonElement) {
   const root = document.documentElement;
-  const label = () =>
-    button.setAttribute("aria-label", root.classList.contains("dark") ? "Switch to light theme" : "Switch to dark theme");
+  const label = () => button.setAttribute("aria-label", root.classList.contains("dark") ? "Switch to light theme" : "Switch to dark theme");
 
   button.addEventListener("click", () => {
     const dark = !root.classList.contains("dark");

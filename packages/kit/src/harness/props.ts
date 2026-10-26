@@ -45,7 +45,11 @@ export function fieldsOf(schema: unknown): Field[] {
   });
 }
 
-const humanize = (name: string) => name.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+const humanize = (name: string) =>
+  name
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
 
 function sample(name: string, schema: Schema): unknown {
   if ("default" in schema) return schema.default;

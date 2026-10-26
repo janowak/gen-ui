@@ -5,7 +5,11 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startServe, type Served } from "./serve.js";
 
-const manifest = { name: "rating", description: "Ask the user to rate something.", props: { type: "object", properties: { question: { type: "string" } } } };
+const manifest = {
+  name: "rating",
+  description: "Ask the user to rate something.",
+  props: { type: "object", properties: { question: { type: "string" } } },
+};
 
 describe("startServe", () => {
   let dir: string;
@@ -43,7 +47,8 @@ describe("startServe", () => {
     clients.push(client);
     return client;
   };
-  const uriOf = async (client: Client, tool: string) => ((await client.listTools()).tools.find((t) => t.name === tool)?._meta?.ui as { resourceUri: string } | undefined)?.resourceUri;
+  const uriOf = async (client: Client, tool: string) =>
+    ((await client.listTools()).tools.find((t) => t.name === tool)?._meta?.ui as { resourceUri: string } | undefined)?.resourceUri;
   const submitForm = { title: "Signup", fields: [{ name: "email", label: "Email", type: "email" }], submit: { toolName: "create_signup" } };
 
   it("serves built-in views and local components at /mcp, rendering only without a token", async () => {

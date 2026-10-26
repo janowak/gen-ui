@@ -58,7 +58,10 @@ describe("view store", () => {
 
     store.set("state", 5);
     await store.info.flush();
-    expect(host.widgetState).toEqual({ modelContent: "Rated 3/5", privateContent: { mine: true, genui: { values: { state: 5 }, at: expect.any(Number) } } });
+    expect(host.widgetState).toEqual({
+      modelContent: "Rated 3/5",
+      privateContent: { mine: true, genui: { values: { state: 5 }, at: expect.any(Number) } },
+    });
   });
 
   it("waits for the render id in the browser, and a value set before the restore wins and is saved with it", async () => {
@@ -91,7 +94,10 @@ describe("view store", () => {
   });
 
   it("keeps state in memory when the render has no id or is cancelled", async () => {
-    for (const end of [(emit: (event: string, params: unknown) => void) => emit("toolresult", { content: [] }), (emit: (event: string, params: unknown) => void) => emit("toolcancelled", {})]) {
+    for (const end of [
+      (emit: (event: string, params: unknown) => void) => emit("toolresult", { content: [] }),
+      (emit: (event: string, params: unknown) => void) => emit("toolcancelled", {}),
+    ]) {
       const storage = memoryStorage();
       const store = createViewStore({ backend: storageBackend(storage), debounceMs: 0 });
       const { app, emit } = fakeApp();

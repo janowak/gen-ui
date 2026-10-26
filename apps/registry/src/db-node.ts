@@ -25,7 +25,9 @@ function migrate(sqlite: DatabaseSync): void {
     "CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)",
   );
   const applied = new Set((sqlite.prepare("SELECT name FROM d1_migrations").all() as { name: string }[]).map((r) => r.name));
-  for (const name of readdirSync(MIGRATIONS).filter((file) => file.endsWith(".sql")).sort()) {
+  for (const name of readdirSync(MIGRATIONS)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()) {
     if (applied.has(name)) continue;
     transaction(sqlite, () => {
       sqlite.exec(readFileSync(new URL(name, MIGRATIONS), "utf8"));

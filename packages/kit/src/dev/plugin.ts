@@ -48,7 +48,11 @@ export function devPlugin(options: { component: string }): Plugin {
             try {
               return send(200, "text/javascript", await readFile(HARNESS, "utf8"));
             } catch {
-              return send(500, "text/javascript", `document.body.textContent = "genui dev: ${HARNESS} is missing. Build @genui/kit first.";`);
+              return send(
+                500,
+                "text/javascript",
+                `document.body.textContent = "genui dev: ${HARNESS} is missing. Build @genui/kit first.";`,
+              );
             }
           case "/__genui/component.json":
             try {

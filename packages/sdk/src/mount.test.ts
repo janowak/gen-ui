@@ -38,9 +38,13 @@ const port = (server: ServerType) => (server.address() as AddressInfo).port;
 /** The company's own server: its data tools plus genui's, as a host sees it. */
 async function companyServer(genui: GenUIClient, watch = false) {
   const server = new McpServer({ name: "acme", version: "1.0.0" });
-  server.registerTool("search_customers", { description: "Search customers.", inputSchema: z.object({ query: z.string().optional() }) }, async () => ({
-    content: [{ type: "text", text: "[]" }],
-  }));
+  server.registerTool(
+    "search_customers",
+    { description: "Search customers.", inputSchema: z.object({ query: z.string().optional() }) },
+    async () => ({
+      content: [{ type: "text", text: "[]" }],
+    }),
+  );
   const handle = await mountGenUI(server, { genui, watch });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "host", version: "1.0.0" });
@@ -160,7 +164,10 @@ describe("mountGenUI", () => {
       down.close(() => resolve());
       (down as unknown as { closeAllConnections(): void }).closeAllConnections();
     });
-    const result = await client.callTool({ name: "render_form", arguments: { fields: [{ name: "notes", label: "Notes", type: "textarea" }] } });
+    const result = await client.callTool({
+      name: "render_form",
+      arguments: { fields: [{ name: "notes", label: "Notes", type: "textarea" }] },
+    });
     expect(result.isError).toBe(true);
     expect((result.content as { text: string }[])[0]?.text).toBe("genui is unavailable right now, try again shortly.");
   });

@@ -8,10 +8,7 @@ export const ResourceSource = z
   .object({
     toolName: z.string().describe("Tool on this server that returns the options."),
     params: ToolParams.optional(),
-    searchParam: z
-      .string()
-      .optional()
-      .describe("Tool parameter that receives the text the user types. Omit if the tool has no search."),
+    searchParam: z.string().optional().describe("Tool parameter that receives the text the user types. Omit if the tool has no search."),
     itemsPath: z
       .string()
       .optional()

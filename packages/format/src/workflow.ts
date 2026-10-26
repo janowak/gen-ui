@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-export const WorkflowName = z
-  .string()
-  .regex(/^[a-z][a-z0-9_]{1,40}$/, "lowercase letters, digits and _; also the slash command name");
+export const WorkflowName = z.string().regex(/^[a-z][a-z0-9_]{1,40}$/, "lowercase letters, digits and _; also the slash command name");
 
 /** Something the user gives when starting the workflow; hosts show it as the slash command's argument. */
 export const WorkflowParam = z.object({
@@ -29,7 +27,10 @@ export const Workflow = z
       .describe("The steps for the model: what to ask, which tools and components (render_form, render_<component>) to use, in order."),
     params: z.array(WorkflowParam).max(10).default([]).describe("With params the workflow is a slash command taking them."),
   })
-  .refine((w) => new Set(w.params.map((p) => p.name)).size === w.params.length, { message: "param names must be unique", path: ["params"] });
+  .refine((w) => new Set(w.params.map((p) => p.name)).size === w.params.length, {
+    message: "param names must be unique",
+    path: ["params"],
+  });
 export type Workflow = z.infer<typeof Workflow>;
 
 /** A workflow with params is started by the user as a slash command; one without is always-on guidance. */
@@ -57,7 +58,8 @@ export function serverInstructions(instructions: string | null | undefined, work
       lines.push("", "The user starts these as slash commands:");
       for (const w of commands) lines.push(`- /${w.name}: ${w.description}`);
     }
-    for (const w of workflows.filter((w) => !isCommand(w))) lines.push("", `### ${heading(w)}`, `When: ${w.description}`, w.instructions.trim());
+    for (const w of workflows.filter((w) => !isCommand(w)))
+      lines.push("", `### ${heading(w)}`, `When: ${w.description}`, w.instructions.trim());
     parts.push(lines.join("\n"));
   }
   return parts.length ? parts.join("\n\n") : undefined;

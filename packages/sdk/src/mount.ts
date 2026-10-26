@@ -32,7 +32,11 @@ export interface GenUIHandle {
 type Mounted<H> = Map<string, { key: string; handle: H }>;
 
 /** Brings registered items in line with `wanted`, re-registering any whose definition changed. Returns true if anything changed. */
-function mirror<T extends { name: string }, H extends { remove(): void }>(mounted: Mounted<H>, wanted: T[], register: (item: T) => H): boolean {
+function mirror<T extends { name: string }, H extends { remove(): void }>(
+  mounted: Mounted<H>,
+  wanted: T[],
+  register: (item: T) => H,
+): boolean {
   const next = new Map(wanted.map((item) => [item.name, item]));
   let changed = false;
   for (const [name, entry] of mounted) {
@@ -81,18 +85,25 @@ export async function mountGenUI(server: McpServer, { genui, watch = false }: Ge
     if (!args.length) return server.registerPrompt(prompt.name, config, () => genui.getPrompt(prompt.name, {}));
     const argsSchema = fromJsonSchema<Record<string, string>>({
       type: "object",
-      properties: Object.fromEntries(args.map((a) => [a.name, { type: "string", ...(a.description ? { description: a.description } : {}) }])),
+      properties: Object.fromEntries(
+        args.map((a) => [a.name, { type: "string", ...(a.description ? { description: a.description } : {}) }]),
+      ),
       required: args.filter((a) => a.required).map((a) => a.name),
     });
     return server.registerPrompt(prompt.name, { ...config, argsSchema }, (values) => genui.getPrompt(prompt.name, values));
   }
 
   const registerResource = (uri: string) =>
-    server.registerResource(uri, uri, { mimeType: genui.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () => genui.readResource(uri));
+    server.registerResource(uri, uri, { mimeType: genui.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () =>
+      genui.readResource(uri),
+    );
 
   // Earlier component versions, for old messages the host renders again: read from genui.
-  server.registerResource("genui component version", new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }), { mimeType: RESOURCE_MIME_TYPE }, (uri) =>
-    genui.readResource(uri.href),
+  server.registerResource(
+    "genui component version",
+    new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }),
+    { mimeType: RESOURCE_MIME_TYPE },
+    (uri) => genui.readResource(uri.href),
   );
 
   function sync() {

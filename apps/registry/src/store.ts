@@ -189,7 +189,11 @@ export class Store {
   private async change(workspaceId: string, environment: string, statements: Statement[]): Promise<unknown[][]> {
     const results = await this.db.batch([
       ...statements,
-      statement("UPDATE environments SET revision = revision + 1 WHERE workspace_id = ? AND name = ? RETURNING revision", workspaceId, environment),
+      statement(
+        "UPDATE environments SET revision = revision + 1 WHERE workspace_id = ? AND name = ? RETURNING revision",
+        workspaceId,
+        environment,
+      ),
     ]);
     const [bumped] = results.at(-1) as { revision: number }[];
     if (bumped) for (const listener of this.listeners) listener({ workspaceId, environment, revision: bumped.revision });
@@ -242,10 +246,13 @@ export class Store {
   // a change shows on the next connection; nothing to re-list.
 
   async branding(workspaceId: string): Promise<WorkspaceBranding> {
-    const row = await this.db.get<{ title: string | null; description: string | null; website_url: string | null; icon_type: IconType | null; icon_hash: string | null }>(
-      "SELECT title, description, website_url, icon_type, icon_hash FROM workspaces WHERE id = ?",
-      workspaceId,
-    );
+    const row = await this.db.get<{
+      title: string | null;
+      description: string | null;
+      website_url: string | null;
+      icon_type: IconType | null;
+      icon_hash: string | null;
+    }>("SELECT title, description, website_url, icon_type, icon_hash FROM workspaces WHERE id = ?", workspaceId);
     return {
       ...(row?.title ? { title: row.title } : {}),
       ...(row?.description ? { description: row.description } : {}),
@@ -276,7 +283,13 @@ export class Store {
     if (!type) throw new RegistryError(400, "The icon must be a PNG, JPEG, WebP or SVG image");
     const data = Buffer.from(bytes);
     const hash = createHash("sha256").update(data).digest("hex").slice(0, 16);
-    await this.db.run("UPDATE workspaces SET icon = ?, icon_type = ?, icon_hash = ? WHERE id = ?", data.toString("base64"), type, hash, workspaceId);
+    await this.db.run(
+      "UPDATE workspaces SET icon = ?, icon_type = ?, icon_hash = ? WHERE id = ?",
+      data.toString("base64"),
+      type,
+      hash,
+      workspaceId,
+    );
   }
 
   async icon(workspaceId: string): Promise<{ type: IconType; hash: string; bytes: Uint8Array } | undefined> {
@@ -310,7 +323,13 @@ export class Store {
       "SELECT id, name, scope, environments, created_at FROM tokens WHERE workspace_id = ? ORDER BY created_at",
       workspaceId,
     );
-    return rows.map((r) => ({ id: r.id, name: r.name, scope: r.scope, environments: r.environments ? (JSON.parse(r.environments) as string[]) : null, createdAt: r.created_at }));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      scope: r.scope,
+      environments: r.environments ? (JSON.parse(r.environments) as string[]) : null,
+      createdAt: r.created_at,
+    }));
   }
 
   /** Servers and CI using the token get 401 from their next request. */
@@ -324,14 +343,24 @@ export class Store {
       "SELECT workspace_id, scope, environments FROM tokens WHERE hash = ?",
       sha256(token),
     );
-    return row && { workspaceId: row.workspace_id, scope: row.scope, environments: row.environments ? (JSON.parse(row.environments) as string[]) : null };
+    return (
+      row && {
+        workspaceId: row.workspace_id,
+        scope: row.scope,
+        environments: row.environments ? (JSON.parse(row.environments) as string[]) : null,
+      }
+    );
   }
 
   // Environments
 
   /** The workspace's environments, prod first. */
   async listEnvironments(workspaceId: string): Promise<string[]> {
-    const rows = await this.db.all<{ name: string }>("SELECT name FROM environments WHERE workspace_id = ? ORDER BY name != ?, name", workspaceId, DEFAULT_ENVIRONMENT);
+    const rows = await this.db.all<{ name: string }>(
+      "SELECT name FROM environments WHERE workspace_id = ? ORDER BY name != ?, name",
+      workspaceId,
+      DEFAULT_ENVIRONMENT,
+    );
     return rows.map((r) => r.name);
   }
 
@@ -341,7 +370,8 @@ export class Store {
 
   /** Environments are created explicitly, so a typo fails instead of creating one. */
   async requireEnvironment(workspaceId: string, name: string): Promise<void> {
-    if (!(await this.hasEnvironment(workspaceId, name))) throw new RegistryError(404, `Environment "${name}" doesn't exist. Create it with: genui env add ${name}`);
+    if (!(await this.hasEnvironment(workspaceId, name)))
+      throw new RegistryError(404, `Environment "${name}" doesn't exist. Create it with: genui env add ${name}`);
   }
 
   async createEnvironment(workspaceId: string, name: string): Promise<void> {
@@ -376,17 +406,29 @@ export class Store {
   /** Sets or clears (null) the URL genui calls when what the environment serves changes. */
   async setRefreshUrl(workspaceId: string, name: string, url: string | null): Promise<void> {
     await this.requireEnvironment(workspaceId, name);
-    await this.db.run("UPDATE environments SET refresh_url = ?, last_refresh = NULL WHERE workspace_id = ? AND name = ?", url, workspaceId, name);
+    await this.db.run(
+      "UPDATE environments SET refresh_url = ?, last_refresh = NULL WHERE workspace_id = ? AND name = ?",
+      url,
+      workspaceId,
+      name,
+    );
   }
 
   /** Turns the built-in render_form and render_chart on or off in an environment's end-user MCP. */
   async setBuiltIns(workspaceId: string, name: string, enabled: boolean): Promise<void> {
     await this.requireEnvironment(workspaceId, name);
-    await this.change(workspaceId, name, [statement("UPDATE environments SET built_ins = ? WHERE workspace_id = ? AND name = ?", enabled ? 1 : 0, workspaceId, name)]);
+    await this.change(workspaceId, name, [
+      statement("UPDATE environments SET built_ins = ? WHERE workspace_id = ? AND name = ?", enabled ? 1 : 0, workspaceId, name),
+    ]);
   }
 
   async setLastRefresh(workspaceId: string, name: string, result: LastRefresh): Promise<void> {
-    await this.db.run("UPDATE environments SET last_refresh = ? WHERE workspace_id = ? AND name = ?", JSON.stringify(result), workspaceId, name);
+    await this.db.run(
+      "UPDATE environments SET last_refresh = ? WHERE workspace_id = ? AND name = ?",
+      JSON.stringify(result),
+      workspaceId,
+      name,
+    );
   }
 
   /** Deletes an environment with what it serves: its deployments, theme, instructions and workflows. */
@@ -394,7 +436,11 @@ export class Store {
     if (name === DEFAULT_ENVIRONMENT) throw new RegistryError(400, `${DEFAULT_ENVIRONMENT} can't be deleted`);
     await this.requireEnvironment(workspaceId, name);
     await this.db.batch([
-      statement("DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ?)", name, workspaceId),
+      statement(
+        "DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ?)",
+        name,
+        workspaceId,
+      ),
       statement("DELETE FROM workflows WHERE workspace_id = ? AND environment = ?", workspaceId, name),
       statement("DELETE FROM environments WHERE workspace_id = ? AND name = ?", workspaceId, name),
     ]);
@@ -484,7 +530,10 @@ export class Store {
     // company IdP) may claim them. Unverified password sign-ups never match.
     const email = user.emailVerified ? user.email.toLowerCase() : undefined;
     const invite = email
-      ? await this.db.get<{ workspace_id: string; role: Role }>("SELECT workspace_id, role FROM invites WHERE email = ? ORDER BY created_at LIMIT 1", email)
+      ? await this.db.get<{ workspace_id: string; role: Role }>(
+          "SELECT workspace_id, role FROM invites WHERE email = ? ORDER BY created_at LIMIT 1",
+          email,
+        )
       : undefined;
     // An invite wins even for people who already have a workspace, e.g. one made at an earlier sign-in.
     if (invite && email) {
@@ -548,7 +597,10 @@ export class Store {
   /** Creates or replaces a workflow. Returns true when it replaced an existing one. */
   async saveWorkflow(workspaceId: string, environment: string, workflow: Workflow): Promise<boolean> {
     await this.requireEnvironment(workspaceId, environment);
-    const [workflows, instructions] = await Promise.all([this.listWorkflows(workspaceId, environment), this.getInstructions(workspaceId, environment)]);
+    const [workflows, instructions] = await Promise.all([
+      this.listWorkflows(workspaceId, environment),
+      this.getInstructions(workspaceId, environment),
+    ]);
     const existed = workflows.some((w) => w.name === workflow.name);
     checkInstructions(instructions, [...workflows.filter((w) => w.name !== workflow.name), workflow]);
     await this.change(workspaceId, environment, [
@@ -565,28 +617,44 @@ export class Store {
   }
 
   async deleteWorkflow(workspaceId: string, environment: string, name: string): Promise<void> {
-    if (!(await this.getWorkflow(workspaceId, environment, name))) throw new RegistryError(404, `Workflow "${name}" not found in ${environment}`);
-    await this.change(workspaceId, environment, [statement("DELETE FROM workflows WHERE workspace_id = ? AND environment = ? AND name = ?", workspaceId, environment, name)]);
+    if (!(await this.getWorkflow(workspaceId, environment, name)))
+      throw new RegistryError(404, `Workflow "${name}" not found in ${environment}`);
+    await this.change(workspaceId, environment, [
+      statement("DELETE FROM workflows WHERE workspace_id = ? AND environment = ? AND name = ?", workspaceId, environment, name),
+    ]);
   }
 
   // Theme: per environment.
 
   async getTheme(workspaceId: string, environment: string): Promise<Theme | null> {
-    const row = await this.db.get<{ theme: string | null }>("SELECT theme FROM environments WHERE workspace_id = ? AND name = ?", workspaceId, environment);
+    const row = await this.db.get<{ theme: string | null }>(
+      "SELECT theme FROM environments WHERE workspace_id = ? AND name = ?",
+      workspaceId,
+      environment,
+    );
     return row?.theme ? (JSON.parse(row.theme) as Theme) : null;
   }
 
   async setTheme(workspaceId: string, environment: string, theme: Theme | null): Promise<void> {
     await this.requireEnvironment(workspaceId, environment);
     await this.change(workspaceId, environment, [
-      statement("UPDATE environments SET theme = ? WHERE workspace_id = ? AND name = ?", theme ? JSON.stringify(theme) : null, workspaceId, environment),
+      statement(
+        "UPDATE environments SET theme = ? WHERE workspace_id = ? AND name = ?",
+        theme ? JSON.stringify(theme) : null,
+        workspaceId,
+        environment,
+      ),
     ]);
   }
 
   // Instructions: per environment, what its MCP helps with. Hosts get them with the workflows added.
 
   async getInstructions(workspaceId: string, environment: string): Promise<string | null> {
-    const row = await this.db.get<{ instructions: string | null }>("SELECT instructions FROM environments WHERE workspace_id = ? AND name = ?", workspaceId, environment);
+    const row = await this.db.get<{ instructions: string | null }>(
+      "SELECT instructions FROM environments WHERE workspace_id = ? AND name = ?",
+      workspaceId,
+      environment,
+    );
     return row?.instructions ?? null;
   }
 
@@ -595,7 +663,9 @@ export class Store {
     await this.requireEnvironment(workspaceId, environment);
     const text = instructions?.trim() || null;
     checkInstructions(text, await this.listWorkflows(workspaceId, environment));
-    await this.change(workspaceId, environment, [statement("UPDATE environments SET instructions = ? WHERE workspace_id = ? AND name = ?", text, workspaceId, environment)]);
+    await this.change(workspaceId, environment, [
+      statement("UPDATE environments SET instructions = ? WHERE workspace_id = ? AND name = ?", text, workspaceId, environment),
+    ]);
   }
 
   // Components
@@ -668,7 +738,12 @@ export class Store {
    * Publishes an immutable version and points the environment at it, older versions included. Publishing
    * the same version with the same bundle and manifest again only points the environment, so CI jobs can be re-run.
    */
-  async publish(workspaceId: string, manifest: ComponentManifest, html: string, environment: string = DEFAULT_ENVIRONMENT): Promise<PublishResult> {
+  async publish(
+    workspaceId: string,
+    manifest: ComponentManifest,
+    html: string,
+    environment: string = DEFAULT_ENVIRONMENT,
+  ): Promise<PublishResult> {
     await this.requireEnvironment(workspaceId, environment);
     const hash = sha256(html).slice(0, 16);
     const json = JSON.stringify(manifest);
@@ -681,26 +756,45 @@ export class Store {
           `${manifest.name}@${manifest.version} already exists with different content; versions are immutable. To serve it here without rebuilding: genui publish ${manifest.name}@${manifest.version} --env ${environment}`,
         );
       }
-      return this.deploy(workspaceId, manifest.name, environment, { id: same.id, manifest }, { version: manifest.version, hash, created: false });
+      return this.deploy(
+        workspaceId,
+        manifest.name,
+        environment,
+        { id: same.id, manifest },
+        { version: manifest.version, hash, created: false },
+      );
     }
 
     const versionId = randomUUID();
     const createdAt = now();
     try {
-      return await this.deploy(workspaceId, manifest.name, environment, { id: versionId, manifest }, { version: manifest.version, hash, created: true }, [
-        statement("INSERT INTO components (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", randomUUID(), workspaceId, manifest.name, createdAt),
-        statement(
-          "INSERT INTO versions (id, component_id, version, hash, manifest, html, created_at) SELECT ?, id, ?, ?, ?, ?, ? FROM components WHERE workspace_id = ? AND name = ?",
-          versionId,
-          manifest.version,
-          hash,
-          json,
-          html,
-          createdAt,
-          workspaceId,
-          manifest.name,
-        ),
-      ]);
+      return await this.deploy(
+        workspaceId,
+        manifest.name,
+        environment,
+        { id: versionId, manifest },
+        { version: manifest.version, hash, created: true },
+        [
+          statement(
+            "INSERT INTO components (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            randomUUID(),
+            workspaceId,
+            manifest.name,
+            createdAt,
+          ),
+          statement(
+            "INSERT INTO versions (id, component_id, version, hash, manifest, html, created_at) SELECT ?, id, ?, ?, ?, ?, ? FROM components WHERE workspace_id = ? AND name = ?",
+            versionId,
+            manifest.version,
+            hash,
+            json,
+            html,
+            createdAt,
+            workspaceId,
+            manifest.name,
+          ),
+        ],
+      );
     } catch (error) {
       // Another publish of this version got there first: answer as a re-run (or a conflict) against it.
       if (isUniqueViolation(error) && (await this.publishedVersion(workspaceId, manifest.name, manifest.version))) {
@@ -720,7 +814,13 @@ export class Store {
       }
       throw new RegistryError(404, `${name}@${version} isn't published`);
     }
-    return this.deploy(workspaceId, name, environment, { id: row.id, manifest: JSON.parse(row.manifest) as ComponentManifest }, { version, hash: row.hash, created: false });
+    return this.deploy(
+      workspaceId,
+      name,
+      environment,
+      { id: row.id, manifest: JSON.parse(row.manifest) as ComponentManifest },
+      { version, hash: row.hash, created: false },
+    );
   }
 
   /**
@@ -737,7 +837,12 @@ export class Store {
     );
     if (!served) throw new RegistryError(404, `${environment} doesn't serve "${name}"`);
     await this.change(workspaceId, environment, [
-      statement("DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ? AND name = ?)", environment, workspaceId, name),
+      statement(
+        "DELETE FROM deployments WHERE environment = ? AND component_id IN (SELECT id FROM components WHERE workspace_id = ? AND name = ?)",
+        environment,
+        workspaceId,
+        name,
+      ),
     ]);
   }
 
@@ -782,7 +887,12 @@ export class Store {
       this.listWorkflows(workspaceId, environment),
       this.environment(workspaceId, environment),
     ]);
-    const components: CatalogComponent[] = rows.map((r) => ({ name: r.name, version: r.version, hash: r.hash, manifest: JSON.parse(r.manifest) }));
+    const components: CatalogComponent[] = rows.map((r) => ({
+      name: r.name,
+      version: r.version,
+      hash: r.hash,
+      manifest: JSON.parse(r.manifest),
+    }));
     return { environment, theme, components, instructions, workflows, builtIns: settings?.builtIns ?? true };
   }
 

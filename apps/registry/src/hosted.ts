@@ -68,9 +68,17 @@ export const iconPath = (workspaceId: string) => `/w/${workspaceId}/icon`;
  * One environment's end-user MCP: genui's forms, charts and components, presented with the workspace's
  * branding. Its instructions carry the workflows without params; those with params are slash commands.
  */
-export async function createHostedMcp(store: Store, { workspace, environment, dataTools, origin }: Hosted, options: RegistryAppOptions, bundle?: BundleLookup): Promise<McpServer> {
+export async function createHostedMcp(
+  store: Store,
+  { workspace, environment, dataTools, origin }: Hosted,
+  options: RegistryAppOptions,
+  bundle?: BundleLookup,
+): Promise<McpServer> {
   const lookup = bundle ?? ((hash: string) => store.bundle(workspace.id, hash));
-  const [branding, snapshot] = await Promise.all([store.branding(workspace.id), storeCatalog(store, workspace.id, lookup).snapshot(environment)]);
+  const [branding, snapshot] = await Promise.all([
+    store.branding(workspace.id),
+    storeCatalog(store, workspace.id, lookup).snapshot(environment),
+  ]);
   const label = environment === DEFAULT_ENVIRONMENT ? "" : ` (${environment})`;
   const instructions = snapshot && serverInstructions(snapshot.catalog.instructions, snapshot.catalog.workflows);
   const server = new McpServer(
@@ -81,7 +89,15 @@ export async function createHostedMcp(store: Store, { workspace, environment, da
       ...(branding.description ? { description: branding.description } : {}),
       ...(branding.websiteUrl ? { websiteUrl: branding.websiteUrl } : {}),
       ...(branding.icon
-        ? { icons: [{ src: `${origin}${iconPath(workspace.id)}?v=${branding.icon.hash}`, mimeType: branding.icon.type, ...(branding.icon.type === "image/svg+xml" ? { sizes: ["any"] } : {}) }] }
+        ? {
+            icons: [
+              {
+                src: `${origin}${iconPath(workspace.id)}?v=${branding.icon.hash}`,
+                mimeType: branding.icon.type,
+                ...(branding.icon.type === "image/svg+xml" ? { sizes: ["any"] } : {}),
+              },
+            ],
+          }
         : {}),
     },
     instructions ? { instructions } : {},
@@ -131,14 +147,16 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
       const caller = await store.resolveToken(header.replace(/^Bearer\s+/i, ""));
       if (!caller) return c.json({ error: "Invalid token" }, 401);
       const workspace = caller.workspaceId === workspaceId ? await store.workspace(workspaceId) : undefined;
-      if (!workspace || !ALLOWED.server.includes(caller.scope)) return c.json({ error: "This token can't use this workspace's genui MCP." }, 403);
+      if (!workspace || !ALLOWED.server.includes(caller.scope))
+        return c.json({ error: "This token can't use this workspace's genui MCP." }, 403);
       hosted = { workspace, environment, dataTools: true, origin: origin(c) };
     } else {
       const workspace = await store.hostedWorkspace(workspaceId);
       if (!workspace) return c.json({ error: "No hosted genui MCP at this address." }, 404);
       hosted = { workspace, environment, dataTools: false, origin: origin(c) };
     }
-    if (!(await store.hasEnvironment(workspaceId, environment))) return c.json({ error: `No environment "${environment}" in this workspace.` }, 404);
+    if (!(await store.hasEnvironment(workspaceId, environment)))
+      return c.json({ error: `No environment "${environment}" in this workspace.` }, 404);
     return hosted;
   }
 

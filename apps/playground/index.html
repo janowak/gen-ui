@@ -5,23 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>genui playground</title>
     <style>
-      :root { color-scheme: light; --bg: #f5f4ef; --panel: #fff; --fg: #141413; --muted: #5e5d59; --line: #e8e6dc; }
-      body[data-theme="dark"] { color-scheme: dark; --bg: #1f1e1d; --panel: #262624; --fg: #faf9f5; --muted: #c2c0b6; --line: #3e3e38; }
-      * { box-sizing: border-box; }
-      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-      main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; padding: 16px; min-height: 100vh; }
-      @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
-      aside, section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-      label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-      select, textarea, button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
-      textarea { min-height: 280px; font-family: ui-monospace, monospace; font-size: 12px; }
-      button { cursor: pointer; font-weight: 600; }
-      .chat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-width: 720px; }
-      iframe { width: 100%; border: 0; height: 200px; display: block; }
-      body.fullscreen main { grid-template-columns: 1fr; }
-      body.fullscreen aside { display: none; }
-      body.fullscreen .chat { max-width: none; }
-      pre { margin: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 320px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+      :root {
+        color-scheme: light;
+        --bg: #f5f4ef;
+        --panel: #fff;
+        --fg: #141413;
+        --muted: #5e5d59;
+        --line: #e8e6dc;
+      }
+      body[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #1f1e1d;
+        --panel: #262624;
+        --fg: #faf9f5;
+        --muted: #c2c0b6;
+        --line: #3e3e38;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(280px, 380px) 1fr;
+        gap: 16px;
+        padding: 16px;
+        min-height: 100vh;
+      }
+      @media (max-width: 800px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      aside,
+      section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--muted);
+      }
+      select,
+      textarea,
+      button {
+        font: inherit;
+        color: inherit;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 8px;
+      }
+      textarea {
+        min-height: 280px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      button {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .chat {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        max-width: 720px;
+      }
+      iframe {
+        width: 100%;
+        border: 0;
+        height: 200px;
+        display: block;
+      }
+      body.fullscreen main {
+        grid-template-columns: 1fr;
+      }
+      body.fullscreen aside {
+        display: none;
+      }
+      body.fullscreen .chat {
+        max-width: none;
+      }
+      pre {
+        margin: 0;
+        padding: 8px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        max-height: 320px;
+        overflow: auto;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
     </style>
   </head>
   <body data-theme="light">
@@ -31,9 +119,17 @@
         <textarea id="args" spellcheck="false"></textarea>
         <label><input id="stream" type="checkbox" checked /> Simulate streaming input</label>
         <label><input id="hostvars" type="checkbox" checked /> Send host style variables</label>
-        <label>Theme <select id="theme"><option>light</option><option>dark</option></select></label>
+        <label
+          >Theme
+          <select id="theme">
+            <option>light</option>
+            <option>dark</option>
+          </select></label
+        >
         <button id="run">Call tool</button>
-        <button id="replay" type="button" title="Render the last result again in a new view, like a host re-rendering a stored message">Replay</button>
+        <button id="replay" type="button" title="Render the last result again in a new view, like a host re-rendering a stored message">
+          Replay
+        </button>
         <button id="signout" type="button">Forget sign-in</button>
       </aside>
       <section>

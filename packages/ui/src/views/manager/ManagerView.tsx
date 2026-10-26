@@ -66,7 +66,8 @@ export function ManagerView() {
       <CardHeader>
         <CardTitle>Components</CardTitle>
         <CardDescription>
-          The version each environment serves. CI publishes to environments; previews, theme, instructions and workflows here show {state?.environment ?? "prod"}.
+          The version each environment serves. CI publishes to environments; previews, theme, instructions and workflows here show{" "}
+          {state?.environment ?? "prod"}.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -102,7 +103,12 @@ export function ManagerView() {
                   checked={state.builtIns}
                   disabled={busy !== null}
                   onCheckedChange={(enabled: boolean) =>
-                    run("builtIns", "built_ins_set", { enabled, environment: state.environment }, "The user changed the built-in forms and charts")
+                    run(
+                      "builtIns",
+                      "built_ins_set",
+                      { enabled, environment: state.environment },
+                      "The user changed the built-in forms and charts",
+                    )
                   }
                 />
               ) : (
@@ -110,7 +116,9 @@ export function ManagerView() {
               )}
             </label>
             {state.components.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No components yet. Publish one with `genui publish --env {state.environment}`.</p>
+              <p className="text-sm text-muted-foreground">
+                No components yet. Publish one with `genui publish --env {state.environment}`.
+              </p>
             ) : (
               <Table>
                 <TableHeader>
@@ -131,7 +139,9 @@ export function ManagerView() {
                       {state.environments.map((environment) => (
                         <TableCell key={environment}>
                           {c.environments[environment] ? (
-                            <Badge variant={environment === state.environment ? "default" : "secondary"}>{c.environments[environment]}</Badge>
+                            <Badge variant={environment === state.environment ? "default" : "secondary"}>
+                              {c.environments[environment]}
+                            </Badge>
                           ) : (
                             "—"
                           )}
@@ -146,7 +156,12 @@ export function ManagerView() {
                               disabled={busy !== null}
                               onClick={() =>
                                 confirm === c.name
-                                  ? run(c.name, "component_remove", { name: c.name, environment: state.environment }, "The user stopped serving a component")
+                                  ? run(
+                                      c.name,
+                                      "component_remove",
+                                      { name: c.name, environment: state.environment },
+                                      "The user stopped serving a component",
+                                    )
                                   : setConfirm(c.name)
                               }
                             >

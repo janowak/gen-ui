@@ -130,7 +130,9 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
     const { tools, prompts, instructions } = await request(async (client) => ({
       tools: (await client.listTools(undefined, { timeout, cacheMode: "refresh" })).tools,
       // No prompts capability until the environment has a workflow with params.
-      prompts: client.getServerCapabilities()?.prompts ? (await client.listPrompts(undefined, { timeout, cacheMode: "refresh" })).prompts : [],
+      prompts: client.getServerCapabilities()?.prompts
+        ? (await client.listPrompts(undefined, { timeout, cacheMode: "refresh" })).prompts
+        : [],
       instructions: client.getInstructions(),
     }));
     for (const tool of tools) {
@@ -146,7 +148,10 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   /** genui's current revision of this environment; undefined when the URL has no `/revision` next to it. */
   async function latestRevision(): Promise<number | undefined> {
     if (!revisionUrl) return undefined;
-    const res = await (options.fetch ?? fetch)(revisionUrl, { headers: { authorization: `Bearer ${options.token}` }, signal: AbortSignal.timeout(timeout) });
+    const res = await (options.fetch ?? fetch)(revisionUrl, {
+      headers: { authorization: `Bearer ${options.token}` },
+      signal: AbortSignal.timeout(timeout),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${revisionUrl}`);
     return ((await res.json()) as { revision: number }).revision;
   }

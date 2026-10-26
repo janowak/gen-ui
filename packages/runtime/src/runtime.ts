@@ -90,11 +90,13 @@ type Registration = (...args: unknown[]) => Mounted;
 
 /** The server's register* methods, keeping every handle they return. */
 function tracked(server: McpServer, handles: Mounted[]): Registrar {
-  const keep = (register: Function): Registration => (...args) => {
-    const handle = (register as Registration).apply(server, args);
-    handles.push(handle);
-    return handle;
-  };
+  const keep =
+    (register: Function): Registration =>
+    (...args) => {
+      const handle = (register as Registration).apply(server, args);
+      handles.push(handle);
+      return handle;
+    };
   return {
     registerTool: keep(server.registerTool) as McpServer["registerTool"],
     registerResource: keep(server.registerResource) as McpServer["registerResource"],
@@ -276,7 +278,10 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   if (!options.preview) {
     for (const workflow of (snapshot?.catalog.workflows ?? []).filter(isCommand)) {
       const args = Object.fromEntries(
-        workflow.params.map((p) => [p.name, p.required ? z.string().describe(p.description) : z.string().optional().describe(p.description)]),
+        workflow.params.map((p) => [
+          p.name,
+          p.required ? z.string().describe(p.description) : z.string().optional().describe(p.description),
+        ]),
       );
       server.registerPrompt(
         `${workflow.name}${suffix}`,

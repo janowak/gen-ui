@@ -34,7 +34,10 @@ function partialSpec(input: Record<string, unknown> | undefined): { title?: stri
 
 export function FormView() {
   const { app, connectError, input, streaming, result, viewId, cancelled } = useView("form");
-  const parsed = useMemo(() => (input && !streaming && Array.isArray(input.fields) ? FormSpec.safeParse(input) : undefined), [input, streaming]);
+  const parsed = useMemo(
+    () => (input && !streaming && Array.isArray(input.fields) ? FormSpec.safeParse(input) : undefined),
+    [input, streaming],
+  );
   const spec = parsed?.success ? parsed.data : undefined;
   const canCall = toolsReady(result);
 
@@ -121,7 +124,11 @@ export function FormView() {
 
     // One id per rendered form, so the submit tool can ignore a repeated submit.
     const key = form.submit.idempotencyParam && viewId ? { [form.submit.idempotencyParam]: viewId } : {};
-    const outcome = await callTool(app, form.submit.toolName, { ...(form.submit.params ?? {}), ...toSubmitValues(form.fields, values), ...key });
+    const outcome = await callTool(app, form.submit.toolName, {
+      ...(form.submit.params ?? {}),
+      ...toSubmitValues(form.fields, values),
+      ...key,
+    });
     const response = SubmitResult.safeParse(outcome.data);
 
     if (response.success && !response.data.ok) {
@@ -153,28 +160,28 @@ export function FormView() {
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <CardContent>
           <FieldGroup>
-          {form.fields.map((field) => (
-            <FieldControl
-              key={field.name}
-              field={field}
-              value={values[field.name]}
-              error={errors[field.name]}
-              disabled={locked}
-              app={app}
-              canCall={canCall}
-              onChange={(value) => change(field.name, value)}
-            />
-          ))}
-          {interrupted && (
-            <p role="status" className="text-sm text-muted-foreground">
-              We couldn't confirm this was sent. {persist ? "Send it again to make sure." : "Fill it in and send it again."}
-            </p>
-          )}
-          {formError && (
-            <p role="alert" className="text-sm text-destructive">
-              {formError}
-            </p>
-          )}
+            {form.fields.map((field) => (
+              <FieldControl
+                key={field.name}
+                field={field}
+                value={values[field.name]}
+                error={errors[field.name]}
+                disabled={locked}
+                app={app}
+                canCall={canCall}
+                onChange={(value) => change(field.name, value)}
+              />
+            ))}
+            {interrupted && (
+              <p role="status" className="text-sm text-muted-foreground">
+                We couldn't confirm this was sent. {persist ? "Send it again to make sure." : "Fill it in and send it again."}
+              </p>
+            )}
+            {formError && (
+              <p role="alert" className="text-sm text-destructive">
+                {formError}
+              </p>
+            )}
           </FieldGroup>
         </CardContent>
         <CardFooter>

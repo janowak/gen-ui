@@ -153,11 +153,16 @@ Your workspace's MCP then offers \`render_${name}\`. Bump \`version\` in \`src/c
 `,
 });
 
-const exists = (path: string) => access(path).then(() => true, () => false);
+const exists = (path: string) =>
+  access(path).then(
+    () => true,
+    () => false,
+  );
 
 /** Writes a new component into `dir`, which must be missing or empty. Returns the component's name. */
 export async function init(dir: string, name = componentName(dir)): Promise<string> {
-  if (!/^[a-z][a-z0-9_]{1,40}$/.test(name)) throw new Error(`--name must be lowercase letters, digits and _, starting with a letter (got "${name}")`);
+  if (!/^[a-z][a-z0-9_]{1,40}$/.test(name))
+    throw new Error(`--name must be lowercase letters, digits and _, starting with a letter (got "${name}")`);
   const root = resolve(dir);
   if ((await exists(root)) && (await readdir(root)).length > 0) throw new Error(`${root} isn't empty`);
   for (const [file, content] of Object.entries(files(name))) {

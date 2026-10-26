@@ -66,8 +66,7 @@ export function registerCompanyTools(server: McpServer): void {
   server.registerTool(
     "create_order",
     {
-      description:
-        "Create an order. Returns { ok: true, message, result } or { ok: false, fieldErrors?, formError? }.",
+      description: "Create an order. Returns { ok: true, message, result } or { ok: false, fieldErrors?, formError? }.",
       inputSchema: z.object({
         customer: z.string(),
         products: z.array(z.string()).optional(),
@@ -83,7 +82,8 @@ export function registerCompanyTools(server: McpServer): void {
       await delay(500);
       const fieldErrors: Record<string, string> = {};
       if (!products?.length) fieldErrors.products = "Pick at least one product";
-      if (delivery_date && new Date(delivery_date) < new Date(new Date().toDateString())) fieldErrors.delivery_date = "Must be today or later";
+      if (delivery_date && new Date(delivery_date) < new Date(new Date().toDateString()))
+        fieldErrors.delivery_date = "Must be today or later";
       if (Object.keys(fieldErrors).length) return json({ ok: false, fieldErrors });
       if (customer === "c-3") return json({ ok: false, formError: "Initech's account is on hold. Contact finance." });
       const orderId = nextOrder++;

@@ -20,7 +20,13 @@ export interface ManagementRuntime {
  * registry MCP at /mcp. Tokens are bound to `${baseURL}/mcp`; the person's role is read
  * from the database on every request, so role changes apply immediately.
  */
-export function enableManagement(app: Hono, db: Database, store: Store, config: AuthConfig, { assets, fetchClientMetadataResource }: ManagementRuntime): Auth {
+export function enableManagement(
+  app: Hono,
+  db: Database,
+  store: Store,
+  config: AuthConfig,
+  { assets, fetchClientMetadataResource }: ManagementRuntime,
+): Auth {
   const auth = createAuth(db, store, config, fetchClientMetadataResource);
   // /mcp checks access tokens against the keys that signed them, read in-process. Over HTTP it would
   // fetch our own public URL, which a Worker can't (same-domain fetch fails) and a container behind a
@@ -36,7 +42,8 @@ export function enableManagement(app: Hono, db: Database, store: Store, config: 
     allowHeaders: ["authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
     exposeHeaders: ["www-authenticate", "mcp-session-id"],
   });
-  for (const path of ["/mcp", "/.well-known/*", "/api/auth/oauth2/token", "/api/auth/oauth2/register", "/api/auth/jwks"]) app.use(path, publicCors);
+  for (const path of ["/mcp", "/.well-known/*", "/api/auth/oauth2/token", "/api/auth/oauth2/register", "/api/auth/jwks"])
+    app.use(path, publicCors);
 
   app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
@@ -70,9 +77,20 @@ export function enableManagement(app: Hono, db: Database, store: Store, config: 
     auth,
     async (request, claims) => {
       const member = claims.sub ? await store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
-      if (!member) return Response.json({ error: "You are not a member of any genui workspace. Ask a workspace admin to invite your email." }, { status: 403 });
+      if (!member)
+        return Response.json(
+          { error: "You are not a member of any genui workspace. Ask a workspace admin to invite your email." },
+          { status: 403 },
+        );
       return mcp.fetch(request, {
-        authInfo: { token: "", clientId: String(claims.azp ?? claims.client_id ?? ""), scopes: String(claims.scope ?? "").split(" ").filter(Boolean), extra: { member } },
+        authInfo: {
+          token: "",
+          clientId: String(claims.azp ?? claims.client_id ?? ""),
+          scopes: String(claims.scope ?? "")
+            .split(" ")
+            .filter(Boolean),
+          extra: { member },
+        },
       });
     },
     { resource, jwksUrl: jwks },

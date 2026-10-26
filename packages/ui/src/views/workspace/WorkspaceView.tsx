@@ -46,11 +46,29 @@ interface State {
 const isState = (value: unknown): value is State =>
   Boolean(value && typeof value === "object" && Array.isArray((value as State).members) && Array.isArray((value as State).connectors));
 
-function Choice<T extends string>({ value, options, onChange, disabled }: { value: T; options: T[]; onChange: (v: T) => void; disabled?: boolean }) {
+function Choice<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: T;
+  options: T[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex gap-1" role="group">
       {options.map((option) => (
-        <Button key={option} type="button" size="sm" variant={option === value ? "default" : "outline"} aria-pressed={option === value} disabled={disabled} onClick={() => onChange(option)}>
+        <Button
+          key={option}
+          type="button"
+          size="sm"
+          variant={option === value ? "default" : "outline"}
+          aria-pressed={option === value}
+          disabled={disabled}
+          onClick={() => onChange(option)}
+        >
           {option}
         </Button>
       ))}
@@ -144,7 +162,8 @@ export function WorkspaceView() {
     reader.readAsDataURL(file);
   }
 
-  const brandingField = (key: keyof Branding) => (event: { currentTarget: HTMLInputElement }) => setBranding({ ...branding, [key]: event.currentTarget.value || undefined });
+  const brandingField = (key: keyof Branding) => (event: { currentTarget: HTMLInputElement }) =>
+    setBranding({ ...branding, [key]: event.currentTarget.value || undefined });
   const iconShown = icon === undefined ? state.branding.iconUrl : (icon?.preview ?? null);
 
   const status = message && (
@@ -184,7 +203,9 @@ export function WorkspaceView() {
                         variant={confirm === `invite:${i.email}` ? "destructive" : "outline"}
                         disabled={busy !== null}
                         onClick={() =>
-                          confirm === `invite:${i.email}` ? run(`invite:${i.email}`, "invite_cancel", { email: i.email }, "The user cancelled an invite") : setConfirm(`invite:${i.email}`)
+                          confirm === `invite:${i.email}`
+                            ? run(`invite:${i.email}`, "invite_cancel", { email: i.email }, "The user cancelled an invite")
+                            : setConfirm(`invite:${i.email}`)
                         }
                       >
                         {busy === `invite:${i.email}` ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
@@ -214,34 +235,60 @@ export function WorkspaceView() {
                 value={invite.email}
                 onInput={(event) => setInvite({ ...invite, email: (event.target as HTMLInputElement).value })}
               />
-              <Choice value={invite.role} options={["member", "admin"]} onChange={(role) => setInvite({ ...invite, role })} disabled={busy !== null} />
+              <Choice
+                value={invite.role}
+                options={["member", "admin"]}
+                onChange={(role) => setInvite({ ...invite, role })}
+                disabled={busy !== null}
+              />
               <Button type="submit" size="sm" disabled={busy !== null || !invite.email}>
                 {busy === "invite" ? <Loader2Icon className="animate-spin" /> : <UserPlusIcon />}
                 Invite
               </Button>
             </form>
           )}
-          {isAdmin && <p className="text-xs text-muted-foreground">They join when they next connect genui and sign in with that verified email.</p>}
+          {isAdmin && (
+            <p className="text-xs text-muted-foreground">They join when they next connect genui and sign in with that verified email.</p>
+          )}
         </section>
 
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-medium">Connector</h3>
-          <p className="text-sm text-muted-foreground">How hosts like Claude and ChatGPT show your end-user MCP. Instructions and workflows are set per environment (manage_instructions, manage_workflows).</p>
+          <p className="text-sm text-muted-foreground">
+            How hosts like Claude and ChatGPT show your end-user MCP. Instructions and workflows are set per environment
+            (manage_instructions, manage_workflows).
+          </p>
           {isAdmin ? (
             <form
               className="flex flex-col gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                run("branding", "branding_save", { branding, ...(icon !== undefined ? { icon: icon?.data ?? null } : {}) }, "The user saved the connector branding");
+                run(
+                  "branding",
+                  "branding_save",
+                  { branding, ...(icon !== undefined ? { icon: icon?.data ?? null } : {}) },
+                  "The user saved the connector branding",
+                );
               }}
             >
               <div className="flex items-center gap-3">
                 <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-                  {iconShown ? <img src={iconShown} alt="Connector icon" className="size-full object-contain" /> : <ImageIcon className="size-5 text-muted-foreground" />}
+                  {iconShown ? (
+                    <img src={iconShown} alt="Connector icon" className="size-full object-contain" />
+                  ) : (
+                    <ImageIcon className="size-5 text-muted-foreground" />
+                  )}
                 </div>
                 <label className="cursor-pointer">
-                  <input type="file" accept={ICON_TYPES.join(",")} className="sr-only" onChange={(event) => pickIcon((event.target as HTMLInputElement).files?.[0])} />
-                  <span className="inline-flex h-7 items-center rounded-md border px-2.5 text-sm">{iconShown ? "Change icon" : "Upload icon"}</span>
+                  <input
+                    type="file"
+                    accept={ICON_TYPES.join(",")}
+                    className="sr-only"
+                    onChange={(event) => pickIcon((event.target as HTMLInputElement).files?.[0])}
+                  />
+                  <span className="inline-flex h-7 items-center rounded-md border px-2.5 text-sm">
+                    {iconShown ? "Change icon" : "Upload icon"}
+                  </span>
                 </label>
                 {iconShown && (
                   <Button type="button" size="sm" variant="outline" onClick={() => setIcon(null)}>
@@ -250,9 +297,27 @@ export function WorkspaceView() {
                 )}
                 <span className="text-xs text-muted-foreground">Square PNG, SVG, WebP or JPEG, up to 100 KB.</span>
               </div>
-              <Input aria-label="Title" maxLength={80} placeholder={`Title (default: ${state.workspace.name})`} value={branding.title ?? ""} onInput={brandingField("title")} />
-              <Input aria-label="Description" maxLength={500} placeholder="What the connector does, in a sentence" value={branding.description ?? ""} onInput={brandingField("description")} />
-              <Input aria-label="Website" type="url" placeholder="https://www.example.com" value={branding.websiteUrl ?? ""} onInput={brandingField("websiteUrl")} />
+              <Input
+                aria-label="Title"
+                maxLength={80}
+                placeholder={`Title (default: ${state.workspace.name})`}
+                value={branding.title ?? ""}
+                onInput={brandingField("title")}
+              />
+              <Input
+                aria-label="Description"
+                maxLength={500}
+                placeholder="What the connector does, in a sentence"
+                value={branding.description ?? ""}
+                onInput={brandingField("description")}
+              />
+              <Input
+                aria-label="Website"
+                type="url"
+                placeholder="https://www.example.com"
+                value={branding.websiteUrl ?? ""}
+                onInput={brandingField("websiteUrl")}
+              />
               <Button type="submit" size="sm" className="self-start" disabled={busy !== null}>
                 {busy === "branding" ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
                 Save connector
@@ -306,7 +371,8 @@ export function WorkspaceView() {
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Tokens</h3>
             <p className="text-sm text-muted-foreground">
-              <b>server</b>: your MCP server forwards genui's tools with @genui/sdk. <b>publish</b>: you or CI publish components with <code>genui publish</code>. <b>admin</b>: every genui CLI command.
+              <b>server</b>: your MCP server forwards genui's tools with @genui/sdk. <b>publish</b>: you or CI publish components with{" "}
+              <code>genui publish</code>. <b>admin</b>: every genui CLI command.
             </p>
             {state.created && (
               <div className="flex flex-col gap-2 rounded-lg border border-primary/40 p-3">
@@ -316,12 +382,14 @@ export function WorkspaceView() {
                 <Copyable value={state.created.token} />
                 {state.created.scope === "server" && (
                   <p className="text-xs text-muted-foreground">
-                    In your server's environment: <code>GENUI_MCP_TOKEN</code> = this token, <code>GENUI_MCP_URL</code> = an end-user MCP address above.
+                    In your server's environment: <code>GENUI_MCP_TOKEN</code> = this token, <code>GENUI_MCP_URL</code> = an end-user MCP
+                    address above.
                   </p>
                 )}
                 {state.created.scope !== "server" && (
                   <p className="text-xs text-muted-foreground">
-                    Use it as <code>GENUI_TOKEN</code>: <code>GENUI_TOKEN=… npx genui publish</code> in a component made with <code>npx @genui/cli init</code>.
+                    Use it as <code>GENUI_TOKEN</code>: <code>GENUI_TOKEN=… npx genui publish</code> in a component made with{" "}
+                    <code>npx @genui/cli init</code>.
                   </p>
                 )}
               </div>
@@ -349,7 +417,9 @@ export function WorkspaceView() {
                           size="sm"
                           variant={confirm === t.id ? "destructive" : "outline"}
                           disabled={busy !== null}
-                          onClick={() => (confirm === t.id ? run(t.id, "token_revoke", { id: t.id }, "The user revoked a token") : setConfirm(t.id))}
+                          onClick={() =>
+                            confirm === t.id ? run(t.id, "token_revoke", { id: t.id }, "The user revoked a token") : setConfirm(t.id)
+                          }
                         >
                           {busy === t.id ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
                           {confirm === t.id ? "Confirm revoke" : "Revoke"}
@@ -377,7 +447,12 @@ export function WorkspaceView() {
                 value={token.name}
                 onInput={(event) => setToken({ ...token, name: (event.target as HTMLInputElement).value })}
               />
-              <Choice value={token.scope} options={["server", "publish", "admin"]} onChange={(scope) => setToken({ ...token, scope })} disabled={busy !== null} />
+              <Choice
+                value={token.scope}
+                options={["server", "publish", "admin"]}
+                onChange={(scope) => setToken({ ...token, scope })}
+                disabled={busy !== null}
+              />
               <Button type="submit" size="sm" disabled={busy !== null || !token.name}>
                 {busy === "token" ? <Loader2Icon className="animate-spin" /> : <KeyRoundIcon />}
                 Create token

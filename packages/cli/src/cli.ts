@@ -105,7 +105,10 @@ if (!command || values.help) {
 // Only registry commands need these: `genui dev` runs without a registry.
 function registry() {
   const url = (values.url ?? (process.env.GENUI_URL || DEFAULT_URL)).replace(/\/$/, "");
-  const token = values.token ?? process.env.GENUI_TOKEN ?? fail("missing --token or GENUI_TOKEN: create one in the genui connector, under Workspace → Tokens");
+  const token =
+    values.token ??
+    process.env.GENUI_TOKEN ??
+    fail("missing --token or GENUI_TOKEN: create one in the genui connector, under Workspace → Tokens");
   return { url, token };
 }
 
@@ -113,7 +116,10 @@ async function api<T = Record<string, unknown>>(method: string, path: string, bo
   const { url, token } = registry();
   const res = await fetch(`${url}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json",
+    },
     body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
   }).catch((error: Error) => fail(`can't reach the registry at ${url}: ${(error.cause as Error | undefined)?.message || error.message}`));
   const json = (await res.json().catch(() => ({}))) as T & { error?: string; issues?: unknown };
@@ -162,7 +168,11 @@ function describeEnvironment(e: Environment): string {
   const line = `${e.name}  ${registry().url}${e.path}${e.builtIns ? "" : "  (built-in forms and charts off)"}`;
   if (!e.refreshUrl) return line;
   const last = e.lastRefresh;
-  const outcome = !last ? "not called yet" : last.ok ? `last call ok (${last.at})` : `last call failed: ${last.error ?? `HTTP ${last.status}`} (${last.at})`;
+  const outcome = !last
+    ? "not called yet"
+    : last.ok
+      ? `last call ok (${last.at})`
+      : `last call failed: ${last.error ?? `HTTP ${last.status}`} (${last.at})`;
   return `${line}\n  refresh ${e.refreshUrl}  ${outcome}`;
 }
 
@@ -191,16 +201,22 @@ async function publish(target: string) {
 async function publishComponent({ manifest, html }: ComponentDir, env: string) {
   const { name } = manifest;
   const result = await api<Published>("POST", "/v1/components", { manifest, html, environment: env });
-  const what = result.created ? `Published ${name}@${result.version} to ${env}` : `${name}@${result.version} was already published with this bundle; ${env} serves it`;
+  const what = result.created
+    ? `Published ${name}@${result.version} to ${env}`
+    : `${name}@${result.version} was already published with this bundle; ${env} serves it`;
   printPublished(result, `${what} (hash ${result.hash})`);
 }
 
-const describeWorkflow = (w: Workflow) => (w.params.length ? `/${w.name} (${w.params.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})` : w.name);
+const describeWorkflow = (w: Workflow) =>
+  w.params.length ? `/${w.name} (${w.params.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})` : w.name;
 
 async function publishWorkflow({ workflow }: WorkflowFile, env: string) {
   const { name, ...rest } = workflow;
   const result = await api<{ replaced: boolean }>("PUT", `/v1/workflows/${name}?environment=${env}`, rest);
-  print(result, `${result.replaced ? "Updated" : "Published"} workflow ${describeWorkflow(workflow)} in ${env}${workflow.params.length ? "" : " (in the instructions)"}`);
+  print(
+    result,
+    `${result.replaced ? "Updated" : "Published"} workflow ${describeWorkflow(workflow)} in ${env}${workflow.params.length ? "" : " (in the instructions)"}`,
+  );
 }
 
 interface KitDev {
@@ -219,7 +235,11 @@ async function kitDev(root: string): Promise<KitDev | undefined> {
   return (await import(pathToFileURL(entry).href)) as KitDev;
 }
 
-const exists = (path: string) => access(path).then(() => true, () => false);
+const exists = (path: string) =>
+  access(path).then(
+    () => true,
+    () => false,
+  );
 const VITE_CONFIGS = ["vite.config.ts", "vite.config.mts", "vite.config.js", "vite.config.mjs"];
 
 /** Runs the component's dev server with the local host from @genui/kit, resolved from the component. */
@@ -242,7 +262,12 @@ async function serve(dirs: string[]) {
     const here = ["genui.component.json", "dist/genui.component.json", ...VITE_CONFIGS].map((file) => resolve(file));
     if ((await Promise.all(here.map(exists))).some(Boolean)) dirs = ["."];
   }
-  const suffix = values.suffix === undefined ? undefined : EnvironmentName.safeParse(values.suffix).success ? values.suffix : fail(`--suffix: lowercase letters and digits, up to 15 characters`);
+  const suffix =
+    values.suffix === undefined
+      ? undefined
+      : EnvironmentName.safeParse(values.suffix).success
+        ? values.suffix
+        : fail(`--suffix: lowercase letters and digits, up to 15 characters`);
   const port = values.port === undefined ? undefined : Number(values.port);
   if (port !== undefined && !Number.isInteger(port)) fail("--port must be a number");
 
@@ -272,7 +297,9 @@ async function serve(dirs: string[]) {
     log,
   }).catch((error: Error) => fail(error.message));
 
-  const tools = served.catalog.components().map((c) => `render_${c.manifest.name}${suffix ? `_${suffix}` : ""} (${c.manifest.name}@${c.manifest.version})`);
+  const tools = served.catalog
+    .components()
+    .map((c) => `render_${c.manifest.name}${suffix ? `_${suffix}` : ""} (${c.manifest.name}@${c.manifest.version})`);
   const workflows = (await served.catalog.snapshot(suffix ?? DEFAULT_ENVIRONMENT))?.catalog.workflows ?? [];
   const lines = [`serving render_form, render_chart${tools.length ? `, ${tools.join(", ")}` : ""}`];
   if (workflows.length) lines.push(`workflows: ${workflows.map(describeWorkflow).join(", ")}`);
@@ -318,7 +345,9 @@ switch (command) {
     const name = args[0] ?? fail("usage: genui remove <name> [--env e]");
     const env = environment();
     await api("DELETE", `/v1/components/${name}/environments/${env}`);
-    console.log(`${env} no longer serves ${name}. Its versions stay published: genui publish ${name}@<version> --env ${env} serves one again.`);
+    console.log(
+      `${env} no longer serves ${name}. Its versions stay published: genui publish ${name}@<version> --env ${env} serves one again.`,
+    );
     break;
   }
   case "list": {
@@ -339,7 +368,7 @@ switch (command) {
       const result = await api<{ environments: Environment[] }>("GET", "/v1/environments");
       print(result, result.environments.map(describeEnvironment).join("\n"));
     } else if (action === "set") {
-      const usage = "usage: genui env set <name> [--refresh-url <url>] [--built-ins on|off]  (--refresh-url \"\" clears it)";
+      const usage = 'usage: genui env set <name> [--refresh-url <url>] [--built-ins on|off]  (--refresh-url "" clears it)';
       const target = name ?? fail(usage);
       const url = values["refresh-url"];
       const builtIns = values["built-ins"];
@@ -357,11 +386,17 @@ switch (command) {
             : `${target} has no refresh URL; servers pick up changes at their next check.`,
         );
       }
-      if (builtIns !== undefined) lines.push(`${target} ${updated.builtIns ? "offers" : "no longer offers"} the built-in render_form and render_chart.`);
+      if (builtIns !== undefined)
+        lines.push(`${target} ${updated.builtIns ? "offers" : "no longer offers"} the built-in render_form and render_chart.`);
       print(updated, lines.join("\n"));
     } else if (action === "add") {
-      const created = await api<{ name: string; path: string }>("POST", "/v1/environments", { name: name ?? fail("usage: genui env add <name>") });
-      print(created, `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`);
+      const created = await api<{ name: string; path: string }>("POST", "/v1/environments", {
+        name: name ?? fail("usage: genui env add <name>"),
+      });
+      print(
+        created,
+        `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`,
+      );
     } else if (action === "rm") {
       await api("DELETE", `/v1/environments/${name ?? fail("usage: genui env rm <name>")}`);
       console.log(`Deleted ${name} with what it served: versions, theme, instructions and workflows.`);
@@ -369,7 +404,9 @@ switch (command) {
     break;
   }
   case "theme": {
-    const theme = values.clear ? null : Theme.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui theme <file.json> | --clear"), "utf8")));
+    const theme = values.clear
+      ? null
+      : Theme.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui theme <file.json> | --clear"), "utf8")));
     const env = environment();
     await api("PUT", `/v1/theme?environment=${env}`, { theme });
     console.log(theme ? `Theme updated in ${env}.` : `Theme cleared in ${env}.`);
@@ -379,7 +416,10 @@ switch (command) {
     const [scope, name] = args;
     if (!scope || !name) fail("usage: genui token <server|publish|admin> <name> [--env a,b]");
     // Only an explicit --env limits a token; GENUI_ENV is for publishing.
-    const environments = values.env?.split(",").map((e) => e.trim()).filter(Boolean);
+    const environments = values.env
+      ?.split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
     const result = await api<{ token: string }>("POST", "/v1/tokens", { scope, name, environments });
     console.log(result.token);
     break;
@@ -389,9 +429,14 @@ switch (command) {
     const env = environment();
     if (action === "list") {
       const { workflows } = await api<{ workflows: Workflow[] }>("GET", `/v1/workflows?environment=${env}`);
-      print({ workflows }, workflows.length ? workflows.map((w) => `${describeWorkflow(w)}  ${w.description}`).join("\n") : `No workflows in ${env} yet.`);
+      print(
+        { workflows },
+        workflows.length ? workflows.map((w) => `${describeWorkflow(w)}  ${w.description}`).join("\n") : `No workflows in ${env} yet.`,
+      );
     } else if (action === "set") {
-      const file = await readWorkflowFile(arg ?? fail("usage: genui workflow set <file> [--env e]")).catch((error: Error) => fail(error.message));
+      const file = await readWorkflowFile(arg ?? fail("usage: genui workflow set <file> [--env e]")).catch((error: Error) =>
+        fail(error.message),
+      );
       await publishWorkflow(file, env);
     } else if (action === "rm") {
       await api("DELETE", `/v1/workflows/${arg ?? fail("usage: genui workflow rm <name> [--env e]")}?environment=${env}`);
@@ -401,10 +446,15 @@ switch (command) {
   }
   case "instructions": {
     const env = environment();
-    const instructions = values.clear ? null : (await readFile(args[0] ?? fail("usage: genui instructions <file.md> | --clear [--env e]"), "utf8")).trim();
-    if (instructions && instructions.length > MAX_ENVIRONMENT_INSTRUCTIONS) fail(`instructions are ${instructions.length} characters; at most ${MAX_ENVIRONMENT_INSTRUCTIONS}`);
+    const instructions = values.clear
+      ? null
+      : (await readFile(args[0] ?? fail("usage: genui instructions <file.md> | --clear [--env e]"), "utf8")).trim();
+    if (instructions && instructions.length > MAX_ENVIRONMENT_INSTRUCTIONS)
+      fail(`instructions are ${instructions.length} characters; at most ${MAX_ENVIRONMENT_INSTRUCTIONS}`);
     await api("PUT", `/v1/instructions?environment=${env}`, { instructions });
-    console.log(instructions ? `Instructions saved in ${env}. Hosts get them on their next connection.` : `Instructions cleared in ${env}.`);
+    console.log(
+      instructions ? `Instructions saved in ${env}. Hosts get them on their next connection.` : `Instructions cleared in ${env}.`,
+    );
     break;
   }
   case "branding": {

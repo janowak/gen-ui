@@ -91,11 +91,17 @@ describe("publishing to environments", () => {
   });
 
   it("treats re-publishing the same version and content as a no-op", async () => {
-    expect(await publish(publisher, "1.1.0", "v1.1", "staging")).toMatchObject({ status: 200, body: { created: false, environments: { staging: "1.1.0" } } });
+    expect(await publish(publisher, "1.1.0", "v1.1", "staging")).toMatchObject({
+      status: 200,
+      body: { created: false, environments: { staging: "1.1.0" } },
+    });
     const changed = await publish(publisher, "1.1.0", "v1.1 rebuilt", "prod");
     expect(changed.status).toBe(409);
     expect(changed.body.error).toContain("genui publish rating@1.1.0 --env prod");
-    expect((await call("POST", "/v1/components", publisher, { manifest: { ...manifest("1.1.0"), description: "Changed." }, html: HTML("v1.1") })).status).toBe(409);
+    expect(
+      (await call("POST", "/v1/components", publisher, { manifest: { ...manifest("1.1.0"), description: "Changed." }, html: HTML("v1.1") }))
+        .status,
+    ).toBe(409);
   });
 
   it("serves exactly what was last published, older versions included", async () => {
@@ -106,7 +112,10 @@ describe("publishing to environments", () => {
 
   it("deploys a published version to another environment without the bundle", async () => {
     const deployed = await deploy(publisher, "rating", "1.1.0", "prod");
-    expect(deployed).toMatchObject({ status: 200, body: { version: "1.1.0", created: false, environment: "prod", environments: { prod: "1.1.0", staging: "1.1.0" } } });
+    expect(deployed).toMatchObject({
+      status: 200,
+      body: { version: "1.1.0", created: false, environment: "prod", environments: { prod: "1.1.0", staging: "1.1.0" } },
+    });
     expect((await deploy(publisher, "rating", "3.0.0", "prod")).status).toBe(404);
     expect((await deploy(publisher, "nope", "1.0.0", "prod")).status).toBe(404);
     expect((await deploy(publisher, "rating", "1.1.0", "stagng")).status).toBe(404);
@@ -116,12 +125,18 @@ describe("publishing to environments", () => {
     const breaking = { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] };
     const published = await publish(publisher, "1.2.0", "v1.2", "staging", breaking);
     expect(published.status).toBe(201);
-    expect(published.body.warnings).toEqual(['removed prop "question" (staging served 1.1.0)', 'newly required prop "prompt" (staging served 1.1.0)']);
+    expect(published.body.warnings).toEqual([
+      'removed prop "question" (staging served 1.1.0)',
+      'newly required prop "prompt" (staging served 1.1.0)',
+    ]);
   });
 
   it("limits publish tokens to their environments", async () => {
     expect((await publish(previewer, "1.3.0", "v1.3", "staging")).status).toBe(201);
-    expect(await publish(previewer, "1.3.0", "v1.3", "prod")).toEqual({ status: 403, body: { error: "This token can't publish to prod (allowed: staging)" } });
+    expect(await publish(previewer, "1.3.0", "v1.3", "prod")).toEqual({
+      status: 403,
+      body: { error: "This token can't publish to prod (allowed: staging)" },
+    });
     expect((await deploy(previewer, "rating", "1.3.0", "prod")).status).toBe(403);
     expect(await environments()).toEqual({ prod: "1.1.0", staging: "1.3.0" });
   });
@@ -141,14 +156,25 @@ describe("environments", () => {
   it("lists them, prod first, with their end-user MCP paths and refresh settings", async () => {
     expect((await call("GET", "/v1/environments", reader)).body.environments).toEqual([
       { name: "prod", path: `/w/${workspace}/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
-      { name: "staging", path: `/w/${workspace}/staging/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
+      {
+        name: "staging",
+        path: `/w/${workspace}/staging/mcp`,
+        revision: expect.any(Number),
+        refreshUrl: null,
+        lastRefresh: null,
+        builtIns: true,
+      },
     ]);
   });
 
   it("lets admins turn the built-in form and chart off, leaving other settings as they are", async () => {
     expect((await call("PUT", "/v1/environments/staging", publisher, { builtIns: false })).status).toBe(403);
     expect((await call("PUT", "/v1/environments/qa", admin, { builtIns: false })).status).toBe(404);
-    expect((await call("PUT", "/v1/environments/staging", admin, { builtIns: false })).body).toMatchObject({ name: "staging", builtIns: false, refreshUrl: null });
+    expect((await call("PUT", "/v1/environments/staging", admin, { builtIns: false })).body).toMatchObject({
+      name: "staging",
+      builtIns: false,
+      refreshUrl: null,
+    });
     expect((await call("PUT", "/v1/environments/staging", admin, { builtIns: true })).body).toMatchObject({ builtIns: true });
   });
 
@@ -158,7 +184,10 @@ describe("environments", () => {
     expect((await deploy(publisher, "rating", "1.0.0", "qa")).status).toBe(200);
     expect((await call("DELETE", "/v1/components/rating/environments/qa", previewer)).status).toBe(403);
     expect((await call("DELETE", "/v1/components/rating/environments/qa", reader)).status).toBe(403);
-    expect((await call("DELETE", "/v1/components/rating/environments/qa", publisher)).body).toEqual({ removed: "rating", environment: "qa" });
+    expect((await call("DELETE", "/v1/components/rating/environments/qa", publisher)).body).toEqual({
+      removed: "rating",
+      environment: "qa",
+    });
     expect((await call("DELETE", "/v1/components/rating/environments/qa", publisher)).status).toBe(404);
     expect(await environments()).not.toHaveProperty("qa");
     expect((await call("GET", "/v1/components", reader)).body.components[0].versions).toContain("1.0.0");
@@ -222,11 +251,17 @@ describe("sign-up gate", () => {
     // Refused once, then invited: the next sign-in joins the inviting workspace.
     expect(await store.resolveMembership(person("bob", "bob@other.test"), hosted)).toBeUndefined();
     await store.invite(ann.workspaceId, "bob@other.test", "member");
-    expect(await store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "member" });
+    expect(await store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({
+      workspaceId: ann.workspaceId,
+      role: "member",
+    });
     // An invite wins over a workspace made at an earlier sign-in; an unused one is deleted.
     const pat = (await store.resolveMembership(person("pat", "pat@partner.test"), hosted))!;
     await store.invite(ann.workspaceId, "pat@partner.test", "admin");
-    expect(await store.resolveMembership(person("pat", "pat@partner.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "admin" });
+    expect(await store.resolveMembership(person("pat", "pat@partner.test"), hosted)).toMatchObject({
+      workspaceId: ann.workspaceId,
+      role: "admin",
+    });
     expect((await store.resolveMembership(person("pat", "pat@partner.test"), hosted))?.workspaceId).toBe(ann.workspaceId);
     expect(await store.workspace(pat.workspaceId)).toBeUndefined();
     // A workspace in use is kept.
@@ -236,14 +271,18 @@ describe("sign-up gate", () => {
     expect((await store.resolveMembership(person("zoe", "zoe@partner.test"), hosted))?.workspaceId).toBe(ann.workspaceId);
     expect(await store.workspace(zoe.workspaceId)).toBeDefined();
     // Narrowing the list later doesn't lock out members.
-    expect((await store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] }))?.workspaceId).toBe(ann.workspaceId);
+    expect(
+      (await store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] }))?.workspaceId,
+    ).toBe(ann.workspaceId);
   });
 
   it("lets listed admins into a self-hosted workspace; no list lets everyone in", async () => {
     const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
     await store.createWorkspace("default");
     const selfHosted = { mode: "self-hosted" as const, adminEmails: ["root@acme.test"], allowedEmails: ["@acme.test"] };
-    expect((await store.resolveMembership(person("root", "root@acme.test"), { ...selfHosted, allowedEmails: ["@elsewhere.test"] }))?.role).toBe("admin");
+    expect(
+      (await store.resolveMembership(person("root", "root@acme.test"), { ...selfHosted, allowedEmails: ["@elsewhere.test"] }))?.role,
+    ).toBe("admin");
     expect(await store.resolveMembership(person("eve", "eve@evil.test"), selfHosted)).toBeUndefined();
     expect((await store.resolveMembership(person("eve", "eve@evil.test"), { ...selfHosted, allowedEmails: [] }))?.role).toBe("member");
   });
@@ -254,22 +293,38 @@ describe("workflows", () => {
 
   it("publish tokens save, list, replace and delete workflows, like components", async () => {
     expect((await call("PUT", "/v1/workflows/add_item", reader, workflow)).status).toBe(403);
-    expect((await call("PUT", "/v1/workflows/add_item", publisher, workflow)).body).toEqual({ name: "add_item", environment: "prod", command: false, replaced: false });
+    expect((await call("PUT", "/v1/workflows/add_item", publisher, workflow)).body).toEqual({
+      name: "add_item",
+      environment: "prod",
+      command: false,
+      replaced: false,
+    });
     const command = { ...workflow, params: [{ name: "name", description: "Item name" }] };
-    expect((await call("PUT", "/v1/workflows/add_item", publisher, command)).body).toEqual({ name: "add_item", environment: "prod", command: true, replaced: true });
+    expect((await call("PUT", "/v1/workflows/add_item", publisher, command)).body).toEqual({
+      name: "add_item",
+      environment: "prod",
+      command: true,
+      replaced: true,
+    });
     expect((await call("PUT", "/v1/workflows/Bad Name", publisher, workflow)).status).toBe(400);
 
     const listed = await call("GET", "/v1/workflows", reader);
-    expect(listed.body.workflows).toEqual([{ name: "add_item", ...workflow, params: [{ name: "name", description: "Item name", required: false }] }]);
+    expect(listed.body.workflows).toEqual([
+      { name: "add_item", ...workflow, params: [{ name: "name", description: "Item name", required: false }] },
+    ]);
 
     expect((await call("DELETE", "/v1/workflows/add_item", publisher)).status).toBe(200);
     expect((await call("DELETE", "/v1/workflows/add_item", publisher)).status).toBe(404);
   });
 
   it("keeps each environment's workflows apart and honours a token's environments", async () => {
-    expect((await call("PUT", "/v1/workflows/add_item?environment=staging", previewer, workflow)).body).toMatchObject({ environment: "staging" });
+    expect((await call("PUT", "/v1/workflows/add_item?environment=staging", previewer, workflow)).body).toMatchObject({
+      environment: "staging",
+    });
     expect((await call("PUT", "/v1/workflows/add_item", previewer, workflow)).status).toBe(403);
-    expect((await call("GET", "/v1/workflows?environment=staging", reader)).body.workflows.map((w: { name: string }) => w.name)).toEqual(["add_item"]);
+    expect((await call("GET", "/v1/workflows?environment=staging", reader)).body.workflows.map((w: { name: string }) => w.name)).toEqual([
+      "add_item",
+    ]);
     expect((await call("GET", "/v1/workflows", reader)).body.workflows).toEqual([]);
     expect((await call("PUT", "/v1/workflows/add_item?environment=qa", admin, workflow)).status).toBe(404);
     expect((await call("DELETE", "/v1/workflows/add_item?environment=staging", previewer)).status).toBe(200);
@@ -277,7 +332,10 @@ describe("workflows", () => {
 
   it("keeps the instructions hosts get, workflows included, within the limit", async () => {
     expect((await call("PUT", "/v1/instructions", publisher, { instructions: "Acme." })).status).toBe(403);
-    expect((await call("PUT", "/v1/instructions", admin, { instructions: " Acme returns. " })).body).toEqual({ environment: "prod", instructions: "Acme returns." });
+    expect((await call("PUT", "/v1/instructions", admin, { instructions: " Acme returns. " })).body).toEqual({
+      environment: "prod",
+      instructions: "Acme returns.",
+    });
     expect((await call("GET", "/v1/instructions", reader)).body.instructions).toBe("Acme returns.");
 
     const long = { description: "Long.", instructions: "x".repeat(4000) };

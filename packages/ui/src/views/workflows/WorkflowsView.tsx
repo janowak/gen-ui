@@ -84,7 +84,8 @@ export function WorkflowsView() {
   if (state.mode === "draft") {
     const { workflow } = state;
     const change = (patch: Partial<Workflow>) => setState({ ...state, workflow: { ...workflow, ...patch }, saved: false });
-    const setParam = (index: number, patch: Partial<WorkflowParam>) => change({ params: workflow.params.map((p, i) => (i === index ? { ...p, ...patch } : p)) });
+    const setParam = (index: number, patch: Partial<WorkflowParam>) =>
+      change({ params: workflow.params.map((p, i) => (i === index ? { ...p, ...patch } : p)) });
     const checked = Workflow.safeParse(workflow);
     const problem = checked.success ? null : `${checked.error.issues[0].path.join(".") || "workflow"}: ${checked.error.issues[0].message}`;
     const command = isCommand(workflow);
@@ -107,10 +108,28 @@ export function WorkflowsView() {
           {isAdmin ? (
             <>
               <div className="flex flex-wrap gap-2">
-                <Input aria-label="Name" placeholder="return_order" className="w-44" value={workflow.name} disabled={state.replaces} onInput={(e) => change({ name: value(e) })} />
-                <Input aria-label="Title" placeholder="Title (optional)" className="w-44 flex-1" value={workflow.title ?? ""} onInput={(e) => change({ title: value(e) || undefined })} />
+                <Input
+                  aria-label="Name"
+                  placeholder="return_order"
+                  className="w-44"
+                  value={workflow.name}
+                  disabled={state.replaces}
+                  onInput={(e) => change({ name: value(e) })}
+                />
+                <Input
+                  aria-label="Title"
+                  placeholder="Title (optional)"
+                  className="w-44 flex-1"
+                  value={workflow.title ?? ""}
+                  onInput={(e) => change({ title: value(e) || undefined })}
+                />
               </div>
-              <Input aria-label="Description" placeholder="When to use it, e.g. The user wants to return an order." value={workflow.description} onInput={(e) => change({ description: value(e) })} />
+              <Input
+                aria-label="Description"
+                placeholder="When to use it, e.g. The user wants to return an order."
+                value={workflow.description}
+                onInput={(e) => change({ description: value(e) })}
+              />
               <Textarea
                 rows={8}
                 maxLength={4000}
@@ -121,21 +140,45 @@ export function WorkflowsView() {
               />
               <section className="flex flex-col gap-2">
                 <h3 className="text-sm font-medium">Params</h3>
-                {workflow.params.length === 0 && <p className="text-sm text-muted-foreground">None: add one to make this a slash command.</p>}
+                {workflow.params.length === 0 && (
+                  <p className="text-sm text-muted-foreground">None: add one to make this a slash command.</p>
+                )}
                 {workflow.params.map((p, i) => (
                   <div key={i} className="flex flex-wrap items-center gap-2">
-                    <Input aria-label="Param name" placeholder="order_id" className="w-36" value={p.name} onInput={(e) => setParam(i, { name: value(e) })} />
-                    <Input aria-label="Param description" placeholder="The order number" className="w-44 flex-1" value={p.description} onInput={(e) => setParam(i, { description: value(e) })} />
+                    <Input
+                      aria-label="Param name"
+                      placeholder="order_id"
+                      className="w-36"
+                      value={p.name}
+                      onInput={(e) => setParam(i, { name: value(e) })}
+                    />
+                    <Input
+                      aria-label="Param description"
+                      placeholder="The order number"
+                      className="w-44 flex-1"
+                      value={p.description}
+                      onInput={(e) => setParam(i, { description: value(e) })}
+                    />
                     <label className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Switch checked={p.required} onCheckedChange={(required) => setParam(i, { required })} aria-label="Required" />
                       required
                     </label>
-                    <Button size="sm" variant="outline" aria-label={`Remove ${p.name}`} onClick={() => change({ params: workflow.params.filter((_, j) => j !== i) })}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Remove ${p.name}`}
+                      onClick={() => change({ params: workflow.params.filter((_, j) => j !== i) })}
+                    >
                       <Trash2Icon />
                     </Button>
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="self-start" onClick={() => change({ params: [...workflow.params, blankParam] })}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => change({ params: [...workflow.params, blankParam] })}
+                >
                   <PlusIcon />
                   Add param
                 </Button>
@@ -145,19 +188,33 @@ export function WorkflowsView() {
             <>
               <p className="text-sm text-muted-foreground">{workflow.description}</p>
               <p className="text-sm whitespace-pre-wrap">{workflow.instructions}</p>
-              {command && <p className="text-sm text-muted-foreground">Params: {workflow.params.map((p) => `${p.name}${p.required ? "" : "?"}`).join(", ")}</p>}
+              {command && (
+                <p className="text-sm text-muted-foreground">
+                  Params: {workflow.params.map((p) => `${p.name}${p.required ? "" : "?"}`).join(", ")}
+                </p>
+              )}
             </>
           )}
-          {state.replaces && !state.saved && <p className="text-sm text-muted-foreground">Saving replaces {workflow.name} in {state.environment}.</p>}
+          {state.replaces && !state.saved && (
+            <p className="text-sm text-muted-foreground">
+              Saving replaces {workflow.name} in {state.environment}.
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex flex-wrap items-center gap-2">
           {isAdmin ? (
             <Button
               disabled={busy !== null || state.saved || problem !== null}
-              onClick={() => run("save", "workflow_save", { workflow: checked.data, environment: state.environment }, "The user saved a workflow")}
+              onClick={() =>
+                run("save", "workflow_save", { workflow: checked.data, environment: state.environment }, "The user saved a workflow")
+              }
             >
               {busy === "save" ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-              {state.saved ? `Saved to ${state.environment}` : state.replaces ? `Replace in ${state.environment}` : `Save to ${state.environment}`}
+              {state.saved
+                ? `Saved to ${state.environment}`
+                : state.replaces
+                  ? `Replace in ${state.environment}`
+                  : `Save to ${state.environment}`}
             </Button>
           ) : (
             <span className="text-sm text-muted-foreground">Only admins can save workflows.</span>
@@ -180,11 +237,16 @@ export function WorkflowsView() {
         <CardTitle className="flex items-center gap-2">
           Workflows <Badge variant="outline">{state.environment}</Badge>
         </CardTitle>
-        <CardDescription>Playbooks the AI follows. With params a workflow is a slash command; without, the AI always has it.</CardDescription>
+        <CardDescription>
+          Playbooks the AI follows. With params a workflow is a slash command; without, the AI always has it.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {state.workflows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No workflows yet. Ask to draft one, e.g. "make a workflow for returning an order", or keep them in your repo and publish with genui publish.</p>
+          <p className="text-sm text-muted-foreground">
+            No workflows yet. Ask to draft one, e.g. "make a workflow for returning an order", or keep them in your repo and publish with
+            genui publish.
+          </p>
         ) : (
           <Table>
             <TableHeader>
@@ -202,7 +264,9 @@ export function WorkflowsView() {
                   <TableCell className="max-w-64 truncate text-muted-foreground" title={w.description}>
                     {w.description}
                   </TableCell>
-                  <TableCell>{isCommand(w) ? <Badge variant="secondary">command</Badge> : <span className="text-muted-foreground">always on</span>}</TableCell>
+                  <TableCell>
+                    {isCommand(w) ? <Badge variant="secondary">command</Badge> : <span className="text-muted-foreground">always on</span>}
+                  </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -216,7 +280,12 @@ export function WorkflowsView() {
                           disabled={busy !== null}
                           onClick={() =>
                             confirm === w.name
-                              ? run(w.name, "workflow_delete", { name: w.name, environment: state.environment }, "The user deleted a workflow")
+                              ? run(
+                                  w.name,
+                                  "workflow_delete",
+                                  { name: w.name, environment: state.environment },
+                                  "The user deleted a workflow",
+                                )
                               : setConfirm(w.name)
                           }
                         >

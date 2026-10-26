@@ -86,7 +86,11 @@ const input = (event: Event) => event.target as HTMLInputElement;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function select(values: string[], current: string, onchange: (value: string) => void, labels = values) {
-  return h("select", { onchange: (e) => onchange(input(e).value) }, ...values.map((v, i) => h("option", { value: v, selected: v === current }, labels[i] ?? v)));
+  return h(
+    "select",
+    { onchange: (e) => onchange(input(e).value) },
+    ...values.map((v, i) => h("option", { value: v, selected: v === current }, labels[i] ?? v)),
+  );
 }
 
 // ── State ──────────────────────────────────────────────────────────────────────
@@ -165,7 +169,12 @@ function layout() {
       "main",
       {},
       chat,
-      h("div", { id: "log" }, h("div", { className: "bar" }, h("b", {}, "Host log"), h("button", { onclick: () => logList.replaceChildren() }, "Clear")), logList),
+      h(
+        "div",
+        { id: "log" },
+        h("div", { className: "bar" }, h("b", {}, "Host log"), h("button", { onclick: () => logList.replaceChildren() }, "Clear")),
+        logList,
+      ),
     ),
   );
 }
@@ -232,7 +241,11 @@ function fieldControl(field: Field): HTMLElement {
     case "boolean":
       control = field.required
         ? h("input", { type: "checkbox", checked: value === true, onchange: (e) => set(input(e).checked) })
-        : select(["", "true", "false"], value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true"), ["(unset)", "true", "false"]);
+        : select(["", "true", "false"], value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true"), [
+            "(unset)",
+            "true",
+            "false",
+          ]);
       break;
     case "enum": {
       const options = field.options ?? [];
@@ -302,7 +315,11 @@ function renderPropsSection() {
       label,
     );
   const body =
-    propsTab === "json" ? propsJson() : fields.length ? h("div", {}, ...fields.map(fieldControl)) : h("p", { className: "hint" }, "This component takes no props.");
+    propsTab === "json"
+      ? propsJson()
+      : fields.length
+        ? h("div", {}, ...fields.map(fieldControl))
+        : h("p", { className: "hint" }, "This component takes no props.");
 
   propsSection.replaceChildren(
     h("h2", {}, "Props", h("span", { className: "tabs" }, tab("form", "Form"), tab("json", "JSON"))),
@@ -312,7 +329,15 @@ function renderPropsSection() {
       "div",
       { className: "row" },
       h("button", { className: "primary", title: "New render with a new view id (⌘/Ctrl+Enter)", onclick: () => void render() }, "Render"),
-      h("button", { className: "secondary", title: "Same view id: state the component saved comes back", onclick: () => void render({ replay: true }) }, "Replay"),
+      h(
+        "button",
+        {
+          className: "secondary",
+          title: "Same view id: state the component saved comes back",
+          onclick: () => void render({ replay: true }),
+        },
+        "Replay",
+      ),
       h(
         "label",
         { title: "Send the props in growing pieces first, like a model writing them" },
@@ -735,7 +760,9 @@ function listen() {
 
 const first = await fetchManifest();
 if (!first) {
-  root.replaceChildren(h("pre", { className: "error", style: "padding: 16px" }, `genui dev: ${manifestError}\n\nFix it and save; the page reloads.`));
+  root.replaceChildren(
+    h("pre", { className: "error", style: "padding: 16px" }, `genui dev: ${manifestError}\n\nFix it and save; the page reloads.`),
+  );
   new EventSource("/__genui/events").addEventListener("reload", () => location.reload());
 } else {
   manifest = first;

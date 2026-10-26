@@ -35,7 +35,10 @@ async function signUp(email: string): Promise<string> {
     body: JSON.stringify({ email, password: "correct-horse-battery", name: email.split("@")[0] }),
   });
   expect(res.status).toBe(200);
-  return res.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+  return res.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .join("; ");
 }
 
 /** Runs the OAuth authorization-code flow (PKCE, consent, resource indicator) like Claude would. */
@@ -75,7 +78,14 @@ async function accessToken(cookie: string): Promise<string> {
   const token = await fetch(`${base}/api/auth/oauth2/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "authorization_code", code: code!, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier, resource: `${base}/mcp` }),
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: code!,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      code_verifier: verifier,
+      resource: `${base}/mcp`,
+    }),
   });
   const body = (await token.json()) as { access_token?: string };
   expect(body.access_token).toBeTruthy();
@@ -84,7 +94,9 @@ async function accessToken(cookie: string): Promise<string> {
 
 async function mcpClient(token: string): Promise<Client> {
   const client = new Client({ name: "test-host", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: `Bearer ${token}` } } }));
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: `Bearer ${token}` } } }),
+  );
   return client;
 }
 
@@ -102,14 +114,32 @@ beforeAll(async () => {
   server = serve({ fetch: (req) => created.app.fetch(req), port: 0 });
   await new Promise((r) => server.once("listening", r));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
-  auth = await enableManagement(created.app, db, store, { baseURL: base, secret: "test-secret-test-secret-test-secret", mode: "self-hosted", adminEmails: [], allowedEmails: [], password: true }, { assets, fetchClientMetadataResource });
+  auth = await enableManagement(
+    created.app,
+    db,
+    store,
+    {
+      baseURL: base,
+      secret: "test-secret-test-secret-test-secret",
+      mode: "self-hosted",
+      adminEmails: [],
+      allowedEmails: [],
+      password: true,
+    },
+    { assets, fetchClientMetadataResource },
+  );
 
   // Stand-in for Claude's Client ID Metadata Document: a public client registered for the test.
   const owner = await signUp("owner@acme.test");
   const res = await fetch(`${base}/api/auth/oauth2/create-client`, {
     method: "POST",
     headers: { cookie: owner, "content-type": "application/json", origin: base },
-    body: JSON.stringify({ client_name: "Test host", redirect_uris: [redirectUri], token_endpoint_auth_method: "none", application_type: "native" }),
+    body: JSON.stringify({
+      client_name: "Test host",
+      redirect_uris: [redirectUri],
+      token_endpoint_auth_method: "none",
+      application_type: "native",
+    }),
   });
   clientId = ((await res.json()) as { client_id: string }).client_id;
   expect(clientId).toBeTruthy();
@@ -141,7 +171,15 @@ describe("management MCP", () => {
     const { tools } = await admin.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     expect(Object.keys(byName)).toEqual(
-      expect.arrayContaining(["manage_components", "use_environment", "open_theme_controller", "preview_form", "preview_chart", "preview_rating", "theme_save"]),
+      expect.arrayContaining([
+        "manage_components",
+        "use_environment",
+        "open_theme_controller",
+        "preview_form",
+        "preview_chart",
+        "preview_rating",
+        "theme_save",
+      ]),
     );
     // Publishing stays with CI; stopping a component and the built-ins switch are clicks in the view.
     for (const name of ["theme_save", "component_remove", "built_ins_set"]) {
@@ -173,7 +211,10 @@ describe("management MCP", () => {
     expect(theme.structuredContent).toMatchObject({ role: "admin", environment: "staging", theme: { light: { primary: "#16a34a" } } });
 
     // Built-in previews render inline data with the active environment's theme.
-    const chart = await staging.callTool({ name: "preview_chart", arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } } });
+    const chart = await staging.callTool({
+      name: "preview_chart",
+      arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } },
+    });
     expect(chart.isError).toBeFalsy();
     expect(chart._meta?.["genui/theme"]).toEqual({ light: { primary: "#16a34a" } });
 
@@ -211,10 +252,14 @@ describe("management MCP", () => {
     ]);
 
     // The view sends the environment it showed; a save lands there.
-    expect((await admin.callTool({ name: "workflow_save", arguments: { workflow, environment: "staging" } })).structuredContent).toMatchObject({ environment: "staging" });
+    expect(
+      (await admin.callTool({ name: "workflow_save", arguments: { workflow, environment: "staging" } })).structuredContent,
+    ).toMatchObject({ environment: "staging" });
     expect((await store.listWorkflows(workspaceId, "staging")).map((w) => w.name)).toEqual(["add_item"]);
     expect((await admin.callTool({ name: "workflow_save", arguments: { workflow, environment: "qa" } })).isError).toBe(true);
-    expect((await admin.callTool({ name: "workflow_delete", arguments: { name: "add_item", environment: "staging" } })).structuredContent).toMatchObject({ mode: "list", workflows: [] });
+    expect(
+      (await admin.callTool({ name: "workflow_delete", arguments: { name: "add_item", environment: "staging" } })).structuredContent,
+    ).toMatchObject({ mode: "list", workflows: [] });
   });
 
   it("lets admins stop serving a component and turn the built-ins off, by clicking in the view", async () => {
@@ -230,7 +275,10 @@ describe("management MCP", () => {
     expect((await store.catalog(workspaceId, "qa")).builtIns).toBe(false);
 
     const removed = await admin.callTool({ name: "component_remove", arguments: { name: "rating", environment: "qa" } });
-    expect(removed.structuredContent).toMatchObject({ environment: "qa", components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" } }] });
+    expect(removed.structuredContent).toMatchObject({
+      environment: "qa",
+      components: [{ name: "rating", environments: { prod: "1.0.0", staging: "1.1.0" } }],
+    });
     expect((await admin.callTool({ name: "component_remove", arguments: { name: "rating", environment: "qa" } })).isError).toBe(true);
     await store.deleteEnvironment(workspaceId, "qa");
   });
@@ -290,11 +338,12 @@ describe("management MCP", () => {
 
     // Private: no token, no MCP; the server token still works until it's revoked.
     await admin.callTool({ name: "public_set", arguments: { enabled: false } });
-    const post = (headers: Record<string, string> = {}) =>
-      fetch(`${base}/w/${workspaceId}/revision`, { headers });
+    const post = (headers: Record<string, string> = {}) => fetch(`${base}/w/${workspaceId}/revision`, { headers });
     expect((await post()).status).toBe(404);
     expect((await post({ authorization: `Bearer ${token}` })).status).toBe(200);
-    const listed = (await admin.callTool({ name: "manage_workspace", arguments: {} })).structuredContent as { tokens: { id: string; name: string }[] };
+    const listed = (await admin.callTool({ name: "manage_workspace", arguments: {} })).structuredContent as {
+      tokens: { id: string; name: string }[];
+    };
     await admin.callTool({ name: "token_revoke", arguments: { id: listed.tokens.find((t) => t.name === "prod server")!.id } });
     expect((await post({ authorization: `Bearer ${token}` })).status).toBe(401);
     await admin.callTool({ name: "public_set", arguments: { enabled: true } });
@@ -324,16 +373,26 @@ describe("management MCP", () => {
     const saved = await admin.callTool({ name: "instructions_save", arguments: { instructions } });
     expect(saved.structuredContent).toMatchObject({ mode: "view", saved: true, instructions });
     // What hosts get: the instructions with the workflows added.
-    await store.saveWorkflow(workspaceId, "prod", { name: "returns", description: "A return.", instructions: "Ask for the order.", params: [] });
+    await store.saveWorkflow(workspaceId, "prod", {
+      name: "returns",
+      description: "A return.",
+      instructions: "Ask for the order.",
+      params: [],
+    });
     expect((await admin.callTool({ name: "manage_instructions", arguments: {} })).structuredContent).toMatchObject({
       instructions,
-      served: expect.stringMatching(new RegExp(`^${instructions}\n\n## Workflows\n[\\s\\S]*### returns\nWhen: A return.\nAsk for the order.$`)),
+      served: expect.stringMatching(
+        new RegExp(`^${instructions}\n\n## Workflows\n[\\s\\S]*### returns\nWhen: A return.\nAsk for the order.$`),
+      ),
     });
     await store.deleteWorkflow(workspaceId, "prod", "returns");
 
     // The icon arrives base64 from the view and is served next to the end-user MCP.
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
-    const bad = await admin.callTool({ name: "branding_save", arguments: { branding: {}, icon: Buffer.from("<script>").toString("base64") } });
+    const bad = await admin.callTool({
+      name: "branding_save",
+      arguments: { branding: {}, icon: Buffer.from("<script>").toString("base64") },
+    });
     expect(bad.isError).toBe(true);
     const branded = await admin.callTool({ name: "branding_save", arguments: { branding: { title: "Acme Support" }, icon: png } });
     const { branding } = branded.structuredContent as { branding: { title: string; iconUrl: string } };
@@ -342,7 +401,9 @@ describe("management MCP", () => {
     expect((await fetch(branding.iconUrl)).headers.get("content-type")).toBe("image/png");
     // Leaving the icon out keeps it.
     const kept = await admin.callTool({ name: "branding_save", arguments: { branding: {} } });
-    expect((kept.structuredContent as { branding: { iconUrl: string | null; title?: string } }).branding).toEqual({ iconUrl: branding.iconUrl });
+    expect((kept.structuredContent as { branding: { iconUrl: string | null; title?: string } }).branding).toEqual({
+      iconUrl: branding.iconUrl,
+    });
   });
 
   it("rejects a token for another resource", async () => {
