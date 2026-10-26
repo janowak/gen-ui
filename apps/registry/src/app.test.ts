@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serve, type ServerType } from "@hono/node-server";
 import type { AddressInfo } from "node:net";
-import { createRegistryApp, openDatabase } from "./app.js";
+import { createRegistryApp } from "./app.js";
+import { loadAssets, testDatabase } from "./testing.js";
 
 const HTML = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const manifest = (version: string, props: Record<string, unknown> = { type: "object", properties: { question: { type: "string" } } }) => ({
@@ -43,14 +44,14 @@ const deploy = (token: string, name: string, version: string, environment: strin
 const environments = async () => (await call("GET", "/v1/components", reader)).body.components[0].environments;
 
 beforeAll(async () => {
-  const { app, store } = createRegistryApp(openDatabase(":memory:"));
-  workspace = store.createWorkspace("acme");
-  store.createEnvironment(workspace, "staging");
-  admin = store.createToken(workspace, "admin", "test");
-  publisher = store.createToken(workspace, "publish", "ci");
-  previewer = store.createToken(workspace, "publish", "ci-preview", ["staging"]);
-  reader = store.createToken(workspace, "server", "sdk");
-  otherReader = store.createToken(store.createWorkspace("other"), "server", "sdk");
+  const { app, store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+  workspace = await store.createWorkspace("acme");
+  await store.createEnvironment(workspace, "staging");
+  admin = await store.createToken(workspace, "admin", "test");
+  publisher = await store.createToken(workspace, "publish", "ci");
+  previewer = await store.createToken(workspace, "publish", "ci-preview", ["staging"]);
+  reader = await store.createToken(workspace, "server", "sdk");
+  otherReader = await store.createToken(await store.createWorkspace("other"), "server", "sdk");
   server = serve({ fetch: app.fetch, port: 0 });
   await new Promise((r) => server.once("listening", r));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
@@ -182,47 +183,47 @@ describe("sign-up gate", () => {
   const hosted = { mode: "hosted" as const, adminEmails: [], allowedEmails: ["ann@acme.test", "@partner.test"] };
   const person = (id: string, email: string, emailVerified = true) => ({ id, email, emailVerified, name: id });
 
-  it("gives workspaces only to listed verified emails and domains", () => {
-    const { store } = createRegistryApp(openDatabase(":memory:"));
-    expect(store.resolveMembership(person("ann", "Ann@Acme.test"), hosted)?.role).toBe("admin");
-    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)?.role).toBe("admin");
-    expect(store.resolveMembership(person("eve", "eve@evil.test"), hosted)).toBeUndefined();
-    expect(store.resolveMembership(person("pet", "pat@notpartner.test"), hosted)).toBeUndefined();
+  it("gives workspaces only to listed verified emails and domains", async () => {
+    const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+    expect((await store.resolveMembership(person("ann", "Ann@Acme.test"), hosted))?.role).toBe("admin");
+    expect((await store.resolveMembership(person("pat", "pat@partner.test"), hosted))?.role).toBe("admin");
+    expect(await store.resolveMembership(person("eve", "eve@evil.test"), hosted)).toBeUndefined();
+    expect(await store.resolveMembership(person("pet", "pat@notpartner.test"), hosted)).toBeUndefined();
     // Unverified emails can't claim a listed address.
-    expect(store.resolveMembership(person("fake", "ann@acme.test", false), hosted)).toBeUndefined();
-    expect(store.countWorkspaces()).toBe(2);
+    expect(await store.resolveMembership(person("fake", "ann@acme.test", false), hosted)).toBeUndefined();
+    expect(await store.countWorkspaces()).toBe(2);
   });
 
-  it("lets invited people and existing members in", () => {
-    const { store } = createRegistryApp(openDatabase(":memory:"));
-    const ann = store.resolveMembership(person("ann", "ann@acme.test"), hosted)!;
+  it("lets invited people and existing members in", async () => {
+    const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+    const ann = (await store.resolveMembership(person("ann", "ann@acme.test"), hosted))!;
     // Refused once, then invited: the next sign-in joins the inviting workspace.
-    expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toBeUndefined();
-    store.invite(ann.workspaceId, "bob@other.test", "member");
-    expect(store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "member" });
+    expect(await store.resolveMembership(person("bob", "bob@other.test"), hosted)).toBeUndefined();
+    await store.invite(ann.workspaceId, "bob@other.test", "member");
+    expect(await store.resolveMembership(person("bob", "bob@other.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "member" });
     // An invite wins over a workspace made at an earlier sign-in; an unused one is deleted.
-    const pat = store.resolveMembership(person("pat", "pat@partner.test"), hosted)!;
-    store.invite(ann.workspaceId, "pat@partner.test", "admin");
-    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "admin" });
-    expect(store.resolveMembership(person("pat", "pat@partner.test"), hosted)?.workspaceId).toBe(ann.workspaceId);
-    expect(store.workspace(pat.workspaceId)).toBeUndefined();
+    const pat = (await store.resolveMembership(person("pat", "pat@partner.test"), hosted))!;
+    await store.invite(ann.workspaceId, "pat@partner.test", "admin");
+    expect(await store.resolveMembership(person("pat", "pat@partner.test"), hosted)).toMatchObject({ workspaceId: ann.workspaceId, role: "admin" });
+    expect((await store.resolveMembership(person("pat", "pat@partner.test"), hosted))?.workspaceId).toBe(ann.workspaceId);
+    expect(await store.workspace(pat.workspaceId)).toBeUndefined();
     // A workspace in use is kept.
-    const zoe = store.resolveMembership(person("zoe", "zoe@partner.test"), hosted)!;
-    store.createToken(zoe.workspaceId, "server", "sdk");
-    store.invite(ann.workspaceId, "zoe@partner.test", "member");
-    expect(store.resolveMembership(person("zoe", "zoe@partner.test"), hosted)?.workspaceId).toBe(ann.workspaceId);
-    expect(store.workspace(zoe.workspaceId)).toBeDefined();
+    const zoe = (await store.resolveMembership(person("zoe", "zoe@partner.test"), hosted))!;
+    await store.createToken(zoe.workspaceId, "server", "sdk");
+    await store.invite(ann.workspaceId, "zoe@partner.test", "member");
+    expect((await store.resolveMembership(person("zoe", "zoe@partner.test"), hosted))?.workspaceId).toBe(ann.workspaceId);
+    expect(await store.workspace(zoe.workspaceId)).toBeDefined();
     // Narrowing the list later doesn't lock out members.
-    expect(store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] })?.workspaceId).toBe(ann.workspaceId);
+    expect((await store.resolveMembership(person("ann", "ann@acme.test"), { ...hosted, allowedEmails: ["@nobody.test"] }))?.workspaceId).toBe(ann.workspaceId);
   });
 
-  it("lets listed admins into a self-hosted workspace; no list lets everyone in", () => {
-    const { store } = createRegistryApp(openDatabase(":memory:"));
-    store.createWorkspace("default");
+  it("lets listed admins into a self-hosted workspace; no list lets everyone in", async () => {
+    const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+    await store.createWorkspace("default");
     const selfHosted = { mode: "self-hosted" as const, adminEmails: ["root@acme.test"], allowedEmails: ["@acme.test"] };
-    expect(store.resolveMembership(person("root", "root@acme.test"), { ...selfHosted, allowedEmails: ["@elsewhere.test"] })?.role).toBe("admin");
-    expect(store.resolveMembership(person("eve", "eve@evil.test"), selfHosted)).toBeUndefined();
-    expect(store.resolveMembership(person("eve", "eve@evil.test"), { ...selfHosted, allowedEmails: [] })?.role).toBe("member");
+    expect((await store.resolveMembership(person("root", "root@acme.test"), { ...selfHosted, allowedEmails: ["@elsewhere.test"] }))?.role).toBe("admin");
+    expect(await store.resolveMembership(person("eve", "eve@evil.test"), selfHosted)).toBeUndefined();
+    expect((await store.resolveMembership(person("eve", "eve@evil.test"), { ...selfHosted, allowedEmails: [] }))?.role).toBe("member");
   });
 });
 

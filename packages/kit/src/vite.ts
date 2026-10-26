@@ -8,7 +8,7 @@ import { DEFAULT_COMPONENT, loadManifest } from "./load.js";
 export interface GenUIPluginOptions {
   /** Module whose default export is `defineComponent(...)`. Default `src/component.ts`. Must not touch the DOM. */
   component?: string;
-  /** Warn above this bundle size, in KB. Default 500. The registry rejects bundles above 3 MB. */
+  /** Warn above this bundle size, in KB. Default 500. The registry rejects bundles above 1.9 MB. */
   budgetKb?: number;
 }
 

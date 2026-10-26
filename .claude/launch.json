@@ -42,6 +42,18 @@
       "port": 5180
     },
     {
+      "name": "registry-worker",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@genui/registry",
+        "exec",
+        "wrangler",
+        "dev"
+      ],
+      "port": 8788
+    },
+    {
       "name": "site-worker",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

@@ -29,10 +29,12 @@ export interface GenUIClientOptions {
   logger?: Pick<Console, "warn">;
 }
 
-/** What genui offers: the tools and prompts to mirror onto your server. */
+/** What genui offers: the tools and prompts to mirror onto your server, and the environment's instructions. */
 export interface Snapshot {
   tools: Tool[];
   prompts: Prompt[];
+  /** The MCP instructions set for this environment in genui, if any. */
+  instructions?: string;
 }
 
 export interface GenUIClient {
@@ -40,6 +42,12 @@ export interface GenUIClient {
   ready(): Promise<void>;
   /** The current tools and prompts, or undefined if genui was never reached. */
   snapshot(): Snapshot | undefined;
+  /**
+   * The environment's MCP instructions from genui, for your server's own instructions
+   * (`new McpServer(info, { instructions })`). Hosts read them when they connect, so a long-lived
+   * server picks up a change at its next start; per-request servers pick it up right away.
+   */
+  instructions(): string | undefined;
   /** A `ui://` resource a current tool points at. Content-hashed, so fetched once. */
   resource(uri: string): ReadResourceResult | undefined;
   readResource(uri: string): Promise<ReadResourceResult>;
@@ -119,16 +127,17 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   }
 
   async function load(): Promise<void> {
-    const { tools, prompts } = await request(async (client) => ({
+    const { tools, prompts, instructions } = await request(async (client) => ({
       tools: (await client.listTools(undefined, { timeout, cacheMode: "refresh" })).tools,
-      // No prompts capability until the environment has recipes.
+      // No prompts capability until the environment has recipes or workflow prompts.
       prompts: client.getServerCapabilities()?.prompts ? (await client.listPrompts(undefined, { timeout, cacheMode: "refresh" })).prompts : [],
+      instructions: client.getInstructions(),
     }));
     for (const tool of tools) {
       const uri = resourceUri(tool);
       if (uri && !resources.has(uri)) resources.set(uri, await request((client) => client.readResource({ uri }, { timeout })));
     }
-    const next = { tools, prompts };
+    const next: Snapshot = { tools, prompts, ...(instructions ? { instructions } : {}) };
     if (JSON.stringify(snapshot) === JSON.stringify(next)) return;
     snapshot = next;
     for (const listener of listeners) listener();
@@ -147,6 +156,12 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
     try {
       const latest = await latestRevision();
       if (snapshot && latest !== undefined && latest === revision) return;
+      // Instructions come with the connection: reconnect so a change to them is seen too.
+      if (snapshot && latest !== undefined && connection) {
+        const stale = connection;
+        drop(stale);
+        stale.then((client) => client.close()).catch(() => {});
+      }
       await load();
       revision = latest;
     } catch (error) {
@@ -193,6 +208,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   return {
     ready: () => initial,
     snapshot: () => snapshot,
+    instructions: () => snapshot?.instructions,
     resource: (uri) => resources.get(uri),
     async readResource(uri) {
       used();

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { WorkflowPrompt } from "./guide.js";
 import type { Recipe } from "./recipe.js";
 import { Theme } from "./theme.js";
 
@@ -46,13 +47,16 @@ export interface CatalogComponent {
   manifest: ComponentManifest;
 }
 
-/** What one environment serves: its components, theme and recipes. */
+/** What one environment serves: its components, theme, recipes, instructions and workflow prompts. */
 export interface Catalog {
   environment: string;
   theme: Theme | null;
   components: CatalogComponent[];
   recipes: Recipe[];
+  /** The end-user MCP's server instructions. */
+  instructions: string | null;
+  prompts: WorkflowPrompt[];
 }
 
-/** Max bundle size accepted by the registry. */
-export const MAX_BUNDLE_BYTES = 3 * 1024 * 1024;
+/** Max bundle size accepted by the registry. D1 stores at most 2 MB per row; the rest is room for the manifest. */
+export const MAX_BUNDLE_BYTES = 1_900_000;

@@ -1,11 +1,9 @@
 import { randomBytes } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
-import { cimd } from "@better-auth/cimd";
-import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { cimd, type CimdOptions } from "@better-auth/cimd";
 import { mcp } from "@better-auth/mcp";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
 import { genericOAuth, jwt } from "better-auth/plugins";
+import type { Database } from "./db.js";
 import type { Store } from "./store.js";
 
 /** Claims the access token carries; the role is re-read from the database on every MCP request. */
@@ -39,7 +37,14 @@ export interface AuthConfig {
 
 export const SSO_PROVIDER_ID = "sso";
 
-export function authConfigFromEnv(env: NodeJS.ProcessEnv): AuthConfig {
+/**
+ * Fetches Client ID Metadata Documents without reaching private networks: `@better-auth/cimd/node` on
+ * Node, which pins the checked DNS answer; a plain fetch on Workers, whose egress can't reach them.
+ */
+export type MetadataFetch = CimdOptions["fetchClientMetadataResource"];
+
+/** Settings from environment variables: `process.env` on Node, the Worker's env (vars and secrets) on Cloudflare. */
+export function authConfigFromEnv(env: Record<string, string | undefined>): AuthConfig {
   const pair = (id?: string, secret?: string) => (id && secret ? { clientId: id, clientSecret: secret } : undefined);
   const emails = (list?: string) => (list ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   const secret = env.GENUI_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
@@ -66,19 +71,21 @@ export function authConfigFromEnv(env: NodeJS.ProcessEnv): AuthConfig {
  * MCP clients (Claude, ChatGPT…) identify via Client ID Metadata Documents, people sign in
  * with GitHub / Google / the company IdP, and access tokens are JWTs bound to `${baseURL}/mcp`.
  */
-export async function createAuth(db: DatabaseSync, store: Store, config: AuthConfig) {
-  const options = authOptions(db, store, config);
-  // Migrate before starting better-auth, so it never sees (and warns about) a missing schema.
-  await (await getMigrations(options)).runMigrations();
-  return betterAuth(options);
+export function createAuth(db: Database, store: Store, config: AuthConfig, fetchClientMetadataResource: MetadataFetch) {
+  return betterAuth(authOptions(db, store, config, fetchClientMetadataResource));
 }
 
-function authOptions(db: DatabaseSync, store: Store, config: AuthConfig) {
+/**
+ * better-auth's settings. Its tables are in `migrations/` like ours (`pnpm auth-schema` regenerates
+ * them after a plugin change), so it never migrates at runtime.
+ */
+export function authOptions(db: Database, store: Store, config: AuthConfig, fetchClientMetadataResource: MetadataFetch) {
   return {
     baseURL: config.baseURL,
     basePath: "/api/auth",
     secret: config.secret,
-    database: db,
+    // node:sqlite's DatabaseSync or the D1 binding: better-auth has a dialect for each.
+    database: db.auth as BetterAuthOptions["database"],
     emailAndPassword: { enabled: config.password },
     socialProviders: {
       ...(config.github ? { github: config.github } : {}),
@@ -92,9 +99,9 @@ function authOptions(db: DatabaseSync, store: Store, config: AuthConfig) {
         resource: `${config.baseURL}/mcp`,
         allowDynamicClientRegistration: Boolean(config.dynamicRegistration),
         allowUnauthenticatedClientRegistration: Boolean(config.dynamicRegistration),
-        customAccessTokenClaims: ({ user }) => {
+        customAccessTokenClaims: async ({ user }) => {
           if (!user) return {};
-          const membership = store.resolveMembership(
+          const membership = await store.resolveMembership(
             { id: user.id, email: user.email, emailVerified: Boolean(user.emailVerified), name: user.name },
             { mode: config.mode, adminEmails: config.adminEmails, allowedEmails: config.allowedEmails },
           );
@@ -122,7 +129,7 @@ function authOptions(db: DatabaseSync, store: Store, config: AuthConfig) {
   } satisfies BetterAuthOptions;
 }
 
-export type Auth = Awaited<ReturnType<typeof createAuth>>;
+export type Auth = ReturnType<typeof createAuth>;
 
 /** What the sign-in page offers. */
 export function signInOptions(config: AuthConfig) {

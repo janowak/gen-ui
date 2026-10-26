@@ -1,23 +1,32 @@
-import { readFileSync } from "node:fs";
-import type { DatabaseSync } from "node:sqlite";
 import { requireMcpAuth } from "@better-auth/mcp";
 import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } from "@better-auth/oauth-provider";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createAuth, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig } from "./auth.js";
+import { createAuth, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
+import type { Database } from "./db.js";
 import { createRegistryMcp } from "./mcp.js";
 import type { Membership, Store } from "./store.js";
+import type { Assets } from "./views.js";
 
-const page = (name: "sign-in" | "consent") => readFileSync(new URL(`../dist-web/${name}.html`, import.meta.url), "utf8");
+/** What management needs from the runtime it runs on. */
+export interface ManagementRuntime {
+  assets: Assets;
+  fetchClientMetadataResource: MetadataFetch;
+}
 
 /**
  * Management in chat: better-auth (OAuth for MCP clients, sign-in, consent) plus the
  * registry MCP at /mcp. Tokens are bound to `${baseURL}/mcp`; the person's role is read
  * from the database on every request, so role changes apply immediately.
  */
-export async function enableManagement(app: Hono, db: DatabaseSync, store: Store, config: AuthConfig): Promise<Auth> {
-  const auth = await createAuth(db, store, config);
+export function enableManagement(app: Hono, db: Database, store: Store, config: AuthConfig, { assets, fetchClientMetadataResource }: ManagementRuntime): Auth {
+  const auth = createAuth(db, store, config, fetchClientMetadataResource);
+  // /mcp checks access tokens against the keys that signed them, read in-process. Over HTTP it would
+  // fetch our own public URL, which a Worker can't (same-domain fetch fails) and a container behind a
+  // proxy may not. better-auth's verifier takes a key-set function here (core's JwksFetchOptions);
+  // only requireMcpAuth's type says URL. The management tests cover this on both runtimes.
+  const jwks = (() => auth.api.getJwks()) as unknown as string;
   const resource = `${config.baseURL}/mcp`;
 
   // Browser-based MCP clients (MCP Inspector, the playground) call these cross-origin. They use bearer
@@ -44,16 +53,14 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
   }
 
   // Sign-in and consent pages (better-auth's client resumes the OAuth flow from them).
-  const signIn = page("sign-in");
-  const consent = page("consent");
-  app.get("/sign-in", (c) => c.html(signIn));
-  app.get("/consent", (c) => c.html(consent));
+  app.get("/sign-in", (c) => c.html(assets.pages["sign-in"]));
+  app.get("/consent", (c) => c.html(assets.pages.consent));
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
 
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
   // A switch of environment changes the preview tools: open listen streams re-list.
   const mcp = createMcpHandler((ctx) =>
-    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, config.baseURL, () => {
+    createRegistryMcp(store, (ctx.authInfo?.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
       mcp.notify.toolsChanged();
       mcp.notify.resourcesChanged();
     }),
@@ -62,13 +69,13 @@ export async function enableManagement(app: Hono, db: DatabaseSync, store: Store
   const protectedMcp = requireMcpAuth(
     auth,
     async (request, claims) => {
-      const member = claims.sub ? store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
+      const member = claims.sub ? await store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
       if (!member) return Response.json({ error: "You are not a member of any genui workspace. Ask a workspace admin to invite your email." }, { status: 403 });
       return mcp.fetch(request, {
         authInfo: { token: "", clientId: String(claims.azp ?? claims.client_id ?? ""), scopes: String(claims.scope ?? "").split(" ").filter(Boolean), extra: { member } },
       });
     },
-    { resource },
+    { resource, jwksUrl: jwks },
   );
   app.all("/mcp", (c) => protectedMcp(c.req.raw));
 

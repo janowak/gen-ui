@@ -3,9 +3,11 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createRegistryApp, openDatabase, type Store } from "./app.js";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { createRegistryApp, type Database, type Store } from "./app.js";
 import type { Auth } from "./auth.js";
 import { enableManagement } from "./management.js";
+import { loadAssets, testDatabase } from "./testing.js";
 
 let server: ServerType;
 let base: string;
@@ -13,7 +15,7 @@ let auth: Auth;
 let store: Store;
 let clientId: string;
 let workspaceId: string;
-let db: ReturnType<typeof openDatabase>;
+let db: Database;
 const redirectUri = "http://127.0.0.1:9/callback";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
@@ -87,19 +89,20 @@ async function mcpClient(token: string): Promise<Client> {
 }
 
 beforeAll(async () => {
-  db = openDatabase(":memory:");
-  const created = createRegistryApp(db);
+  db = await testDatabase();
+  const assets = await loadAssets();
+  const created = createRegistryApp(db, { assets });
   store = created.store;
-  const ws = store.createWorkspace("acme");
+  const ws = await store.createWorkspace("acme");
   workspaceId = ws;
-  store.createEnvironment(ws, "staging");
-  store.publish(ws, rating("1.0.0"), html("v1"));
-  store.publish(ws, rating("1.1.0"), html("v1.1"), "staging");
+  await store.createEnvironment(ws, "staging");
+  await store.publish(ws, rating("1.0.0"), html("v1"));
+  await store.publish(ws, rating("1.1.0"), html("v1.1"), "staging");
 
   server = serve({ fetch: (req) => created.app.fetch(req), port: 0 });
   await new Promise((r) => server.once("listening", r));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
-  auth = await enableManagement(created.app, db, store, { baseURL: base, secret: "test-secret-test-secret-test-secret", mode: "self-hosted", adminEmails: [], allowedEmails: [], password: true });
+  auth = await enableManagement(created.app, db, store, { baseURL: base, secret: "test-secret-test-secret-test-secret", mode: "self-hosted", adminEmails: [], allowedEmails: [], password: true }, { assets, fetchClientMetadataResource });
 
   // Stand-in for Claude's Client ID Metadata Document: a public client registered for the test.
   const owner = await signUp("owner@acme.test");
@@ -161,8 +164,8 @@ describe("management MCP", () => {
 
     const saved = await staging.callTool({ name: "theme_save", arguments: { theme: { light: { primary: "#16a34a" } } } });
     expect(saved.isError).toBeFalsy();
-    expect(store.getTheme(workspaceId, "staging")).toEqual({ light: { primary: "#16a34a" } });
-    expect(store.getTheme(workspaceId, "prod")).toBeNull();
+    expect(await store.getTheme(workspaceId, "staging")).toEqual({ light: { primary: "#16a34a" } });
+    expect(await store.getTheme(workspaceId, "prod")).toBeNull();
     const theme = await staging.callTool({ name: "open_theme_controller", arguments: {} });
     expect(theme.structuredContent).toMatchObject({ role: "admin", environment: "staging", theme: { light: { primary: "#16a34a" } } });
 
@@ -179,9 +182,9 @@ describe("management MCP", () => {
   });
 
   it("drafts recipes for review; only an admin click saves them", async () => {
-    store.invite(workspaceId, "dana@acme.test", "admin");
+    await store.invite(workspaceId, "dana@acme.test", "admin");
     const cookie = await signUp("dana@acme.test");
-    db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("dana@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "dana@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
     const recipe = {
       name: "add_item",
@@ -191,16 +194,16 @@ describe("management MCP", () => {
 
     const draft = await admin.callTool({ name: "draft_recipe", arguments: recipe });
     expect(draft.structuredContent).toMatchObject({ mode: "draft", replaces: false });
-    expect(store.listRecipes(workspaceId, "prod")).toEqual([]);
+    expect(await store.listRecipes(workspaceId, "prod")).toEqual([]);
 
     const tools = (await admin.listTools()).tools;
     expect((tools.find((t) => t.name === "recipe_save")?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     expect((await admin.callTool({ name: "recipe_save", arguments: { recipe } })).isError).toBeFalsy();
-    expect(store.listRecipes(workspaceId, "prod").map((r) => r.name)).toEqual(["add_item"]);
+    expect((await store.listRecipes(workspaceId, "prod")).map((r) => r.name)).toEqual(["add_item"]);
 
     // The view sends the environment it showed; a save lands there.
     expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "staging" } })).structuredContent).toMatchObject({ environment: "staging" });
-    expect(store.listRecipes(workspaceId, "staging").map((r) => r.name)).toEqual(["add_item"]);
+    expect((await store.listRecipes(workspaceId, "staging")).map((r) => r.name)).toEqual(["add_item"]);
     expect((await admin.callTool({ name: "recipe_save", arguments: { recipe, environment: "qa" } })).isError).toBe(true);
 
     // A fresh session previews it with the workspace theme.
@@ -221,8 +224,8 @@ describe("management MCP", () => {
   });
 
   it("gives invited people the invited role at first sign-in", async () => {
-    store.invite(workspaceId, "Carol@Acme.test", "admin");
-    store.invite(workspaceId, "mallory@acme.test", "admin");
+    await store.invite(workspaceId, "Carol@Acme.test", "admin");
+    await store.invite(workspaceId, "mallory@acme.test", "admin");
 
     // Password sign-ups have unverified emails and must not claim invites.
     const mallory = await mcpClient(await accessToken(await signUp("mallory@acme.test")));
@@ -230,15 +233,15 @@ describe("management MCP", () => {
 
     // A verified email (as GitHub / Google / the company IdP provide) claims the invite.
     const cookie = await signUp("carol@acme.test");
-    db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("carol@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "carol@acme.test");
     const carol = await mcpClient(await accessToken(cookie));
     expect((await carol.listTools()).tools.map((t) => t.name)).toContain("theme_save");
   });
 
   it("lets admins invite people, create and revoke tokens, and make the end-user MCP private, by clicking in the view", async () => {
-    store.invite(workspaceId, "frank@acme.test", "admin");
+    await store.invite(workspaceId, "frank@acme.test", "admin");
     const cookie = await signUp("frank@acme.test");
-    db.prepare("UPDATE user SET emailVerified = 1 WHERE email = ?").run("frank@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "frank@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
 
     const tools = (await admin.listTools()).tools;
@@ -250,18 +253,18 @@ describe("management MCP", () => {
     const shown = await admin.callTool({ name: "manage_workspace", arguments: { invite: { email: "gina@acme.test", role: "admin" } } });
     expect(shown.structuredContent).toMatchObject({ role: "admin", public: true, draftInvite: { email: "gina@acme.test", role: "admin" } });
     expect((shown.structuredContent as { connectors: { url: string }[] }).connectors[0]?.url).toBe(`${base}/w/${workspaceId}/mcp`);
-    expect(store.listMembers(workspaceId).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+    expect((await store.listMembers(workspaceId)).invites.map((i) => i.email)).not.toContain("gina@acme.test");
     await admin.callTool({ name: "member_invite", arguments: { email: "gina@acme.test", role: "admin" } });
-    expect(store.listMembers(workspaceId).invites).toContainEqual({ email: "gina@acme.test", role: "admin" });
+    expect((await store.listMembers(workspaceId)).invites).toContainEqual({ email: "gina@acme.test", role: "admin" });
     await admin.callTool({ name: "invite_cancel", arguments: { email: "gina@acme.test" } });
-    expect(store.listMembers(workspaceId).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+    expect((await store.listMembers(workspaceId)).invites.map((i) => i.email)).not.toContain("gina@acme.test");
 
     // The token goes to the view only, never into the text the model reads.
     const created = await admin.callTool({ name: "token_create", arguments: { name: "prod server" } });
     const { token } = (created.structuredContent as { created: { token: string } }).created;
     expect(token).toMatch(/^gnu_server_/);
     expect(JSON.stringify(created.content)).not.toContain(token);
-    expect(store.resolveToken(token)).toMatchObject({ workspaceId, scope: "server" });
+    expect(await store.resolveToken(token)).toMatchObject({ workspaceId, scope: "server" });
 
     // Private: no token, no MCP; the server token still works until it's revoked.
     await admin.callTool({ name: "public_set", arguments: { enabled: false } });
@@ -280,6 +283,38 @@ describe("management MCP", () => {
     const view = (await member.callTool({ name: "manage_workspace", arguments: {} })).structuredContent;
     expect(view).toMatchObject({ role: "member", public: true });
     expect(view).not.toHaveProperty("tokens");
+  });
+
+  it("drafts instructions and workflow prompts for review; branding and saves are clicks in the views", async () => {
+    await store.invite(workspaceId, "ivy@acme.test", "admin");
+    const cookie = await signUp("ivy@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "ivy@acme.test");
+    const admin = await mcpClient(await accessToken(cookie));
+    const tools = (await admin.listTools()).tools;
+    for (const name of ["branding_save", "guide_save"]) {
+      expect((tools.find((t) => t.name === name)?._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    }
+
+    const guide = { instructions: "Use /return_order for returns.", prompts: [{ name: "return_order", description: "Return an order.", prompt: "Ask for the order number." }] };
+    const drafted = await admin.callTool({ name: "draft_guide", arguments: guide });
+    expect(drafted.structuredContent).toMatchObject({ mode: "draft", environment: "prod", ...guide });
+    expect(await store.getGuide(workspaceId, "prod")).toEqual({ prompts: [] });
+    const saved = await admin.callTool({ name: "guide_save", arguments: { guide } });
+    expect(saved.structuredContent).toMatchObject({ mode: "view", saved: true, ...guide });
+    expect((await admin.callTool({ name: "manage_guide", arguments: {} })).structuredContent).toMatchObject(guide);
+
+    // The icon arrives base64 from the view and is served next to the end-user MCP.
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
+    const bad = await admin.callTool({ name: "branding_save", arguments: { branding: {}, icon: Buffer.from("<script>").toString("base64") } });
+    expect(bad.isError).toBe(true);
+    const branded = await admin.callTool({ name: "branding_save", arguments: { branding: { title: "Acme Support" }, icon: png } });
+    const { branding } = branded.structuredContent as { branding: { title: string; iconUrl: string } };
+    expect(branding.title).toBe("Acme Support");
+    expect(branding.iconUrl).toMatch(new RegExp(`^${base}/w/${workspaceId}/icon\\?v=`));
+    expect((await fetch(branding.iconUrl)).headers.get("content-type")).toBe("image/png");
+    // Leaving the icon out keeps it.
+    const kept = await admin.callTool({ name: "branding_save", arguments: { branding: {} } });
+    expect((kept.structuredContent as { branding: { iconUrl: string | null; title?: string } }).branding).toEqual({ iconUrl: branding.iconUrl });
   });
 
   it("rejects a token for another resource", async () => {

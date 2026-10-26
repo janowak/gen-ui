@@ -1,0 +1,29 @@
+// genui cloud: the registry as a Worker (src/worker.ts) on D1. One deployment, production (README "Deploy").
+// Self-hosting runs the same registry from the Docker image, on SQLite.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "genui-registry",
+  // The Cloudflare account that holds the app-mcp.com zone
+  "account_id": "9341ca52ab56b808dfd9a4a673fce52c",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Run next to the database (EU), not next to the caller: a request makes several D1 queries.
+  "placement": { "mode": "smart" },
+  // Views and sign-in pages are bundled as text
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+  "observability": { "enabled": true },
+  // pnpm dev:worker on http://localhost:8788 (the site's worker uses 8787). Without host, wrangler dev
+  // rewrites requests to the route's hostname, and sign-in refuses them as coming from another origin.
+  "dev": { "port": 8788, "host": "localhost:8788", "upstream_protocol": "http" },
+  "workers_dev": false,
+  "routes": [{ "pattern": "api.app-mcp.com", "custom_domain": true }],
+  // Created with: wrangler d1 create genui --jurisdiction eu (data stays in the EU)
+  "d1_databases": [{ "binding": "DB", "database_name": "genui", "database_id": "06af2a5c-2d2d-48e1-9393-37b3854eb81d", "migrations_dir": "migrations" }],
+  // Secrets (wrangler secret put): GENUI_AUTH_SECRET, GOOGLE_CLIENT_ID and _SECRET, GITHUB_CLIENT_ID and _SECRET.
+  // Local development reads .dev.vars instead (see .dev.vars.example).
+  "vars": {
+    "GENUI_MODE": "hosted",
+    "GENUI_PUBLIC_URL": "https://api.app-mcp.com",
+  }
+}

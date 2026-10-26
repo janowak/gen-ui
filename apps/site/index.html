@@ -3,20 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>genui: UI for MCP Apps, released like code</title>
+    <title>genui: your flows, in the chat</title>
     <meta
       name="description"
-      content="Forms, charts and your own components for your MCP server. They render inside Claude, ChatGPT and other MCP Apps hosts, call your tools, and ship from your CI to staging and prod."
+      content="Build the components your customers' flows need and publish them to genui. They show up in Claude, ChatGPT and other MCP Apps hosts, where your customers use them."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://app-mcp.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="genui" />
     <meta property="og:url" content="https://app-mcp.com/" />
-    <meta property="og:title" content="genui: UI for MCP Apps, released like code" />
+    <meta property="og:title" content="genui: your flows, in the chat" />
     <meta
       property="og:description"
-      content="Forms, charts and your own components for your MCP server, rendered inside Claude, ChatGPT and other MCP Apps hosts."
+      content="Your own components, shaped around your customers' flows, inside Claude, ChatGPT and other MCP Apps hosts."
     />
     <meta property="og:image" content="https://app-mcp.com/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -61,9 +61,9 @@
         </a>
         <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
           <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#features">What's included</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#environments">Environments</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#features">What you can build</a>
           <a class="btn btn-ghost text-muted-foreground" href="#data">Your data</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#self-host">Self-host</a>
         </nav>
         <div class="ml-auto flex items-center gap-2 md:ml-0">
           <button class="btn btn-ghost w-8 px-0" type="button" aria-label="Switch to dark theme" data-theme-toggle>
@@ -81,11 +81,11 @@
       >
         <div>
           <h1 class="text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl lg:leading-[1.05]">
-            UI for MCP Apps, released like code.
+            Your flows, in the chat.
           </h1>
           <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-            genui adds forms, charts and your own components to your MCP server. They render inside Claude, ChatGPT and
-            other MCP Apps hosts, work with the tools you already have, and ship from your CI to staging and prod.
+            Build the components your customers' flows need, publish them to genui, and they show up in Claude, ChatGPT
+            and other MCP Apps hosts. UX that fits the job, not a generic chat reply. No MCP server needed to start.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a class="btn btn-lg" href="#early-access">Get early access</a>
@@ -167,8 +167,8 @@
             </li>
           </ol>
           <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            The model picks the form and pre-fills it. The customer search, the product list and the order itself run on
-            your tools.
+            A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks
+            it and places the order.
           </figcaption>
         </figure>
       </section>
@@ -177,33 +177,197 @@
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="how-title">How it works</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Three steps, and the first one is a single function call in the server you already run.
+            From sign-up to your customers using your components, without running a server of your own.
           </p>
-          <ol class="mt-12 grid list-none gap-12 md:grid-cols-3 md:gap-x-6 md:gap-y-4">
+          <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-6 md:gap-y-12 lg:grid-cols-4 lg:gap-y-4">
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
                 <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">1</span>
-                Mount the SDK in your server
+                Register
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                One call adds forms, charts, your recipes and your custom components as tools. The URL picks the
-                environment.
+                Sign in with GitHub, Google or your company's login. You get a workspace and an MCP address your
+                customers can connect to.
               </p>
-              <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
-  genui: connectGenUI({
-    url: <span class="s">"…/w/acme/staging/mcp"</span>,
-    token,
-  }),
-});</code></pre>
+              <pre class="code"><code><span class="s">https://app-mcp.com</span>
+  /w/acme/mcp</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
                 <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">2</span>
-                The model builds the UI
+                Add your components
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                It picks a form or chart and fills in what it knows. Selects search your tools as people type, and
-                submit errors from your tool show next to the field.
+                Write them with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in TypeScript or
+                the framework you use, or describe a form as a recipe. Props are a Zod schema; the build is one HTML
+                file.
+              </p>
+              <pre class="code"><code><span class="k">defineComponent</span>({
+  name: <span class="s">"rating"</span>,
+  props: z.object({ … }),
+});</code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
+                Test them
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Publish, add your address as a connector in Claude or ChatGPT, and try the flow as your customers will.
+                Change it and publish again.
+              </p>
+              <pre class="code"><code>$ <span class="k">genui publish</span>
+# serves rating 1.3.0</code></pre>
+            </li>
+            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+              <h3 class="flex items-center gap-3 font-medium">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">4</span>
+                Your customers use it
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Share the address. Customers add it as a connector, and new versions reach running chats without a
+                restart. Need it to act on your systems?
+                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#data">Connect your data.</a>
+              </p>
+              <pre class="code"><code>Settings → Connectors → Add
+<span class="s">https://app-mcp.com</span>
+  /w/acme/mcp</code></pre>
+            </li>
+          </ol>
+
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="features" aria-labelledby="features-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">
+            What you can build
+          </h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Whatever your customers' flows need. genui handles the plumbing around it, so your team writes the
+            component.
+          </p>
+          <dl class="mt-12 divide-y border-y">
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Your components</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                A seat picker, a quote builder, a rating: anything your flow needs. Plain TypeScript or the framework
+                you use, with props as a Zod schema.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Recipes</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Forms your business owns. Fields and validation are fixed; the model only picks the recipe and
+                pre-fills values. Each recipe is also a slash command.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Forms and charts, built in</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                For everything you haven't built yet. Text, numbers, dates, switches and selects; line, bar, area and
+                pie charts.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">render_form, render_chart</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Your theme</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and
+                chart colors for each environment, with a live preview in the chat.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Environments</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Add staging or any other environment when you want one. Each has its own address, versions, theme and
+                recipes, so testers can keep it next to prod in the same chat. Publish a tested version to prod without
+                rebuilding it.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">genui publish --env staging</code></dd>
+            </div>
+            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+              <dt class="font-medium">Loading states</dt>
+              <dd class="max-w-xl text-muted-foreground">
+                Fields appear while the model is still writing. Submits can't fire twice, and failures tell the model
+                what went wrong.
+              </dd>
+              <dd><code class="badge badge-outline font-mono">streaming → ready</code></dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="further" aria-labelledby="further-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="further-title">
+            Going further
+          </h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Start hosted. Add your own data when a flow needs it, and run genui yourself when nothing may leave your
+            network.
+          </p>
+          <ol class="mt-12 grid list-none gap-4 md:grid-cols-3">
+            <li class="card px-5 ring-2 ring-primary">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-medium">Hosted</p>
+                <span class="badge badge-default">Start here</span>
+              </div>
+              <p class="text-muted-foreground">
+                Register, publish your components and share the address. Components, recipes, forms and charts.
+              </p>
+              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#how">How it works</a>
+            </li>
+            <li class="card px-5">
+              <p class="font-medium">With your data</p>
+              <p class="text-muted-foreground">
+                Plus your MCP server with the genui SDK. Views search, load and submit through your tools; genui never
+                sees the results.
+              </p>
+              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#data">Connect your data</a>
+            </li>
+            <li class="card px-5">
+              <p class="font-medium">Self-hosted</p>
+              <p class="text-muted-foreground">
+                Plus genui inside your network, with your own database and your company's sign-in.
+              </p>
+              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#self-host">Self-host</a>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="data" aria-labelledby="data-title">
+        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="data-title">
+            Need your own data? Connect your MCP server
+          </h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
+            When a flow needs your customers, orders or prices, mount genui in the MCP server you already run. Your
+            data stays on your server.
+          </p>
+
+          <div class="mt-12 grid gap-12 md:grid-cols-2 md:gap-x-6">
+            <div class="flex flex-col gap-4">
+              <h3 class="font-medium">One call in your server</h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Your components, recipes, forms and charts become tools on your server, next to the ones you have.
+              </p>
+              <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
+  genui: connectGenUI({
+    url: <span class="s">"…/w/acme/mcp"</span>,
+    token,
+  }),
+});</code></pre>
+            </div>
+            <div class="flex flex-col gap-4">
+              <h3 class="font-medium">Views that use your tools</h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Selects search your tools as people type, charts load rows from your tools so private data stays out of
+                the model's context, and submit errors from your tool show next to the field.
               </p>
               <pre class="code"><code>{
   <span class="s">"name"</span>: <span class="s">"customer"</span>,
@@ -212,167 +376,10 @@
     <span class="s">"toolName"</span>: <span class="s">"search_customers"</span>
   }
 }</code></pre>
-            </li>
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden="true">3</span>
-                Publish to an environment
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                CI publishes each build to an environment. Put a tested version in prod without rebuilding it. Running
-                servers switch over without a restart.
-              </p>
-              <pre class="code"><code>$ <span class="k">genui publish --env staging</span>
-# staging serves rating 1.3.0
-$ <span class="k">genui publish rating@1.3.0 \
-    --env prod</span>
-# prod serves rating 1.3.0</code></pre>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="scroll-mt-14 border-t" id="features" aria-labelledby="features-title">
-        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">
-            What's included
-          </h2>
-          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            The parts every in-chat view needs, so your team writes the component and not the plumbing around it.
-          </p>
-          <dl class="mt-12 divide-y border-y">
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Forms</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Text, numbers, dates, switches and selects, including selects that search your own tools. Errors from
-                your submit tool appear next to the field, and the values stay put.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">"type": "resource_select"</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Charts</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Line, bar, area and pie. Pass rows inline, or let the chart call your tool so large or private data
-                stays out of the model's context. Refreshes pause while the chart is off screen.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">"data": { "source": … }</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Recipes</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Forms your business owns. Fields, validation and the submit tool are fixed; the model only picks the
-                recipe and pre-fills values. Each recipe is also a slash command.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Custom components</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Write your own with <code class="font-mono text-[0.9em] text-foreground">@genui/kit</code> in plain
-                TypeScript or the framework you use. Props are a Zod schema, and the build is a single HTML file ready
-                to publish.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Theme</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and
-                chart colors for each environment, with a live preview in the chat.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Loading states</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Fields appear while the model is still writing. Searches debounce and cancel, submits can't fire twice,
-                and failures tell the model what went wrong.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">streaming → ready</code></dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section class="scroll-mt-14 border-t" id="environments" aria-labelledby="environments-title">
-        <div
-          class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 md:py-28 lg:grid-cols-2 lg:gap-16"
-        >
-          <div class="max-w-xl">
-            <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="environments-title">
-              Staging next to prod, in the same chat
-            </h2>
-            <div class="mt-5 flex flex-col gap-4 text-muted-foreground">
-              <p>
-                Every workspace has prod, and you add the others you need. Each environment serves exactly what was
-                last published to it, with its own recipes and theme, so prod changes only when someone publishes or
-                saves to prod. To go back, publish the older version again.
-              </p>
-              <p>
-                Each environment has its own MCP URL, so in the chat it's its own connector. Outside prod, tools carry
-                the environment's name, like
-                <code class="font-mono text-[0.9em] text-foreground">render_form_staging</code>. Testers can keep
-                staging next to prod and always see which one ran.
-              </p>
-              <p>
-                The registry is an MCP server too. From views inside Claude or ChatGPT, admins see which version each
-                environment serves, switch the environment their previews show, and edit the theme and recipes.
-              </p>
             </div>
           </div>
 
-          <div class="card px-5">
-            <div>
-              <p class="font-mono text-sm font-medium">rating</p>
-              <p class="text-xs text-muted-foreground">Custom component</p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left">
-                <caption class="sr-only">The version of rating each environment serves</caption>
-                <thead class="border-b text-xs text-muted-foreground">
-                  <tr>
-                    <th class="py-2 pr-4 font-medium" scope="col">Environment</th>
-                    <th class="py-2 pr-4 font-medium" scope="col">Version</th>
-                    <th class="py-2 font-medium" scope="col">Tool in the chat</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y">
-                  <tr>
-                    <th class="py-2.5 pr-4 font-medium" scope="row">prod</th>
-                    <td class="py-2.5 pr-4 font-mono">1.2.0</td>
-                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating</td>
-                  </tr>
-                  <tr>
-                    <th class="py-2.5 pr-4 font-medium" scope="row">staging</th>
-                    <td class="py-2.5 pr-4 font-mono">1.3.0</td>
-                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating_staging</td>
-                  </tr>
-                  <tr>
-                    <th class="py-2.5 pr-4 font-medium" scope="row">dev</th>
-                    <td class="py-2.5 pr-4 font-mono">1.3.0</td>
-                    <td class="py-2.5 font-mono text-xs text-muted-foreground sm:text-sm">render_rating_dev</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="text-muted-foreground">
-              Testers on the staging connector see 1.3.0. Customers on prod see 1.2.0 until CI publishes 1.3.0 there.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section class="scroll-mt-14 border-t" id="data" aria-labelledby="data-title">
-        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="data-title">
-            Your data stays on your server
-          </h2>
-          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Views call your tools through the host, over the connection your customers already have with you. genui
-            never sits between them.
-          </p>
-
-          <div class="flow mt-12 text-sm">
+          <div class="flow mt-16 text-sm">
             <div class="node-host rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <p class="font-medium">AI client</p>
               <p class="mt-1 text-muted-foreground">Claude, ChatGPT or another MCP Apps host renders the view.</p>
@@ -397,7 +404,7 @@ $ <span class="k">genui publish rating@1.3.0 \
             </div>
           </div>
 
-          <ul class="mt-16 grid list-none gap-8 md:grid-cols-3">
+          <ul class="mt-16 grid list-none gap-8 md:grid-cols-2">
             <li>
               <h3 class="font-medium">Versions that never change</h3>
               <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -411,14 +418,22 @@ $ <span class="k">genui publish rating@1.3.0 \
                 Theme and recipe saves are hidden from the model. They run only from a click in the view.
               </p>
             </li>
-            <li>
-              <h3 class="font-medium">Run genui yourself</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                One Node process and a SQLite file, so nothing leaves your network. Sign in with GitHub, Google or your
-                company's OIDC provider.
-              </p>
-            </li>
           </ul>
+        </div>
+      </section>
+
+      <section class="scroll-mt-14 border-t" id="self-host" aria-labelledby="self-host-title">
+        <div class="mx-auto grid max-w-6xl gap-6 px-4 py-16 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:py-20">
+          <div class="max-w-2xl">
+            <h2 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl" id="self-host-title">
+              Nothing may leave your network? Run genui yourself
+            </h2>
+            <p class="mt-3 text-muted-foreground">
+              The same registry as one container with a SQLite file, inside your network. People sign in with GitHub,
+              Google or your company's OIDC provider, and everything above works the same.
+            </p>
+          </div>
+          <a class="btn btn-lg btn-outline w-fit" href="mailto:hello@app-mcp.com?subject=genui%20self-hosting">Talk to us</a>
         </div>
       </section>
 
@@ -426,11 +441,11 @@ $ <span class="k">genui publish rating@1.3.0 \
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <div class="rounded-xl bg-muted/40 px-6 py-12 ring-1 ring-foreground/10 sm:px-12">
             <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="cta-title">
-              Put your product inside the chat
+              Put your flows inside the chat
             </h2>
             <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-              We're working with a small group of teams that run MCP servers for their own customers. Tell us what you
-              want people to do in the chat, and we'll help you ship the first view.
+              We're opening genui to a small group of teams first. Tell us the flow you want your customers to finish in
+              the chat, and we'll help you ship the first component.
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
               <a class="btn btn-lg" href="mailto:hello@app-mcp.com?subject=genui%20early%20access">Get early access</a>
@@ -451,7 +466,7 @@ $ <span class="k">genui publish rating@1.3.0 \
         class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6"
       >
         <span class="font-semibold tracking-tight text-foreground">genui</span>
-        <span>Forms, charts and components for MCP Apps.</span>
+        <span>Your components, in every AI chat.</span>
       </div>
     </footer>
 

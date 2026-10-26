@@ -11,7 +11,8 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
 | `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
 | `packages/cli` | `genui` CLI: publish (to an environment) / list / env / theme / recipe / token |
-| `apps/registry` | genui server: the registry (HTTP API on SQLite with workspaces, scoped tokens, immutable versions, environments with their own theme and recipes), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (the only genui runtime) |
+| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, recipes, components from a `CatalogSource`). Used by the registry; `genui serve` next ([DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md)) |
+| `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme and recipes), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@genui/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
 | `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@genui/ui/styles.css`): `pnpm --filter @genui/site dev` on http://localhost:5180 |
@@ -32,6 +33,62 @@ pnpm --filter @genui/playground dev     # host on http://localhost:5173
 ```
 
 The demo reads `.env.local` (gitignored) for `GENUI_MCP_URL` (`http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment) and `GENUI_MCP_TOKEN` (the server token). Without them it serves its company tools only.
+
+## Database and migrations
+
+The registry runs on SQLite either way: a file through `node:sqlite` on Node, or Cloudflare D1 on Workers. Both use the same SQL through one async interface (`apps/registry/src/db.ts`). D1 has no interactive transactions, so writes that belong together run in one atomic `batch`.
+
+- **Schema:** numbered files in `apps/registry/migrations/`. Change it by adding a file; never edit one that has been applied.
+  - **Node:** applies new files at startup.
+  - **Cloudflare:** `wrangler d1 migrations apply`.
+  - Both record what ran in the `d1_migrations` table.
+- **better-auth's tables:** `0002_better_auth.sql`, generated from the plugins in `auth.ts`. After changing those plugins, run `pnpm --filter @genui/registry auth-schema` and turn the difference into a new migration.
+- **Tests:** `pnpm --filter @genui/registry test` runs the suite twice, on `node:sqlite` and on a local D1 (Miniflare).
+- **Size limit:** a D1 row holds at most 2 MB, so bundles are limited to 1.9 MB.
+
+## Deploy
+
+### genui cloud: Cloudflare Workers + D1
+
+`apps/registry/wrangler.jsonc` runs the registry as a Worker on `api.app-mcp.com`, on the D1 database `genui` (EU jurisdiction), with Smart Placement so it runs next to its database. There's one deployment, production: changes are tested locally (below), then deployed.
+
+Before the first deploy, set the secrets from `apps/registry`:
+
+```bash
+wrangler secret put GENUI_AUTH_SECRET
+```
+
+Also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` the same way. `GENUI_AUTH_SECRET` comes from `openssl rand -hex 32`; keep it in the password manager, because changing it breaks every session and connector.
+
+Deploy: builds the sign-in pages, applies new migrations to the D1 database, then deploys the Worker.
+
+```bash
+pnpm deploy:registry
+```
+
+Locally, `cp apps/registry/.dev.vars.example apps/registry/.dev.vars`, then:
+
+```bash
+pnpm --filter @genui/registry dev:worker
+```
+
+It runs on http://localhost:8788 with D1 in `apps/registry/.wrangler/`. Run `pnpm build` first.
+
+### Self-hosted: Docker
+
+`apps/registry/Dockerfile` builds the same registry on Node 24 with SQLite in `/data`. `compose.yaml` runs it:
+
+```bash
+cp registry.env.example registry.env
+```
+```bash
+docker compose up -d
+```
+```bash
+docker compose logs registry
+```
+
+Fill in `registry.env` before starting; the logs show the admin token printed at first start. Back up the `genui-data` volume. Claude and ChatGPT need to reach `GENUI_PUBLIC_URL` over https, so put a reverse proxy or a tunnel in front.
 
 ## Registry and environments
 

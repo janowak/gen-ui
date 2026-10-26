@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { createRegistryApp, openDatabase, type Refresher, type Store } from "@genui/registry";
+import { createRegistryApp, loadAssets, openDatabase, type Refresher, type Store } from "@genui/registry";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
@@ -60,13 +60,13 @@ async function ratingUri(client: Client): Promise<string | undefined> {
 }
 
 beforeAll(async () => {
-  const created = createRegistryApp(openDatabase(":memory:"), { allowPrivateWebhooks: true });
+  const created = createRegistryApp(openDatabase(":memory:"), { assets: await loadAssets(), allowPrivateWebhooks: true });
   ({ store, refresher } = created);
-  acme = store.createWorkspace("Acme");
-  token = store.createToken(acme, "server", "acme-mcp");
-  store.publish(acme, rating("1.0.0"), html("rating v1"));
-  store.publish(acme, rating("1.1.0"), html("rating v1.1"), "prod");
-  store.deployVersion(acme, "rating", "1.0.0", "prod");
+  acme = await store.createWorkspace("Acme");
+  token = await store.createToken(acme, "server", "acme-mcp");
+  await store.publish(acme, rating("1.0.0"), html("rating v1"));
+  await store.publish(acme, rating("1.1.0"), html("rating v1.1"), "prod");
+  await store.deployVersion(acme, "rating", "1.0.0", "prod");
   registry = await listen(created.app.fetch);
   url = `http://localhost:${port(registry)}/w/${acme}/mcp`;
 });
@@ -80,17 +80,17 @@ describe("refresh", () => {
   it("re-lists genui's tools only when the environment's revision changed", async () => {
     const genui = connect();
     await genui.ready();
-    expect(genui.revision()).toBe(store.environment(acme, "prod")?.revision);
+    expect(genui.revision()).toBe((await store.environment(acme, "prod"))?.revision);
 
     const before = upstream;
     await genui.refresh();
     expect(upstream).toBe(before + 1); // the revision, nothing else
 
-    store.deployVersion(acme, "rating", "1.1.0", "prod");
+    await store.deployVersion(acme, "rating", "1.1.0", "prod");
     await genui.refresh();
     expect(upstream).toBeGreaterThan(before + 2);
-    expect(genui.revision()).toBe(store.environment(acme, "prod")?.revision);
-    store.deployVersion(acme, "rating", "1.0.0", "prod");
+    expect(genui.revision()).toBe((await store.environment(acme, "prod"))?.revision);
+    await store.deployVersion(acme, "rating", "1.0.0", "prod");
   });
 
   it("checks an old copy in the background when genui's tools are used", async () => {
@@ -98,13 +98,13 @@ describe("refresh", () => {
     const { client, notified } = await companyServer(genui);
     const before = await ratingUri(client);
 
-    store.deployVersion(acme, "rating", "1.1.0", "prod");
+    await store.deployVersion(acme, "rating", "1.1.0", "prod");
     await new Promise((resolve) => setTimeout(resolve, 80));
     // Answered from the copy at once; the check runs after it.
     await client.callTool({ name: "render_form", arguments: { fields: [{ name: "notes", label: "Notes", type: "textarea" }] } });
     await vi.waitFor(() => expect(notified).toHaveBeenCalled());
     expect(await ratingUri(client)).not.toBe(before);
-    store.deployVersion(acme, "rating", "1.0.0", "prod");
+    await store.deployVersion(acme, "rating", "1.0.0", "prod");
   });
 
   it("updates a watching server right away when genui calls its refresh endpoint", async () => {
@@ -112,16 +112,16 @@ describe("refresh", () => {
     const { client, notified } = await companyServer(genui);
     const before = await ratingUri(client);
     const endpoint = await listen(refreshHandler(genui));
-    store.setRefreshUrl(acme, "prod", `http://localhost:${port(endpoint)}/genui/refresh`);
+    await store.setRefreshUrl(acme, "prod", `http://localhost:${port(endpoint)}/genui/refresh`);
 
-    store.deployVersion(acme, "rating", "1.1.0", "prod");
+    await store.deployVersion(acme, "rating", "1.1.0", "prod");
     await refresher.idle();
     await vi.waitFor(() => expect(notified).toHaveBeenCalled());
     expect(await ratingUri(client)).not.toBe(before);
-    expect(store.environment(acme, "prod")?.lastRefresh).toMatchObject({ ok: true, status: 202 });
+    expect((await store.environment(acme, "prod"))?.lastRefresh).toMatchObject({ ok: true, status: 202 });
 
-    store.setRefreshUrl(acme, "prod", null);
-    store.deployVersion(acme, "rating", "1.0.0", "prod");
+    await store.setRefreshUrl(acme, "prod", null);
+    await store.deployVersion(acme, "rating", "1.0.0", "prod");
   });
 
   it("ignores refresh calls for a revision it already has, and anything but POST", async () => {

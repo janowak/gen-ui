@@ -1,12 +1,19 @@
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { beforeAll, describe, expect, it } from "vitest";
-import { mountGenUI } from "./runtime.js";
+import { mountGenUI, type CatalogSource } from "./runtime.js";
+import { viewBundles } from "./views.js";
+
+const require = createRequire(import.meta.url);
+const view = (name: string) => readFile(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
+const views = viewBundles({ form: await view("form"), chart: await view("chart") });
 
 async function connect() {
   const server = new McpServer({ name: "test", version: "1.0.0" });
-  await mountGenUI(server, { theme: { light: { primary: "#4f46e5" } } });
+  await mountGenUI(server, { views, theme: { light: { primary: "#4f46e5" } } });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "1.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -56,7 +63,7 @@ describe("mountGenUI", () => {
 
   it("names tools preview_* in preview mode and flags their results as previews", async () => {
     const server = new McpServer({ name: "preview", version: "1.0.0" });
-    await mountGenUI(server, { preview: true });
+    await mountGenUI(server, { views, preview: true });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const previewClient = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), previewClient.connect(a)]);
@@ -69,7 +76,7 @@ describe("mountGenUI", () => {
 
   it("suffixes tool names and titles outside prod, so an environment's connector can sit next to prod's", async () => {
     const server = new McpServer({ name: "staging", version: "1.0.0" });
-    await mountGenUI(server, { environment: "staging" });
+    await mountGenUI(server, { views, environment: "staging" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const stagingClient = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), stagingClient.connect(a)]);
@@ -93,7 +100,7 @@ describe("mountGenUI", () => {
 
   it("rejects specs that use tools on a server without data tools", async () => {
     const server = new McpServer({ name: "render-only", version: "1.0.0" });
-    await mountGenUI(server, { dataTools: false });
+    await mountGenUI(server, { views, dataTools: false });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const renderOnly = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), renderOnly.connect(a)]);
@@ -133,7 +140,7 @@ describe("recipes", () => {
 
   async function connectWithRecipes() {
     const server = new McpServer({ name: "recipes", version: "1.0.0" });
-    await mountGenUI(server, { recipes: [addOrder as never, wipe as never] });
+    await mountGenUI(server, { views, recipes: [addOrder as never, wipe as never] });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const recipeClient = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), recipeClient.connect(a)]);
@@ -153,7 +160,7 @@ describe("recipes", () => {
 
   it("sends recipe values back to the conversation on a server without data tools", async () => {
     const server = new McpServer({ name: "render-only", version: "1.0.0" });
-    await mountGenUI(server, { recipes: [wipe as never], dataTools: false });
+    await mountGenUI(server, { views, recipes: [wipe as never], dataTools: false });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const c = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), c.connect(a)]);
@@ -171,7 +178,7 @@ describe("recipes", () => {
     };
     const calls: { recipe: string; values: Record<string, unknown>; viewId?: string }[] = [];
     const server = new McpServer({ name: "validated", version: "1.0.0" });
-    await mountGenUI(server, {
+    await mountGenUI(server, { views,
       recipes: [quote as never, wipe as never],
       dataTools: false,
       validate: async (recipe, values, viewId) => {
@@ -212,5 +219,57 @@ describe("recipes", () => {
     const text = (prompt.messages[0]?.content as { text: string }).text;
     expect(text).toContain('call use_recipe with recipe "add_order"');
     expect(text).toContain("3 mugs for Globex");
+  });
+});
+
+describe("components", () => {
+  const manifest = (version: string) => ({
+    name: "rating",
+    version,
+    description: "Ask the user to rate something.",
+    props: { type: "object", properties: { question: { type: "string" } }, required: ["question"] },
+    tools: [],
+  });
+  const bundles: Record<string, string> = { aaaa: "<p>rating 1.0.0</p>", bbbb: "<p>rating 1.1.0</p>" };
+  const source = (hash: string, version: string): CatalogSource => ({
+    snapshot: async () => ({
+      catalog: { environment: "prod", theme: null, instructions: null, prompts: [], recipes: [], components: [{ name: "rating", version, hash, manifest: manifest(version) }] },
+      bundles: { [hash]: bundles[hash]! },
+    }),
+    bundle: async (h) => bundles[h],
+  });
+
+  async function connectTo(server: McpServer) {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return client;
+  }
+
+  it("serves earlier versions by hash through the source's bundle lookup", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    await mountGenUI(server, { views, registry: source("bbbb", "1.1.0") });
+    const c = await connectTo(server);
+    const { tools } = await c.listTools();
+    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://genui/c/rating/bbbb" });
+    const old = await c.readResource({ uri: "ui://genui/c/rating/aaaa" });
+    expect((old.contents[0] as { text: string }).text).toBe("<p>rating 1.0.0</p>");
+    await expect(c.readResource({ uri: "ui://genui/c/rating/ffff" })).rejects.toThrow();
+  });
+
+  it("remove() takes everything off the server, so it can be mounted again with a new snapshot", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const mounted = await mountGenUI(server, { views, registry: source("aaaa", "1.0.0") });
+    const c = await connectTo(server);
+    const changed = new Promise<void>((resolve) => c.setNotificationHandler("notifications/tools/list_changed", () => resolve()));
+
+    mounted.remove();
+    expect((await c.listTools()).tools).toEqual([]);
+    await mountGenUI(server, { views, registry: source("bbbb", "1.1.0") });
+    await changed;
+
+    const { tools } = await c.listTools();
+    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://genui/c/rating/bbbb" });
+    expect(tools.map((t) => t.name).sort()).toEqual(["render_chart", "render_form", "render_rating"]);
   });
 });

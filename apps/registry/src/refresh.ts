@@ -28,7 +28,7 @@ export function refreshServers(store: Store, { allowPrivate = false, fetch: doFe
   const again = new Set<string>();
 
   async function call({ workspaceId, environment }: EnvironmentChange): Promise<void> {
-    const target = store.environment(workspaceId, environment);
+    const target = await store.environment(workspaceId, environment);
     if (!target?.refreshUrl) return;
     const invalid = webhookUrlError(target.refreshUrl, allowPrivate, "refresh URL");
     let result: LastRefresh;
@@ -50,7 +50,7 @@ export function refreshServers(store: Store, { allowPrivate = false, fetch: doFe
       }
     }
     if (!result.ok) console.warn(`[genui] refresh URL of ${environment} failed: ${result.error ?? `HTTP ${result.status}`}`);
-    store.setLastRefresh(workspaceId, environment, result);
+    await store.setLastRefresh(workspaceId, environment, result);
   }
 
   function start(change: EnvironmentChange): void {

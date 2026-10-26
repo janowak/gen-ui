@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { createRegistryApp, openDatabase, type Store } from "@genui/registry";
+import { createRegistryApp, loadAssets, openDatabase, type Store } from "@genui/registry";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
@@ -58,15 +58,15 @@ async function resourceText(client: Client, tool: string): Promise<string | unde
 }
 
 beforeAll(async () => {
-  const created = createRegistryApp(openDatabase(":memory:"));
+  const created = createRegistryApp(openDatabase(":memory:"), { assets: await loadAssets() });
   store = created.store;
-  acme = store.createWorkspace("Acme");
-  store.createEnvironment(acme, "staging");
-  token = store.createToken(acme, "server", "acme-mcp");
-  store.publish(acme, rating("1.0.0"), html("rating v1"));
-  store.publish(acme, rating("1.1.0"), html("rating v1.1"), "staging");
-  store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
-  store.saveRecipe(acme, "prod", {
+  acme = await store.createWorkspace("Acme");
+  await store.createEnvironment(acme, "staging");
+  token = await store.createToken(acme, "server", "acme-mcp");
+  await store.publish(acme, rating("1.0.0"), html("rating v1"));
+  await store.publish(acme, rating("1.1.0"), html("rating v1.1"), "staging");
+  await store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
+  await store.saveRecipe(acme, "prod", {
     name: "add_item",
     when: "The user wants to add an item.",
     form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
@@ -133,7 +133,7 @@ describe("mountGenUI", () => {
     client.setNotificationHandler("notifications/tools/list_changed", notified);
     const before = await resourceUri(client, "render_rating");
 
-    store.deployVersion(acme, "rating", "1.1.0", "prod");
+    await store.deployVersion(acme, "rating", "1.1.0", "prod");
     await genui.refresh();
     await vi.waitFor(() => expect(notified).toHaveBeenCalled());
     const after = await resourceUri(client, "render_rating");
@@ -143,16 +143,16 @@ describe("mountGenUI", () => {
     // An old message still renders: the earlier version is read from genui by its hash.
     expect(((await client.readResource({ uri: before })).contents[0] as { text?: string }).text).toBe(html("rating v1"));
     handle.close();
-    store.publish(acme, rating("1.0.0"), html("rating v1"));
+    await store.publish(acme, rating("1.0.0"), html("rating v1"));
   });
 
   it("returns a clear error when genui is unreachable", async () => {
-    const second = createRegistryApp(openDatabase(":memory:"));
-    const ws = second.store.createWorkspace("Down");
+    const second = createRegistryApp(openDatabase(":memory:"), { assets: await loadAssets() });
+    const ws = await second.store.createWorkspace("Down");
     const down = await listen(second.app);
     const genui = connectGenUI({
       url: `http://localhost:${port(down)}/w/${ws}/mcp`,
-      token: second.store.createToken(ws, "server", "down"),
+      token: await second.store.createToken(ws, "server", "down"),
       refreshSeconds: 0,
       logger: { warn: () => {} },
     });

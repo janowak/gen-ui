@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/dist-web
+**/.wrangler
+**/*.sqlite
+**/*.sqlite-*
+**/.venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.env*
+**/.dev.vars
+registry.env
+.git
+.idea
+.claude

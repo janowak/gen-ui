@@ -1,185 +1,24 @@
-import { DatabaseSync } from "node:sqlite";
+/** A SQL statement with its parameters, for `Database.batch`. */
+export interface Statement {
+  sql: string;
+  params: unknown[];
+}
+
+export const statement = (sql: string, ...params: unknown[]): Statement => ({ sql, params });
 
 /**
- * SQLite schema. Every row is scoped to a workspace: the cloud runs many,
- * a self-hosted install usually one. Versions are immutable; deployments point an environment at one.
+ * The registry's database: SQLite through node:sqlite (Docker, local development) or Cloudflare D1.
+ * Async because D1 is. D1 has no interactive transactions, so writes that belong together go in one
+ * `batch`, which is atomic on both. The schema lives in `migrations/`, applied by `wrangler d1
+ * migrations apply` on Cloudflare and by `openDatabase` on Node.
  */
-const MIGRATIONS = [
-  `
-  CREATE TABLE workspaces (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    theme TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE tokens (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    scope TEXT NOT NULL CHECK (scope IN ('server', 'publish', 'admin')),
-    hash TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE components (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    UNIQUE (workspace_id, name)
-  );
-  CREATE TABLE versions (
-    id TEXT PRIMARY KEY,
-    component_id TEXT NOT NULL REFERENCES components(id),
-    version TEXT NOT NULL,
-    hash TEXT NOT NULL,
-    manifest TEXT NOT NULL,
-    html TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    UNIQUE (component_id, version)
-  );
-  CREATE INDEX versions_hash ON versions(hash);
-  CREATE TABLE channels (
-    component_id TEXT NOT NULL REFERENCES components(id),
-    channel TEXT NOT NULL CHECK (channel IN ('beta', 'stable')),
-    version_id TEXT NOT NULL REFERENCES versions(id),
-    PRIMARY KEY (component_id, channel)
-  );
-  -- Every pointer change, newest last; rollback pops the latest entry.
-  CREATE TABLE channel_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    component_id TEXT NOT NULL REFERENCES components(id),
-    channel TEXT NOT NULL,
-    version_id TEXT NOT NULL REFERENCES versions(id),
-    changed_at TEXT NOT NULL
-  );
-  `,
-  `
-  -- People who manage a workspace. user_id is the better-auth user id.
-  CREATE TABLE members (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    user_id TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('member', 'admin')),
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, user_id)
-  );
-  CREATE INDEX members_user ON members(user_id);
-  -- Pending memberships, claimed when someone with that email first signs in.
-  CREATE TABLE invites (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    email TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('member', 'admin')),
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, email)
-  );
-  `,
-  `
-  -- Named, business-owned forms. Saving one makes it live (no channels yet).
-  CREATE TABLE recipes (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    recipe TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, name)
-  );
-  `,
-  `
-  -- Release tokens: publish to any channel, promote, roll back. SQLite cannot alter a CHECK, so rebuild.
-  CREATE TABLE tokens_next (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    scope TEXT NOT NULL CHECK (scope IN ('server', 'publish', 'release', 'admin')),
-    hash TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL
-  );
-  INSERT INTO tokens_next SELECT id, workspace_id, name, scope, hash, created_at FROM tokens;
-  DROP TABLE tokens;
-  ALTER TABLE tokens_next RENAME TO tokens;
-  `,
-  `
-  -- Hosted MCP: the registry serves the workspace's end-user MCP at /w/<id>/mcp. Off until an admin turns it on.
-  ALTER TABLE workspaces ADD COLUMN hosted INTEGER NOT NULL DEFAULT 0;
-  `,
-  `
-  -- Signs requests to recipe validation webhooks. Kept in plain text: signing needs the secret itself.
-  ALTER TABLE workspaces ADD COLUMN webhook_secret TEXT;
-  `,
-  `
-  -- Environments replace the beta/stable channels. Each serves exactly what was last published or
-  -- saved to it: component versions, its theme and its recipes. Every workspace has prod.
-  CREATE TABLE environments (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    theme TEXT,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, name)
-  );
-  INSERT INTO environments (workspace_id, name, theme, created_at) SELECT id, 'prod', theme, created_at FROM workspaces;
-  ALTER TABLE workspaces DROP COLUMN theme;
-
-  CREATE TABLE deployments (
-    component_id TEXT NOT NULL REFERENCES components(id),
-    environment TEXT NOT NULL,
-    version_id TEXT NOT NULL REFERENCES versions(id),
-    PRIMARY KEY (component_id, environment)
-  );
-  INSERT INTO deployments SELECT component_id, 'prod', version_id FROM channels WHERE channel = 'stable';
-  DROP TABLE channel_history;
-  DROP TABLE channels;
-
-  CREATE TABLE recipes_next (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    environment TEXT NOT NULL,
-    name TEXT NOT NULL,
-    recipe TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, environment, name)
-  );
-  INSERT INTO recipes_next SELECT workspace_id, 'prod', name, recipe, updated_at FROM recipes;
-  DROP TABLE recipes;
-  ALTER TABLE recipes_next RENAME TO recipes;
-
-  -- No more release tokens. Publish tokens can be limited to environments (JSON list; null: all).
-  CREATE TABLE tokens_next (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    name TEXT NOT NULL,
-    scope TEXT NOT NULL CHECK (scope IN ('server', 'publish', 'admin')),
-    environments TEXT,
-    hash TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL
-  );
-  INSERT INTO tokens_next (id, workspace_id, name, scope, hash, created_at)
-    SELECT id, workspace_id, name, CASE scope WHEN 'release' THEN 'publish' ELSE scope END, hash, created_at FROM tokens;
-  DROP TABLE tokens;
-  ALTER TABLE tokens_next RENAME TO tokens;
-
-  -- The environment a member's previews, theme and recipes show in the management MCP. Null: prod.
-  ALTER TABLE members ADD COLUMN environment TEXT;
-  `,
-  `
-  -- Every change to what an environment serves bumps its revision: the SDK compares it to know when
-  -- to re-list. A company's server can register a refresh URL that genui calls on each change.
-  ALTER TABLE environments ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
-  ALTER TABLE environments ADD COLUMN refresh_url TEXT;
-  ALTER TABLE environments ADD COLUMN last_refresh TEXT;
-  `,
-];
-
-export function openDatabase(path: string): DatabaseSync {
-  const db = new DatabaseSync(path);
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-  const current = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
-  for (let i = current; i < MIGRATIONS.length; i++) {
-    db.exec("BEGIN");
-    try {
-      db.exec(MIGRATIONS[i]!);
-      db.exec(`PRAGMA user_version = ${i + 1}`);
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
-  }
-  return db;
+export interface Database {
+  get<T>(sql: string, ...params: unknown[]): Promise<T | undefined>;
+  all<T>(sql: string, ...params: unknown[]): Promise<T[]>;
+  /** Runs a write; `changes` is the number of rows it changed. */
+  run(sql: string, ...params: unknown[]): Promise<{ changes: number }>;
+  /** Runs the statements in one transaction and returns each one's rows (from RETURNING). */
+  batch(statements: Statement[]): Promise<unknown[][]>;
+  /** What better-auth is given: node:sqlite's DatabaseSync or the D1 binding. */
+  readonly auth: object;
 }

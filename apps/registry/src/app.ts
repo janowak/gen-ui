@@ -1,22 +1,29 @@
-import type { DatabaseSync } from "node:sqlite";
 import { MAX_BUNDLE_BYTES } from "@genui/format";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createApi } from "./api.js";
+import type { Database } from "./db.js";
 import { enableHosting } from "./hosted.js";
 import { refreshServers, type Refresher } from "./refresh.js";
 import { Store } from "./store.js";
+import type { Assets } from "./views.js";
 
-export { openDatabase } from "./db.js";
 export { Store, RegistryError, type Scope } from "./store.js";
+export type { Database } from "./db.js";
 export type { Refresher } from "./refresh.js";
+export type { Assets } from "./views.js";
 
 export interface RegistryAppOptions {
+  /** The views and pages the registry serves, loaded by the runtime it runs on. */
+  assets: Assets;
   /** Let recipe validation webhooks and refresh URLs use http and private addresses. For self-hosted installs and tests. */
   allowPrivateWebhooks?: boolean;
+  /** Public URL of the registry, for the absolute URLs hosts are given (the connector icon). Default: each request's origin. */
+  baseURL?: string;
 }
 
-export function createRegistryApp(db: DatabaseSync, options: RegistryAppOptions = {}): { app: Hono; store: Store; refresher: Refresher } {
+/** The registry without management: the /v1 API and the end-user MCP. Runtime-neutral: Node and Workers share it. */
+export function createRegistryApp(db: Database, options: RegistryAppOptions): { app: Hono; store: Store; refresher: Refresher } {
   const store = new Store(db);
   const app = new Hono();
   app.use(bodyLimit({ maxSize: MAX_BUNDLE_BYTES * 2 }));

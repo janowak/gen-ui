@@ -18,9 +18,9 @@ import {
   type Theme,
 } from "@genui/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { fromJsonSchema, type McpServer } from "@modelcontextprotocol/server";
+import { fromJsonSchema, ResourceNotFoundError, ResourceTemplate, type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { loadBuiltInViews, type ViewBundle, type ViewName } from "./views.js";
+import type { ViewBundle, ViewName } from "./views.js";
 
 /** An environment's catalog plus every bundle it references. */
 export interface Snapshot {
@@ -28,16 +28,26 @@ export interface Snapshot {
   bundles: Record<string, string>;
 }
 
-/** Where custom components, recipes and the theme come from: the registry's own store. */
+/** Where custom components, recipes and the theme come from: the registry's store, or files on disk. */
 export interface CatalogSource {
-  snapshot(environment: string): Snapshot | undefined;
+  snapshot(environment: string): Promise<Snapshot | undefined>;
+  /**
+   * Any component bundle by content hash, including versions the snapshot no longer serves, so
+   * old messages a host renders again still load. Without it, only the current versions resolve.
+   */
+  bundle?(hash: string): Promise<string | undefined>;
+}
+
+/** What `mountGenUI` registered. `remove()` takes it all off the server, which tells connected clients the lists changed. */
+export interface Mounted {
+  remove(): void;
 }
 
 export interface GenUIOptions {
   /** Workspace theme, or a function returning the current one. Overrides the catalog theme. */
   theme?: Theme | (() => Theme | undefined | Promise<Theme | undefined>);
-  /** Override built-in view bundles. Defaults to the bundles in @genui/ui. */
-  views?: Record<ViewName, ViewBundle>;
+  /** The built-in form and chart views (`builtInViews(assets)`). */
+  views: Record<ViewName, ViewBundle>;
   /** Custom components, recipes and the theme. */
   registry?: CatalogSource;
   /**
@@ -94,9 +104,28 @@ function noDataTools(uses: string[], tool: string) {
   return { isError: true, content: [{ type: "text" as const, text }] };
 }
 
+type Registrar = Pick<McpServer, "registerTool" | "registerResource" | "registerPrompt">;
+type Registration = (...args: unknown[]) => Mounted;
+
+/** The server's register* methods, keeping every handle they return. */
+function tracked(server: McpServer, handles: Mounted[]): Registrar {
+  const keep = (register: Function): Registration => (...args) => {
+    const handle = (register as Registration).apply(server, args);
+    handles.push(handle);
+    return handle;
+  };
+  return {
+    registerTool: keep(server.registerTool) as McpServer["registerTool"],
+    registerResource: keep(server.registerResource) as McpServer["registerResource"],
+    registerPrompt: keep(server.registerPrompt) as McpServer["registerPrompt"],
+  };
+}
+
 /** Registers `render_form`, `render_chart` and registry components (tools + `ui://` resources) on an MCP server. */
-export async function mountGenUI(server: McpServer, options: GenUIOptions = {}): Promise<void> {
-  const views = options.views ?? (await loadBuiltInViews());
+export async function mountGenUI(target: McpServer, options: GenUIOptions): Promise<Mounted> {
+  const handles: Mounted[] = [];
+  const server = tracked(target, handles);
+  const views = options.views;
   const environment = options.environment ?? DEFAULT_ENVIRONMENT;
   const dataTools = options.dataTools ?? true;
   const registry = options.registry;
@@ -108,9 +137,12 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
   const recipeTool = options.preview ? "preview_recipe" : `use_recipe${suffix}`;
   const validateTool = `${VALIDATE_TOOL}${suffix}`;
 
+  // Read once: the registry builds a server per request, so this is what the request should see.
+  const snapshot = await registry?.snapshot(environment);
+
   async function theme(): Promise<Theme | undefined> {
     if (options.theme) return typeof options.theme === "function" ? options.theme() : options.theme;
-    return registry?.snapshot(environment)?.catalog.theme ?? undefined;
+    return snapshot?.catalog.theme ?? undefined;
   }
 
   /** What every render result carries: a fresh render id (views key their saved state by it), the theme and the preview flag. */
@@ -226,7 +258,6 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     );
   }
 
-  const snapshot = registry?.snapshot(environment);
   for (const component of snapshot?.catalog.components ?? []) {
     // Built with a newer @genui/kit than this server serves: it would render without data it expects.
     if ((component.manifest.contract ?? 0) > COMPONENT_CONTRACT) {
@@ -240,6 +271,38 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
     }
     const html = snapshot!.bundles[component.hash];
     if (html) mountComponent(component, html);
+  }
+
+  // Earlier versions of components, for old messages the host renders again. Bundles are immutable and kept.
+  const lookup = registry?.bundle?.bind(registry);
+  if (lookup) {
+    server.registerResource(
+      "genui component version",
+      new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }),
+      { mimeType: RESOURCE_MIME_TYPE },
+      async (uri, { hash }) => {
+        const html = await lookup(String(hash));
+        if (html === undefined) throw new ResourceNotFoundError(uri.href);
+        return { contents: [{ uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: html }] };
+      },
+    );
+  }
+
+  // Workflow prompts: slash commands that start one of the workspace's workflows.
+  if (!options.preview) {
+    for (const workflow of snapshot?.catalog.prompts ?? []) {
+      server.registerPrompt(
+        `${workflow.name}${suffix}`,
+        {
+          title: `${workflow.title ?? workflow.name}${label}`,
+          description: workflow.description,
+          argsSchema: z.object({ details: z.string().optional().describe("Anything the workflow should know, in plain words.") }),
+        },
+        ({ details }) => ({
+          messages: [{ role: "user", content: { type: "text", text: details ? `${workflow.prompt}\n\nDetails: ${details}` : workflow.prompt } }],
+        }),
+      );
+    }
   }
 
   // Recipes: one use_recipe tool (the server builds the form; the model picks and pre-fills)
@@ -327,4 +390,6 @@ export async function mountGenUI(server: McpServer, options: GenUIOptions = {}):
       }
     }
   }
+
+  return { remove: () => handles.splice(0).forEach((handle) => handle.remove()) };
 }

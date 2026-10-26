@@ -5,16 +5,19 @@
   "license": "FSL-1.1-Apache-2.0",
   "exports": {
     ".": {
-      "types": "./dist/app.d.ts",
-      "default": "./dist/app.js"
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
     }
   },
   "scripts": {
     "build": "pnpm build:web && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && GENUI_TEST_DB=d1 vitest run",
     "start": "node --env-file-if-exists=../../.env.local --disable-warning=ExperimentalWarning --import tsx src/main.ts",
-    "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web"
+    "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web",
+    "auth-schema": "node --disable-warning=ExperimentalWarning --import tsx scripts/auth-schema.ts",
+    "dev:worker": "wrangler d1 migrations apply genui --local && wrangler dev",
+    "deploy": "pnpm build:web && wrangler d1 migrations apply genui --remote && wrangler deploy --tag $(git rev-parse --short HEAD)"
   },
   "dependencies": {
     "@better-auth/cimd": "1.7.12",
@@ -24,6 +27,7 @@
     "@better-auth/utils": "^0.5.0",
     "@better-fetch/fetch": "1.3.2",
     "@genui/format": "workspace:*",
+    "@genui/runtime": "workspace:*",
     "@genui/ui": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/client": "^2.3.1",
@@ -36,13 +40,16 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "miniflare": "5.20261019.2-beta",
     "tsx": "^4.20.0",
     "vite": "^8.3.5",
     "vite-plugin-singlefile": "^2.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
   },
   "files": [
     "dist",
-    "dist-web"
+    "dist-web",
+    "migrations"
   ]
 }

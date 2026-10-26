@@ -3,7 +3,8 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createRegistryApp, openDatabase, type Store } from "./app.js";
+import { createRegistryApp, type Store } from "./app.js";
+import { loadAssets, testDatabase } from "./testing.js";
 import { signature } from "./webhook.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
@@ -30,9 +31,9 @@ function startWebhook(): Promise<string> {
   webhook = createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
-    req.on("end", () => {
+    req.on("end", async () => {
       const [, t, v1] = /^t=(\d+),v1=([0-9a-f]+)$/.exec(String(req.headers["x-genui-signature"])) ?? [];
-      const signed = v1 === signature(store.webhookSecret(acme), Number(t), raw);
+      const signed = v1 === signature(await store.webhookSecret(acme), Number(t), raw);
       const body = JSON.parse(raw) as { recipe: string; values: { email?: string } };
       received.push({ signed, body });
       const taken = body.values.email === "taken@acme.test";
@@ -57,28 +58,28 @@ async function resourceText(client: Client, tool: string): Promise<string | unde
 
 beforeAll(async () => {
   const webhookUrl = await startWebhook();
-  const created = createRegistryApp(openDatabase(":memory:"), { allowPrivateWebhooks: true });
+  const created = createRegistryApp(await testDatabase(), { assets: await loadAssets(), allowPrivateWebhooks: true });
   store = created.store;
-  acme = store.createWorkspace("Acme");
-  store.createEnvironment(acme, "staging");
-  admin = store.createToken(acme, "admin", "test");
-  store.publish(acme, component("rating", "1.0.0"), html("rating v1"));
-  store.publish(acme, component("rating", "1.1.0"), html("rating v1.1"), "staging");
-  store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
-  store.saveRecipe(acme, "prod", {
+  acme = await store.createWorkspace("Acme");
+  await store.createEnvironment(acme, "staging");
+  admin = await store.createToken(acme, "admin", "test");
+  await store.publish(acme, component("rating", "1.0.0"), html("rating v1"));
+  await store.publish(acme, component("rating", "1.1.0"), html("rating v1.1"), "staging");
+  await store.setTheme(acme, "prod", { light: { primary: "#16a34a" } });
+  await store.saveRecipe(acme, "prod", {
     name: "add_item",
     when: "The user wants to add an item.",
     form: { fields: [{ name: "name", label: "Name", type: "text", required: true }], submit: { toolName: "create_item" } },
   });
-  store.saveRecipe(acme, "prod", {
+  await store.saveRecipe(acme, "prod", {
     name: "quote",
     when: "The user wants a quote.",
     form: { fields: [{ name: "email", label: "Email", type: "email", required: true }] },
     validate: { url: webhookUrl },
   });
 
-  other = store.createWorkspace("Other");
-  store.publish(other, component("survey", "1.0.0"), html("survey"));
+  other = await store.createWorkspace("Other");
+  await store.publish(other, component("survey", "1.0.0"), html("survey"));
 
   server = serve({ fetch: created.app.fetch, port: 0 });
   await new Promise((r) => server.once("listening", r));
@@ -138,7 +139,7 @@ describe("hosted end-user MCP", () => {
     const rendered = await client.callTool({ name: "render_rating_staging", arguments: { question: "How was it?" } });
     expect(rendered._meta).not.toHaveProperty("genui/theme");
 
-    store.saveRecipe(acme, "staging", { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" }] } });
+    await store.saveRecipe(acme, "staging", { name: "add_item", when: "The user wants to add an item.", form: { fields: [{ name: "name", label: "Name", type: "text" }] } });
     const again = await mcpClient(`/w/${acme}/staging/mcp`);
     expect((await again.listPrompts()).prompts.map((p) => p.name)).toEqual(["add_item_staging"]);
     const recipeTool = (await again.listTools()).tools.find((t) => t.name === "use_recipe_staging");
@@ -192,7 +193,7 @@ describe("hosted end-user MCP", () => {
     const read = async (method: string) =>
       ((await (await fetch(`${base}/v1/hosting/webhook-secret`, { method, headers: { authorization: `Bearer ${admin}` } })).json()) as { secret: string }).secret;
     const current = await read("GET");
-    expect(current).toBe(store.webhookSecret(acme));
+    expect(current).toBe(await store.webhookSecret(acme));
     expect(await read("POST")).not.toBe(current);
   });
 
@@ -205,7 +206,7 @@ describe("hosted end-user MCP", () => {
   });
 
   it("stops serving when hosting is turned off", async () => {
-    store.setHosted(other, false);
+    await store.setHosted(other, false);
     const res = await fetch(`${base}/w/${other}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(res.status).toBe(404);
   });
@@ -215,7 +216,7 @@ describe("upstream for a company's own server (server token)", () => {
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
   it("turns data tools on: tool-backed fields, submit tools and recipe submits work", async () => {
-    const client = await mcpClient(`/w/${acme}/mcp`, bearer(store.createToken(acme, "server", "acme-mcp")));
+    const client = await mcpClient(`/w/${acme}/mcp`, bearer(await store.createToken(acme, "server", "acme-mcp")));
     const description = (await client.listTools()).tools.find((t) => t.name === "render_form")?.description;
     expect(description).toContain("resource_select");
 
@@ -229,18 +230,18 @@ describe("upstream for a company's own server (server token)", () => {
   });
 
   it("serves private workspaces", async () => {
-    const solo = store.createWorkspace("Solo");
-    store.setHosted(solo, false);
-    store.publish(solo, component("poll", "1.0.0"), html("poll v1"));
+    const solo = await store.createWorkspace("Solo");
+    await store.setHosted(solo, false);
+    await store.publish(solo, component("poll", "1.0.0"), html("poll v1"));
     expect((await fetch(`${base}/w/${solo}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(404);
 
-    const client = await mcpClient(`/w/${solo}/mcp`, bearer(store.createToken(solo, "server", "solo-mcp")));
+    const client = await mcpClient(`/w/${solo}/mcp`, bearer(await store.createToken(solo, "server", "solo-mcp")));
     expect(client.getServerVersion()?.name).toBe("Solo");
     expect(await resourceText(client, "render_poll")).toBe(html("poll v1"));
   });
 
   it("picks the environment from the URL only", async () => {
-    const token = store.createToken(acme, "server", "environments");
+    const token = await store.createToken(acme, "server", "environments");
     expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
     expect(await resourceText(await mcpClient(`/w/${acme}/prod/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
     expect(await resourceText(await mcpClient(`/w/${acme}/staging/mcp`, bearer(token)), "render_rating_staging")).toBe(html("rating v1.1"));
@@ -249,7 +250,7 @@ describe("upstream for a company's own server (server token)", () => {
   });
 
   it("keeps every component version readable for old messages", async () => {
-    const token = store.createToken(acme, "server", "versions");
+    const token = await store.createToken(acme, "server", "versions");
     const staging = await mcpClient(`/w/${acme}/staging/mcp`, bearer(token));
     const stagingUri = ((await staging.listTools()).tools.find((t) => t.name === "render_rating_staging")?._meta as { ui: { resourceUri: string } }).ui.resourceUri;
 
@@ -263,7 +264,72 @@ describe("upstream for a company's own server (server token)", () => {
     const post = (headers: Record<string, string>) =>
       fetch(`${base}/w/${acme}/mcp`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}" });
     expect((await post(bearer("gnu_server_nope"))).status).toBe(401);
-    expect((await post(bearer(store.createToken(other, "server", "other-mcp")))).status).toBe(403);
-    expect((await post(bearer(store.createToken(acme, "publish", "ci")))).status).toBe(403);
+    expect((await post(bearer(await store.createToken(other, "server", "other-mcp")))).status).toBe(403);
+    expect((await post(bearer(await store.createToken(acme, "publish", "ci")))).status).toBe(403);
+  });
+});
+
+describe("branding, instructions and workflow prompts", () => {
+  // The smallest valid PNG header is enough: the format is read from the bytes.
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const call = (method: string, path: string, body?: unknown) =>
+    fetch(`${base}/v1${path}`, {
+      method,
+      headers: { authorization: `Bearer ${admin}`, "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
+      body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
+    });
+  const guide = {
+    instructions: "Acme handles returns. For a return, ask for the order, then use the add_item recipe.",
+    prompts: [{ name: "return_order", title: "Return an order", description: "Return an order and pick a refund.", prompt: "Ask for the order number, then call use_recipe." }],
+  };
+
+  afterAll(async () => {
+    await store.setBranding(acme, {});
+    await store.setIcon(acme, null);
+    await store.setGuide(acme, "prod", { prompts: [] });
+  });
+
+  it("presents the workspace's title, description, website and icon to hosts", async () => {
+    expect((await call("PUT", "/branding", { title: "Acme Support", description: "Orders and returns.", websiteUrl: "https://acme.test" })).status).toBe(200);
+    expect((await call("PUT", "/branding/icon", new TextEncoder().encode("not an image"))).status).toBe(400);
+    const saved = (await (await call("PUT", "/branding/icon", png)).json()) as { icon: { type: string; hash: string } };
+    expect(saved.icon.type).toBe("image/png");
+
+    const info = (await mcpClient(`/w/${acme}/mcp`)).getServerVersion();
+    expect(info).toMatchObject({ name: "Acme", title: "Acme Support", description: "Orders and returns.", websiteUrl: "https://acme.test" });
+    expect(info?.icons).toEqual([{ src: `${base}/w/${acme}/icon?v=${saved.icon.hash}`, mimeType: "image/png" }]);
+    expect((await mcpClient(`/w/${acme}/staging/mcp`)).getServerVersion()?.title).toBe("Acme Support (staging)");
+
+    // Hosts fetch the icon without a token, even from a private workspace; the versioned URL caches for good.
+    const icon = await fetch(info!.icons![0]!.src);
+    expect(icon.headers.get("content-type")).toBe("image/png");
+    expect(icon.headers.get("cache-control")).toContain("immutable");
+    expect(new Uint8Array(await icon.arrayBuffer())).toEqual(png);
+    expect((await fetch(`${base}/w/${other}/icon`)).status).toBe(404);
+  });
+
+  it("gives each environment its own instructions and workflow prompts", async () => {
+    const before = (await store.environment(acme, "prod"))!.revision;
+    expect((await call("PUT", "/guide?environment=prod", guide)).status).toBe(200);
+    expect((await store.environment(acme, "prod"))!.revision).toBe(before + 1);
+
+    const client = await mcpClient(`/w/${acme}/mcp`);
+    expect(client.getInstructions()).toBe(guide.instructions);
+    expect((await client.listPrompts()).prompts.map((p) => p.name)).toEqual(["return_order", "add_item", "quote"]);
+    const prompt = await client.getPrompt({ name: "return_order", arguments: { details: "order 42" } });
+    expect(prompt.messages[0]?.content).toEqual({ type: "text", text: `${guide.prompts[0]!.prompt}\n\nDetails: order 42` });
+
+    // Staging has none of prod's.
+    const staging = await mcpClient(`/w/${acme}/staging/mcp`);
+    expect(staging.getInstructions()).toBeUndefined();
+    expect((await staging.listPrompts()).prompts.map((p) => p.name)).not.toContain("return_order_staging");
+    expect(await (await call("GET", "/guide?environment=staging")).json()).toEqual({ environment: "staging", prompts: [] });
+  });
+
+  it("keeps workflow prompts and recipes from sharing a slash command", async () => {
+    const clash = await call("PUT", "/guide?environment=prod", { prompts: [{ ...guide.prompts[0], name: "add_item" }] });
+    expect(clash.status).toBe(409);
+    const recipe = await call("PUT", "/recipes/return_order?environment=prod", { when: "Returns.", form: { fields: [{ name: "n", label: "N", type: "text" }] } });
+    expect(recipe.status).toBe(409);
   });
 });

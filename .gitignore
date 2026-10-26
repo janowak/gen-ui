@@ -10,3 +10,6 @@ dist
 dist-web
 .idea/
 .wrangler
+.dev.vars
+registry.env
+.claude/worktrees/

@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@genui/format": "workspace:*"
+    "@genui/format": "workspace:*",
+    "@genui/runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

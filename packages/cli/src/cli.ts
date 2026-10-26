@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { ComponentManifest, DEFAULT_ENVIRONMENT, EnvironmentName, Recipe, Theme } from "@genui/format";
+import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, Guide, Recipe, Theme } from "@genui/format";
+import { readComponentDir } from "@genui/runtime/local";
 
 const USAGE = `genui <command> [options]
 
@@ -21,11 +22,14 @@ Commands:
   recipe list                       List an environment's recipes
   recipe set <file.json>            Create or replace a recipe from a JSON file                      admin
   recipe rm <name>                  Delete a recipe                                                  admin
+  guide <file.json> | --clear       Set or clear an environment's MCP instructions and workflow prompts admin
+  branding <file.json>              Set the connector's title, description and website               admin
+  icon <image> | --clear            Set or clear the connector icon (PNG, JPEG, WebP or SVG, 100 KB) admin
 
 Options:
   --url <url>      Registry URL     (env GENUI_URL)
   --token <token>  Registry token   (env GENUI_TOKEN)
-  --env <name>     Environment for publish, theme and recipe (env GENUI_ENV, default prod)
+  --env <name>     Environment for publish, theme, recipe and guide (env GENUI_ENV, default prod)
   --json           Print the registry's response as JSON (publish, list, env list)
 
 Token scopes: server reads (SDK); publish publishes to any environment, or with --env only to
@@ -75,8 +79,8 @@ async function api<T = Record<string, unknown>>(method: string, path: string, bo
   const { url, token } = registry();
   const res = await fetch(`${url}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { authorization: `Bearer ${token}`, "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
+    body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as T & { error?: string; issues?: unknown };
   if (!res.ok) fail(`${res.status} ${json.error ?? res.statusText}${json.issues ? `\n${JSON.stringify(json.issues, null, 2)}` : ""}`);
@@ -139,25 +143,10 @@ async function deploy(name: string, version: string) {
 async function publish(target: string) {
   const ref = REF.exec(target);
   if (ref) return deploy(ref[1]!, ref[2]!);
-  const dir = target;
   const env = environment();
-  // A hand-written manifest next to the sources, else the one @genui/kit/vite generates into dist/.
-  const manifests = [resolve(dir, "genui.component.json"), resolve(dir, "dist/genui.component.json")];
-  let manifestPath = "";
-  let text: string | undefined;
-  for (const candidate of manifests) {
-    text = await readFile(candidate, "utf8").catch(() => undefined);
-    manifestPath = candidate;
-    if (text !== undefined) break;
-  }
-  if (text === undefined) fail(`no genui.component.json in ${resolve(dir)} or its dist/; build it first`);
-  const raw = JSON.parse(text) as Record<string, unknown>;
-  const parsed = ComponentManifest.safeParse(raw);
-  if (!parsed.success) fail(`invalid manifest:\n${parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n")}`);
-  const bundlePath = resolve(dirname(manifestPath), typeof raw.bundle === "string" ? raw.bundle : "dist/index.html");
-  const html = await readFile(bundlePath, "utf8").catch(() => fail(`bundle not found at ${bundlePath}; build it first`));
-  const { name } = parsed.data;
-  const result = await api<Published>("POST", "/v1/components", { manifest: parsed.data, html, environment: env });
+  const { manifest, html } = await readComponentDir(target).catch((error: Error) => fail(error.message));
+  const { name } = manifest;
+  const result = await api<Published>("POST", "/v1/components", { manifest, html, environment: env });
   const what = result.created ? `Published ${name}@${result.version} to ${env}` : `${name}@${result.version} was already published with this bundle; ${env} serves it`;
   printPublished(result, `${what} (hash ${result.hash})`);
 }
@@ -259,6 +248,29 @@ switch (command) {
       await api("DELETE", `/v1/recipes/${arg ?? fail("usage: genui recipe rm <name> [--env e]")}${query}`);
       console.log(`Deleted recipe /${arg} from ${env}.`);
     } else fail("usage: genui recipe list | set <file.json> | rm <name> [--env e]");
+    break;
+  }
+  case "guide": {
+    const env = environment();
+    const parse = async (file: string) => {
+      const parsed = Guide.safeParse(JSON.parse(await readFile(file, "utf8")));
+      if (!parsed.success) fail(`invalid guide:\n${parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n")}`);
+      return parsed.data;
+    };
+    const guide = values.clear ? { prompts: [] } : await parse(args[0] ?? fail("usage: genui guide <file.json> | --clear [--env e]"));
+    await api("PUT", `/v1/guide?environment=${env}`, guide);
+    console.log(values.clear ? `Instructions and workflow prompts cleared in ${env}.` : `Instructions and ${guide.prompts.length} workflow prompt(s) saved in ${env}.`);
+    break;
+  }
+  case "branding": {
+    const branding = Branding.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui branding <file.json>"), "utf8")));
+    print(await api("PUT", "/v1/branding", branding), "Branding updated. Hosts show it the next time they connect.");
+    break;
+  }
+  case "icon": {
+    if (values.clear) await api("DELETE", "/v1/branding/icon");
+    else await api("PUT", "/v1/branding/icon", new Uint8Array(await readFile(args[0] ?? fail("usage: genui icon <image> | --clear"))));
+    console.log(values.clear ? "Icon cleared." : "Icon updated. Hosts show it the next time they connect.");
     break;
   }
   default:

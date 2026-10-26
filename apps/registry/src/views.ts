@@ -1,32 +1,24 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { viewBundles, type ViewBundle, type ViewName } from "@genui/runtime";
 
-export type ViewName = "form" | "chart";
+export type { ViewName };
+export type ManagementViewName = "manager" | "theme" | "recipes" | "workspace" | "guide";
 
-export interface ViewBundle {
-  name: ViewName;
-  html: string;
-  /** Content hash; part of the `ui://` URI so hosts never serve a stale cached bundle. */
-  hash: string;
-  uri: string;
+/**
+ * The HTML the registry serves. Each runtime loads it its own way: Node reads it from disk
+ * (assets-node.ts), the Worker bundles it (worker.ts).
+ */
+export interface Assets {
+  /** Single-file views from @genui/ui. */
+  views: Record<ViewName | ManagementViewName, string>;
+  /** Sign-in and consent pages, built from web/ into dist-web/. */
+  pages: Record<"sign-in" | "consent", string>;
 }
 
-const require = createRequire(import.meta.url);
+const hashed = new WeakMap<Assets, Record<ViewName, ViewBundle>>();
 
-export function bundle(name: ViewName, html: string): ViewBundle {
-  const hash = createHash("sha256").update(html).digest("hex").slice(0, 16);
-  return { name, html, hash, uri: `ui://genui/${name}/${hash}` };
-}
-
-let builtIn: Promise<Record<ViewName, ViewBundle>> | undefined;
-
-/** Loads the built-in view bundles shipped with @genui/ui (read and hashed once per process). */
-export function loadBuiltInViews(): Promise<Record<ViewName, ViewBundle>> {
-  builtIn ??= (async () => {
-    const read = (name: ViewName) => readFile(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
-    const [form, chart] = await Promise.all([read("form"), read("chart")]);
-    return { form: bundle("form", form), chart: bundle("chart", chart) };
-  })();
-  return builtIn;
+/** The built-in form and chart views with their `ui://` URIs, hashed once per process. */
+export function builtInViews(assets: Assets): Record<ViewName, ViewBundle> {
+  let views = hashed.get(assets);
+  if (!views) hashed.set(assets, (views = viewBundles(assets.views)));
+  return views;
 }
