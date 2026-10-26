@@ -6,7 +6,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "deploy:site": "pnpm --filter @genui/site run deploy"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

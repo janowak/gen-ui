@@ -2,6 +2,8 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "genui-site",
+  // The Cloudflare account that holds the app-mcp.com zone
+  "account_id": "9341ca52ab56b808dfd9a4a673fce52c",
   "compatibility_date": "2026-10-01",
   "assets": { "directory": "./dist", "not_found_handling": "404-page" },
   "routes": [{ "pattern": "app-mcp.com", "custom_domain": true }],
