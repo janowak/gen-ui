@@ -91,6 +91,10 @@ form {
   flex-direction: column;
   gap: 10px;
 }
+/* display rules above would otherwise show elements the pages hide, like the password form */
+[hidden] {
+  display: none !important;
+}
 .row {
   display: flex;
   gap: 8px;
