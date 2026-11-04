@@ -11,13 +11,13 @@ export interface ComponentDefinition<P extends z.ZodObject = z.ZodObject, T exte
   description: string;
   /** Props the model passes. Validated in the view and published as the tool's JSON Schema. */
   props: P;
-  /** Tools on the host MCP server the component calls (typed `tools.call` names, mocked by `genui dev`). */
+  /** Tools on the host MCP server the component calls (typed `tools.call` names, mocked by `app-mcp dev`). */
   tools: readonly T[];
 }
 
 /**
  * The one place a component is described: the view validates props with it, and the Vite
- * plugin turns it into `genui.component.json`.
+ * plugin turns it into `app-mcp.component.json`.
  */
 export function defineComponent<P extends z.ZodObject, const T extends string = never>(
   definition: Omit<ComponentDefinition<P, T>, "tools"> & { tools?: readonly T[] },

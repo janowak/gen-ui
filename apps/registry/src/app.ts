@@ -30,7 +30,7 @@ export function createRegistryApp(db: Database, options: RegistryAppOptions): { 
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/v1", createApi(store, options));
   enableHosting(app, store, options);
-  // Companies' servers re-list genui's tools right after a change, if their environment has a refresh URL.
+  // Companies' servers re-list app-mcp's tools right after a change, if their environment has a refresh URL.
   const refresher = refreshServers(store, { allowPrivate: options.allowPrivateWebhooks });
   return { app, store, refresher };
 }

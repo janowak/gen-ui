@@ -1,5 +1,5 @@
 /*
- * genui view chrome, kept out of shadcn's generated styles.css.
+ * app-mcp view chrome, kept out of shadcn's generated styles.css.
  * Unlayered on purpose: wins over Tailwind's base layer.
  */
 html,

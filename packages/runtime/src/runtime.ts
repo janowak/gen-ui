@@ -35,12 +35,12 @@ export interface CatalogSource {
   bundle?(hash: string): Promise<string | undefined>;
 }
 
-/** What `mountGenUI` registered. `remove()` takes it all off the server, which tells connected clients the lists changed. */
+/** What `mountAppMcp` registered. `remove()` takes it all off the server, which tells connected clients the lists changed. */
 export interface Mounted {
   remove(): void;
 }
 
-export interface GenUIOptions {
+export interface AppMcpOptions {
   /** Workspace theme, or a function returning the current one. Overrides the catalog theme. */
   theme?: Theme | (() => Theme | undefined | Promise<Theme | undefined>);
   /** The built-in form and chart views (`builtInViews(assets)`). */
@@ -59,7 +59,7 @@ export interface GenUIOptions {
   preview?: boolean;
   /**
    * Whether views can call tools on this server (option sources, chart sources, submit tools).
-   * True behind a customer's server (the SDK forwards genui's tools from there, next to their data
+   * True behind a customer's server (the SDK forwards app-mcp's tools from there, next to their data
    * tools). False for the public end-user MCP, which only renders: specs that use tools are
    * rejected. Default true.
    */
@@ -105,7 +105,7 @@ function tracked(server: McpServer, handles: Mounted[]): Registrar {
 }
 
 /** Registers `render_form`, `render_chart` and registry components (tools + `ui://` resources) on an MCP server. */
-export async function mountGenUI(target: McpServer, options: GenUIOptions): Promise<Mounted> {
+export async function mountAppMcp(target: McpServer, options: AppMcpOptions): Promise<Mounted> {
   const handles: Mounted[] = [];
   const server = tracked(target, handles);
   const views = options.views;
@@ -142,7 +142,7 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   }
 
   for (const view of Object.values(views)) {
-    registerAppResource(server, `genui ${view.name}`, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
+    registerAppResource(server, `app-mcp ${view.name}`, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
       contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html }],
     }));
   }
@@ -224,8 +224,8 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   // Registry components: render_<name>, each backed by its own content-hashed ui:// resource.
   function mountComponent(component: CatalogComponent, html: string) {
     const { manifest, hash } = component;
-    const uri = `ui://genui/c/${manifest.name}/${hash}`;
-    registerAppResource(server, `genui ${manifest.name}`, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
+    const uri = `ui://app-mcp/c/${manifest.name}/${hash}`;
+    registerAppResource(server, `app-mcp ${manifest.name}`, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
       contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html }],
     }));
     registerAppTool(
@@ -250,7 +250,7 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
       if (!tooNew.has(component.hash)) {
         tooNew.add(component.hash);
         console.warn(
-          `[genui] skipping ${component.name}@${component.version}: needs component contract ${component.manifest.contract}, this server serves ${COMPONENT_CONTRACT}. Update genui.`,
+          `[app-mcp] skipping ${component.name}@${component.version}: needs component contract ${component.manifest.contract}, this server serves ${COMPONENT_CONTRACT}. Update app-mcp.`,
         );
       }
       continue;
@@ -263,8 +263,8 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   const lookup = registry?.bundle?.bind(registry);
   if (lookup) {
     server.registerResource(
-      "genui component version",
-      new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }),
+      "app-mcp component version",
+      new ResourceTemplate("ui://app-mcp/c/{name}/{hash}", { list: undefined }),
       { mimeType: RESOURCE_MIME_TYPE },
       async (uri, { hash }) => {
         const html = await lookup(String(hash));

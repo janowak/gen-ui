@@ -1,5 +1,5 @@
 # Copy to .dev.vars for `pnpm dev:worker` (wrangler dev on http://localhost:8788, D1 in .wrangler/).
-GENUI_PUBLIC_URL=http://localhost:8788
-GENUI_AUTH_SECRET=dev-only-secret-change-me
-GENUI_PASSWORD_LOGIN=true
-GENUI_ALLOW_DCR=true
+APP_MCP_PUBLIC_URL=http://localhost:8788
+APP_MCP_AUTH_SECRET=dev-only-secret-change-me
+APP_MCP_PASSWORD_LOGIN=true
+APP_MCP_ALLOW_DCR=true

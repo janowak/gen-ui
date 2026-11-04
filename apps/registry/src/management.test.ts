@@ -216,13 +216,13 @@ describe("management MCP", () => {
       arguments: { type: "pie", data: { categories: ["A", "B"], series: [{ name: "n", values: [1, 2] }] } },
     });
     expect(chart.isError).toBeFalsy();
-    expect(chart._meta?.["genui/theme"]).toEqual({ light: { primary: "#16a34a" } });
+    expect(chart._meta?.["app-mcp/theme"]).toEqual({ light: { primary: "#16a34a" } });
 
     // Component previews get the same _meta contract as a customer server, with no tools approved.
     const preview = await staging.callTool({ name: "preview_rating", arguments: { question: "How was it?" } });
-    expect(preview._meta).toMatchObject({ "genui/preview": true, "genui/theme": { light: { primary: "#16a34a" } } });
-    expect(preview._meta?.["genui/viewId"]).toEqual(expect.any(String));
-    expect(preview.structuredContent).toEqual({ genui: { id: preview._meta?.["genui/viewId"] } });
+    expect(preview._meta).toMatchObject({ "app-mcp/preview": true, "app-mcp/theme": { light: { primary: "#16a34a" } } });
+    expect(preview._meta?.["app-mcp/viewId"]).toEqual(expect.any(String));
+    expect(preview.structuredContent).toEqual({ appMcp: { id: preview._meta?.["app-mcp/viewId"] } });
   });
 
   it("drafts workflows for review; only an admin click saves them", async () => {

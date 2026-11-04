@@ -14,7 +14,7 @@ export const contentHash = (html: string) => createHash("sha256").update(html).d
 
 export function bundle(name: ViewName, html: string): ViewBundle {
   const hash = contentHash(html);
-  return { name, html, hash, uri: `ui://genui/${name}/${hash}` };
+  return { name, html, hash, uri: `ui://app-mcp/${name}/${hash}` };
 }
 
 /** The built-in form and chart views with their `ui://` URIs, from the HTML in @app-mcp/ui. */

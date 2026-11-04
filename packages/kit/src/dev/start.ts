@@ -7,12 +7,12 @@ export interface DevOptions {
   open?: boolean;
 }
 
-/** Starts the component's Vite dev server (its own vite.config) with the genui dev host at `/`. */
+/** Starts the component's Vite dev server (its own vite.config) with the app-mcp dev host at `/`. */
 export async function startDev(options: DevOptions): Promise<ViteDevServer> {
   const server = await createServer({ root: options.root, server: { port: options.port, open: options.open } });
-  if (!server.config.plugins.some((plugin) => plugin.name === "genui:dev")) {
+  if (!server.config.plugins.some((plugin) => plugin.name === "app-mcp:dev")) {
     await server.close();
-    throw new Error(`${options.root}: add genui() from @app-mcp/kit/vite to the plugins in vite.config.`);
+    throw new Error(`${options.root}: add appMcp() from @app-mcp/kit/vite to the plugins in vite.config.`);
   }
   await server.listen();
   return server;
@@ -30,7 +30,7 @@ export interface BuildWatcher {
 }
 
 /**
- * `vite build --watch` with the component's own vite.config, quietly: `genui serve` reports builds
+ * `vite build --watch` with the component's own vite.config, quietly: `app-mcp serve` reports builds
  * itself, and over stdio, stdout belongs to the MCP protocol. Resolves after the first build.
  */
 export async function watchBuild(options: WatchBuildOptions): Promise<BuildWatcher> {

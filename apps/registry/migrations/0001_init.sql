@@ -11,7 +11,7 @@ CREATE TABLE workspaces (
 
 -- Each environment serves exactly what was last published or saved to it: component versions, its theme
 -- and its workflows. Every workspace has prod. Every change bumps the revision, which the SDK compares to know
--- when to re-list; a company's server can register a refresh URL that genui calls on each change.
+-- when to re-list; a company's server can register a refresh URL that app-mcp calls on each change.
 CREATE TABLE environments (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
   name TEXT NOT NULL,

@@ -8,7 +8,7 @@ import { serve as listen, type ServerType } from "@hono/node-server";
 import { McpServer, WebStandardStreamableHTTPServerTransport, type Transport } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { localCatalog, type LocalCatalog, type LocalCatalogOptions } from "./local.js";
-import { mountGenUI, type Mounted } from "./runtime.js";
+import { mountAppMcp, type Mounted } from "./runtime.js";
 import { viewBundles, type ViewBundle, type ViewName } from "./views.js";
 
 const require = createRequire(import.meta.url);
@@ -58,7 +58,7 @@ const rpcError = (status: number, message: string) =>
   Response.json({ jsonrpc: "2.0", error: { code: -32000, message }, id: null }, { status });
 
 /**
- * A local genui MCP: genui's forms, charts and the catalog's components and workflows, with no registry.
+ * A local app-mcp MCP: app-mcp's forms, charts and the catalog's components and workflows, with no registry.
  * Each session gets its own server, mounted again when the catalog changes (`changed()`), which
  * tells the client its lists changed.
  *
@@ -73,12 +73,12 @@ export function createLocalMcp(options: LocalMcpOptions) {
   const stdio = new Set<Session>();
   let remounting = Promise.resolve();
 
-  const mount = (server: McpServer, dataTools: boolean) => mountGenUI(server, { views, registry: catalog, environment, dataTools });
+  const mount = (server: McpServer, dataTools: boolean) => mountAppMcp(server, { views, registry: catalog, environment, dataTools });
 
   async function open(dataTools: boolean): Promise<Session> {
     const instructions = catalog.instructions();
     const server = new McpServer(
-      { name: "genui-local", title: "genui (local)", version: "0.1.0" },
+      { name: "app-mcp-local", title: "app-mcp (local)", version: "0.1.0" },
       {
         ...(instructions ? { instructions } : {}),
         // A remount removes and adds every tool: one notification per kind, not one per tool.
@@ -205,7 +205,7 @@ export interface ServeOptions extends LocalCatalogOptions {
   /** Serve over stdin/stdout instead of HTTP. */
   stdio?: boolean;
   suffix?: string;
-  /** POSTed `{ type: "genui.refresh", environment, revision }` on every change, like the registry's refresh URL. */
+  /** POSTed `{ type: "app-mcp.refresh", environment, revision }` on every change, like the registry's refresh URL. */
   refreshUrl?: string;
   /** Builds component directories that have a build, and rebuilds them on change (@app-mcp/kit's watchBuild). */
   build?: (dir: string, onBuild: (error?: Error) => void) => Promise<{ close(): Promise<void> } | undefined>;
@@ -221,7 +221,7 @@ export interface Served {
   close(): Promise<void>;
 }
 
-/** `genui serve`: builds, loads and watches the local catalog and serves it over HTTP or stdio. */
+/** `app-mcp serve`: builds, loads and watches the local catalog and serves it over HTTP or stdio. */
 export async function startServe(options: ServeOptions): Promise<Served> {
   const log = options.log ?? ((line: string) => console.error(line));
   const closers: (() => Promise<void> | void)[] = [];
@@ -254,7 +254,7 @@ export async function startServe(options: ServeOptions): Promise<Served> {
       if (!changed) return;
       await mcp.changed();
       if (options.refreshUrl) {
-        const body = JSON.stringify({ type: "genui.refresh", environment: options.suffix ?? "prod", revision: catalog.revision() });
+        const body = JSON.stringify({ type: "app-mcp.refresh", environment: options.suffix ?? "prod", revision: catalog.revision() });
         await fetch(options.refreshUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },

@@ -62,7 +62,7 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     };
   }
 
-  /** What's served where: every token may read it, so `genui list` works with the publish token that published. */
+  /** What's served where: every token may read it, so `app-mcp list` works with the publish token that published. */
   const anyToken = () => auth("server", ["server", "publish", "admin"]);
 
   const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));

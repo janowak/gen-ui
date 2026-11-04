@@ -8,24 +8,24 @@ import {
   type RegisteredResource,
   type RegisteredTool,
 } from "@modelcontextprotocol/server";
-import { resourceUri, type GenUIClient } from "./client.js";
+import { resourceUri, type AppMcpClient } from "./client.js";
 
 const RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
-export interface GenUIOptions {
-  /** From `connectGenUI`, once per process and environment: its URL picks the environment this server serves. */
-  genui: GenUIClient;
+export interface AppMcpOptions {
+  /** From `connectAppMcp`, once per process and environment: its URL picks the environment this server serves. */
+  appMcp: AppMcpClient;
   /**
-   * Long-lived (stateful) servers: re-sync when genui's tools change (a publish, a theme, instructions or workflow
+   * Long-lived (stateful) servers: re-sync when app-mcp's tools change (a publish, a theme, instructions or workflow
    * save) and notify the client with list_changed. Leave off for per-request servers.
    */
   watch?: boolean;
 }
 
-export interface GenUIHandle {
-  /** genui tools currently on the server. */
+export interface AppMcpHandle {
+  /** app-mcp tools currently on the server. */
   tools(): string[];
-  /** Stops watching genui. */
+  /** Stops watching app-mcp. */
   close(): void;
 }
 
@@ -55,12 +55,12 @@ function mirror<T extends { name: string }, H extends { remove(): void }>(
 }
 
 /**
- * Puts genui's tools (`render_form`, `render_chart`, `render_<component>`), their
+ * Puts app-mcp's tools (`render_form`, `render_chart`, `render_<component>`), their
  * `ui://` resources and the workflow prompts on your MCP server, next to your own tools. Calls are
- * forwarded to genui. genui's views call your tools through the host, so those never leave your server.
+ * forwarded to app-mcp. app-mcp's views call your tools through the host, so those never leave your server.
  */
-export async function mountGenUI(server: McpServer, { genui, watch = false }: GenUIOptions): Promise<GenUIHandle> {
-  await genui.ready();
+export async function mountAppMcp(server: McpServer, { appMcp, watch = false }: AppMcpOptions): Promise<AppMcpHandle> {
+  await appMcp.ready();
   const tools: Mounted<RegisteredTool> = new Map();
   const prompts: Mounted<RegisteredPrompt> = new Map();
   const resources = new Map<string, RegisteredResource>();
@@ -76,13 +76,13 @@ export async function mountGenUI(server: McpServer, { genui, watch = false }: Ge
         annotations: tool.annotations,
         _meta: tool._meta,
       },
-      (args) => genui.callTool(tool.name, args as Record<string, unknown>),
+      (args) => appMcp.callTool(tool.name, args as Record<string, unknown>),
     );
 
   function registerPrompt(prompt: Prompt) {
     const args = prompt.arguments ?? [];
     const config = { title: prompt.title, description: prompt.description };
-    if (!args.length) return server.registerPrompt(prompt.name, config, () => genui.getPrompt(prompt.name, {}));
+    if (!args.length) return server.registerPrompt(prompt.name, config, () => appMcp.getPrompt(prompt.name, {}));
     const argsSchema = fromJsonSchema<Record<string, string>>({
       type: "object",
       properties: Object.fromEntries(
@@ -90,25 +90,25 @@ export async function mountGenUI(server: McpServer, { genui, watch = false }: Ge
       ),
       required: args.filter((a) => a.required).map((a) => a.name),
     });
-    return server.registerPrompt(prompt.name, { ...config, argsSchema }, (values) => genui.getPrompt(prompt.name, values));
+    return server.registerPrompt(prompt.name, { ...config, argsSchema }, (values) => appMcp.getPrompt(prompt.name, values));
   }
 
   const registerResource = (uri: string) =>
-    server.registerResource(uri, uri, { mimeType: genui.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () =>
-      genui.readResource(uri),
+    server.registerResource(uri, uri, { mimeType: appMcp.resource(uri)?.contents[0]?.mimeType ?? RESOURCE_MIME_TYPE }, () =>
+      appMcp.readResource(uri),
     );
 
-  // Earlier component versions, for old messages the host renders again: read from genui.
+  // Earlier component versions, for old messages the host renders again: read from app-mcp.
   server.registerResource(
-    "genui component version",
-    new ResourceTemplate("ui://genui/c/{name}/{hash}", { list: undefined }),
+    "app-mcp component version",
+    new ResourceTemplate("ui://app-mcp/c/{name}/{hash}", { list: undefined }),
     { mimeType: RESOURCE_MIME_TYPE },
-    (uri) => genui.readResource(uri.href),
+    (uri) => appMcp.readResource(uri.href),
   );
 
   function sync() {
     const changed = { tools: false, resources: false, prompts: false };
-    const snapshot = genui.snapshot();
+    const snapshot = appMcp.snapshot();
     if (!snapshot) return changed;
     changed.tools = mirror(tools, snapshot.tools, registerTool);
     changed.prompts = mirror(prompts, snapshot.prompts, registerPrompt);
@@ -129,14 +129,14 @@ export async function mountGenUI(server: McpServer, { genui, watch = false }: Ge
 
   sync();
   const unsubscribe = watch
-    ? genui.onChange(() => {
+    ? appMcp.onChange(() => {
         try {
           const changed = sync();
           if (changed.tools) server.sendToolListChanged();
           if (changed.resources) server.sendResourceListChanged();
           if (changed.prompts) server.sendPromptListChanged();
         } catch (error) {
-          console.warn(`[genui] could not update genui's tools: ${error}`);
+          console.warn(`[app-mcp] could not update app-mcp's tools: ${error}`);
         }
       })
     : () => {};

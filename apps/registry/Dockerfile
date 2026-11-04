@@ -1,6 +1,6 @@
-# The genui registry for self-hosting: Node 24 on SQLite, data in /data. genui cloud runs the same
+# The app-mcp registry for self-hosting: Node 24 on SQLite, data in /data. app-mcp cloud runs the same
 # code on Cloudflare Workers and D1 (wrangler.jsonc). Build from the repository root:
-#   docker build -f apps/registry/Dockerfile -t genui-registry .
+#   docker build -f apps/registry/Dockerfile -t app-mcp-registry .
 # or use compose.yaml there.
 
 FROM node:24-slim AS build
@@ -14,7 +14,7 @@ RUN pnpm --filter "@app-mcp/registry..." build
 RUN pnpm --filter @app-mcp/registry deploy --prod /out
 
 FROM node:24-slim
-ENV NODE_ENV=production PORT=4000 GENUI_DB=/data/genui.sqlite
+ENV NODE_ENV=production PORT=4000 APP_MCP_DB=/data/app-mcp.sqlite
 WORKDIR /app
 COPY --from=build /out .
 RUN mkdir /data && chown node:node /data

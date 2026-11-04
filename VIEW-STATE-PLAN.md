@@ -1,6 +1,6 @@
 # View state plan
 
-A re-rendered view (scroll back, reload, reopen the chat) comes back as the user left it. The kit gives every view `useState<T>`-style state: a value and a setter. Underneath, it finds the render id and calls the right storage: the host's own state where it has one (ChatGPT `widgetState`), `localStorage` elsewhere, memory as a last resort. The built-in form builds its draft and submit state on top of it. genui stores no view state, now or later. Implements [janowak/gen-ui#1](https://github.com/janowak/gen-ui/issues/1).
+A re-rendered view (scroll back, reload, reopen the chat) comes back as the user left it. The kit gives every view `useState<T>`-style state: a value and a setter. Underneath, it finds the render id and calls the right storage: the host's own state where it has one (ChatGPT `widgetState`), `localStorage` elsewhere, memory as a last resort. The built-in form builds its draft and submit state on top of it. app-mcp stores no view state, now or later. Implements [janowak/gen-ui#1](https://github.com/janowak/gen-ui/issues/1).
 
 **Status (2026-10-24)**
 - Built (phases 1–7, 2026-10-24). The guarantees in §7 are published only after the M0 checks in §8.
@@ -11,7 +11,7 @@ A re-rendered view (scroll back, reload, reopen the chat) comes back as the user
   - the form's draft and submit shape on top (§5);
   - an idempotency key (§6, phase 5).
 
-**Principle: the host keeps the id, the browser or host keeps the state, the customer's server keeps the truth.** genui mints a render id and forgets it. Drafts and "done" live in the host or the browser. Anything that must hold (answered once, across devices) is enforced by the customer's own submit tool, keyed by that id.
+**Principle: the host keeps the id, the browser or host keeps the state, the customer's server keeps the truth.** app-mcp mints a render id and forgets it. Drafts and "done" live in the host or the browser. Anything that must hold (answered once, across devices) is enforced by the customer's own submit tool, keyed by that id.
 
 ---
 
@@ -19,7 +19,7 @@ A re-rendered view (scroll back, reload, reopen the chat) comes back as the user
 
 | | Today | After |
 |---|---|---|
-| Render id | `_meta["genui/viewId"]` only | `structuredContent.genui.id`. The `_meta` copy stays only until M0 check 1 shows which one hosts replay; then one goes |
+| Render id | `_meta["app-mcp/viewId"]` only | `structuredContent.appMcp.id`. The `_meta` copy stays only until M0 check 1 shows which one hosts replay; then one goes |
 | State API | Kit only: `ctx.state.get()` / `set()` | `useState<T>` mechanics for every view: `ctx.useState(initial)` in the kit, `useViewState(initial)` for React views. No ids or storage in component code |
 | Storage | `localStorage`, else memory | Picked per host: ChatGPT `widgetState` (`privateContent`), `localStorage`, memory, or a custom backend |
 | Built-in form | Values and "Submitted" in React state. A replay is blank and can be submitted again | Draft and submit state, as the form's own shape in `useViewState`. A replay restores the draft, shows a submitted form as done, and says when a submit was interrupted |
@@ -91,13 +91,13 @@ interface StateBackend {
 
 **Picked in this order:**
 
-1. `attachViewState(app, scope, { backend })`: a custom backend. The extension point for a customer who wants state on their own server (app-only `get_draft` / `save_draft` tools on *their* MCP). genui ships none.
+1. `attachViewState(app, scope, { backend })`: a custom backend. The extension point for a customer who wants state on their own server (app-only `get_draft` / `save_draft` tools on *their* MCP). app-mcp ships none.
 2. **ChatGPT:** `typeof window.openai?.setWidgetState === "function"`.
-   - Reads `window.openai.widgetState?.privateContent?.genui`.
-   - Writes `setWidgetState({ ...current, privateContent: { ...current.privateContent, genui: saved } })`. It merges, because `setWidgetState` replaces the whole state and a component may use `window.openai` itself.
+   - Reads `window.openai.widgetState?.privateContent?.appMcp`.
+   - Writes `setWidgetState({ ...current, privateContent: { ...current.privateContent, appMcp: saved } })`. It merges, because `setWidgetState` replaces the whole state and a component may use `window.openai` itself.
    - `privateContent`, not top-level state: plain widget state goes to the model on the next turn.
    - Available at load, so ChatGPT restores before any tool result arrives.
-3. **Browser:** `localStorage` under `genui:<scope>:<id>`, if a probe write succeeds. Waits for the render id. Scope is the component name, or `form` for the built-in form.
+3. **Browser:** `localStorage` under `app-mcp:<scope>:<id>`, if a probe write succeeds. Waits for the render id. Scope is the component name, or `form` for the built-in form.
 4. **Memory.**
 
 **Writes:**
@@ -105,9 +105,9 @@ interface StateBackend {
 - `flush()` writes at once and resolves when the backend has it.
 - Pending writes are flushed on `pagehide` and when the page is hidden, and in `onteardown` where the kit runtime or `useView` owns it. Hosts may drop the iframe without tearing it down.
 
-**Sweep:** on the first browser load per page, delete `genui:*` entries whose `at` is over 30 days old. Best effort: it only runs when a genui view opens in that origin again.
+**Sweep:** on the first browser load per page, delete `app-mcp:*` entries whose `at` is over 30 days old. Best effort: it only runs when an app-mcp view opens in that origin again.
 
-**Size:** cap a saved entry (and warn in `genui dev`) instead of failing silently. ChatGPT documents no limit for widget state, and a large draft costs every replay.
+**Size:** cap a saved entry (and warn in `app-mcp dev`) instead of failing silently. ChatGPT documents no limit for widget state, and a large draft costs every replay.
 
 **Where the code lives:**
 - `packages/kit/src/state.ts`, exported as `@app-mcp/kit/state`.
@@ -146,10 +146,10 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
 
 ## 6. Idempotency key (recommended, phase 5)
 
-"Answered once" can't hold in the view alone (another device, cleared storage, an interrupted submit). The customer's tool can make it hold, keyed by the render id, with no genui storage:
+"Answered once" can't hold in the view alone (another device, cleared storage, an interrupted submit). The customer's tool can make it hold, keyed by the render id, with no app-mcp storage:
 
 - **`FormSpec.submit.idempotencyParam?: string`:** the submit tool parameter that receives the render id. Recipe authors set it in the recipe. The `render_form` description tells the model to set it when the submit tool has such a parameter.
-- **Recipe webhooks:** the form sends the id to `genui_validate`, and the webhook body carries `viewId`, so webhooks can dedupe too.
+- **Recipe webhooks:** the form sends the id to `app_mcp_validate`, and the webhook body carries `viewId`, so webhooks can dedupe too.
 - **Kit:** the docs show `ctx.tools.call(name, { ..., request_id: ctx.viewId })`.
 
 ---
@@ -178,14 +178,14 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
 
 ## 9. Gaps and risks
 
-1. **"No customer data on our side" holds for state, not for traffic.** genui stores no view state. But with the cloud runtime, the arguments the model passes to render tools (specs, prefills, inline rows) still pass through genui, and recipe values pass through on their way to the webhook. That doesn't change here. Self-hosting remains the answer for those.
+1. **"No customer data on our side" holds for state, not for traffic.** app-mcp stores no view state. But with the cloud runtime, the arguments the model passes to render tools (specs, prefills, inline rows) still pass through app-mcp, and recipe values pass through on their way to the webhook. That doesn't change here. Self-hosting remains the answer for those.
 2. **Answered once is not guaranteed** without §6. On Claude, another browser or cleared storage shows the form open again.
 3. **Interrupted submits.** If the view closes after the tool call but before "done" is saved, the replay can't know the outcome. The form shows `interrupted`, and a retry is safe only with §6.
 4. **The id becomes model-visible.** `structuredContent` goes to the model in most hosts: a few tokens of noise, and the possible content-vs-structuredContent problem in M0 check 2.
-5. **Shared origins.** A host that derives the sandbox origin from the hostname (the spec's example `www-example-com.oaiusercontent.com`) puts every workspace of genui's hosted end-user MCP in one origin. There, a tenant's custom component could read another tenant's `localStorage` state. ChatGPT avoids this by using `widgetState`. Behind a customer's SDK, the origin is the customer's server. If M0 finds a hostname-scoped host without host state, give the hosted MCP per-workspace hostnames or set `_meta.ui.domain` per workspace.
+5. **Shared origins.** A host that derives the sandbox origin from the hostname (the spec's example `www-example-com.oaiusercontent.com`) puts every workspace of app-mcp's hosted end-user MCP in one origin. There, a tenant's custom component could read another tenant's `localStorage` state. ChatGPT avoids this by using `widgetState`. Behind a customer's SDK, the origin is the customer's server. If M0 finds a hostname-scoped host without host state, give the hosted MCP per-workspace hostnames or set `_meta.ui.domain` per workspace.
 6. **Drafts at rest.** Plaintext in the browser until the sweep, and in ChatGPT's message storage. Add `FormSpec.persistDraft: false` for sensitive forms: they keep only the submit state.
 7. **Two live views of one render** (the same chat in two tabs, inline plus fullscreen): last write wins. Not handled.
-8. **The sweep is best effort.** It only runs when a genui view opens in that origin again. Don't promise deletion after 30 days.
+8. **The sweep is best effort.** It only runs when an app-mcp view opens in that origin again. Don't promise deletion after 30 days.
 9. **The spec may add host state.** MCP Apps lists "state persistence and restoration" as future work. When it lands, it becomes another backend in §4; components don't change.
 
 ---
@@ -193,8 +193,8 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
 ## 10. Steps
 
 1. **Render id in `structuredContent`.**
-   - `apps/registry/src/runtime.ts` (`meta()` → also `structuredContent: { genui: { id } }`) and the previews in `apps/registry/src/mcp.ts`.
-   - `VIEW_CONTENT_KEY = "genui"` in `packages/format/src/meta.ts`.
+   - `apps/registry/src/runtime.ts` (`meta()` → also `structuredContent: { appMcp: { id } }`) and the previews in `apps/registry/src/mcp.ts`.
+   - `VIEW_CONTENT_KEY = "appMcp"` in `packages/format/src/meta.ts`.
    - Tests: registry runtime and management tests; `packages/sdk/src/mount.test.ts`; Python `test_mount.py`, which checks that `structured_output=False` still forwards `structuredContent`.
 2. **Store and adapter** in `packages/kit/src/state.ts` (`@app-mcp/kit/state`):
    - `attachViewState(app, scope, options)`: the id from `structuredContent` (and `_meta` until M0 check 1 picks one), backend selection, values by hook key.
@@ -215,9 +215,9 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
    - `FormView` changes (§5).
 5. **Idempotency key** (§6):
    - `idempotencyParam` in `FormSpec` (format).
-   - Form and `genui_validate` pass the id; the webhook body adds `viewId`.
+   - Form and `app_mcp_validate` pass the id; the webhook body adds `viewId`.
    - Tool descriptions.
-6. **`genui dev`.**
+6. **`app-mcp dev`.**
    - `renderResult()` sends `structuredContent`.
    - A "Host state" setting: browser, ChatGPT (a `window.openai` shim the dev page injects, kept by the harness per view id so **Replay** restores), none.
    - Saved state in the log on each write, and a "Clear saved state" button.
@@ -229,7 +229,7 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
 
 ## 11. Out of scope
 
-- Server-side state in genui. If a customer needs state across devices on Claude, they plug a custom backend (§4) into their own tools.
+- Server-side state in app-mcp. If a customer needs state across devices on Claude, they plug a custom backend (§4) into their own tools.
 - A submit helper in the kit. It moves there from the form when a second component needs it.
 - Syncing two live views of one render.
 - State for the chart and management views.

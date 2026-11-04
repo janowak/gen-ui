@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 
-// The genui dev host page's script, bundled with its dependencies so a component's dev server
+// The app-mcp dev host page's script, bundled with its dependencies so a component's dev server
 // can serve it as-is (no resolving or pre-bundling on the user's side).
 export default defineConfig({
   build: {

@@ -4,7 +4,7 @@ Recipes go away. An environment has **instructions** (the overview) and **workfl
 
 **Status (2026-10-26)**
 - Done and on `master`: §2–§10 plus §13 (code path). Recipes, `guide.ts`, `GuideView` and the validation webhook are gone.
-- `genui serve` reads workflow files from its dirs and takes `--instructions <file.md>`; `--recipes` and `--guide` are gone.
+- `app-mcp serve` reads workflow files from its dirs and takes `--instructions <file.md>`; `--recipes` and `--guide` are gone.
 - Dev mode: no migration of existing recipes, no compat aliases. Local databases get recreated.
 
 **Principle: one concept, the model builds the UI.** Components describe themselves and `render_form` builds any form, so a workflow only needs to say *what to do*. No business-owned fixed forms, no validation webhook. If a customer needs a guaranteed form later, it comes back as an optional part of a workflow, not as its own concept.
@@ -18,7 +18,7 @@ Recipes go away. An environment has **instructions** (the overview) and **workfl
 | Recipe: fixed form + `when` + `notes` + optional webhook, also `/name` | Gone. The workflow says "show a form with order id and reason, submit to `create_return`" |
 | Workflow prompt: name, description, prompt text, always `/name` with a free `details` arg | Workflow: name, description, instructions, optional params |
 | Two kinds of slash command that can't share a name | One kind: workflows with params |
-| `use_recipe`, `preview_recipe`, `genui_validate` tools | None. `render_form`, `render_chart`, `render_<component>` only |
+| `use_recipe`, `preview_recipe`, `app_mcp_validate` tools | None. `render_form`, `render_chart`, `render_<component>` only |
 | Webhook secret, signed `recipe.validate` calls | Gone. The customer's submit tool validates, as for any `render_form` |
 
 ## 2. The workflow
@@ -82,7 +82,7 @@ Both kinds are listed in that section by name and description, so the model know
 
 ## 4. Runtime (`packages/runtime/src/runtime.ts`)
 
-- Delete the recipe block: `use_recipe` / `preview_recipe`, `genui_validate`, the per-recipe prompts, `RECIPE_PARAM`, `VIEW_PARAM` if nothing else uses it, the `recipes` and `validate` options.
+- Delete the recipe block: `use_recipe` / `preview_recipe`, `app_mcp_validate`, the per-recipe prompts, `RECIPE_PARAM`, `VIEW_PARAM` if nothing else uses it, the `recipes` and `validate` options.
 - Workflow prompts: register only workflows with params, `argsSchema` built from them (`z.string()`, `.optional()` unless required).
 - Preview MCP: no prompts, as today. The management MCP can show the composed instructions instead (§6).
 
@@ -121,7 +121,7 @@ The `draft_workflow` description teaches the model to write instructions that na
 
 ## 8. CLI and SDKs
 
-- CLI: `genui workflow list | set <file> | rm <name>` (`set` takes `.json` or `.md` with frontmatter: name, title, description, params; body = instructions). `genui instructions set <file.md> | --clear` replaces `genui guide`. Help text and `--env` wording drop "recipe".
+- CLI: `app-mcp workflow list | set <file> | rm <name>` (`set` takes `.json` or `.md` with frontmatter: name, title, description, params; body = instructions). `app-mcp instructions set <file.md> | --clear` replaces `app-mcp guide`. Help text and `--env` wording drop "recipe".
 - TS SDK (`mount.ts`, `client.ts`, `refresh.ts`): prompts are already mirrored generically; only comments and tests change (`use_recipe` assertions → a workflow prompt with params).
 - Python SDK: same, comments/README/tests only (`conftest.py` fixture saves a workflow instead of a recipe).
 
@@ -163,9 +163,9 @@ The `draft_workflow` description teaches the model to write instructions that na
 
 Workflows live in the repo next to the components they use and ship the same way:
 
-- `<name>.workflow.md` in a component dir or its `workflows/`: YAML frontmatter (`title`, `description`, `params`; `name` defaults to the file name) and the instructions as the body. `.json` works for `genui workflow set`.
-- `genui publish <dir>` sends the dir's component and its workflows to the environment (`PUT /v1/workflows/:name`), with the same publish token and its environment limits. A dir may hold only workflows.
-- `genui workflow list | set <file> | rm <name>` for single ones; `genui instructions <file.md> | --clear` for the environment's instructions (admin).
-- `@app-mcp/runtime/local`: `parseWorkflowFile`, `readWorkflowFile`, `readWorkflowDir`, also used by `genui serve`.
-- Publishing doesn't delete workflows that left the repo; `genui workflow rm` does. A sync mode (`--prune`) can come later.
+- `<name>.workflow.md` in a component dir or its `workflows/`: YAML frontmatter (`title`, `description`, `params`; `name` defaults to the file name) and the instructions as the body. `.json` works for `app-mcp workflow set`.
+- `app-mcp publish <dir>` sends the dir's component and its workflows to the environment (`PUT /v1/workflows/:name`), with the same publish token and its environment limits. A dir may hold only workflows.
+- `app-mcp workflow list | set <file> | rm <name>` for single ones; `app-mcp instructions <file.md> | --clear` for the environment's instructions (admin).
+- `@app-mcp/runtime/local`: `parseWorkflowFile`, `readWorkflowFile`, `readWorkflowDir`, also used by `app-mcp serve`.
+- Publishing doesn't delete workflows that left the repo; `app-mcp workflow rm` does. A sync mode (`--prune`) can come later.
 - Example: `examples/rating/workflows/` (`create_order` is a command, `order_feedback` is always-on).

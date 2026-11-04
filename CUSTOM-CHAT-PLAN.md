@@ -1,13 +1,13 @@
 # Custom chat plan
 
-Render genui components in a company's own chat: their frontend, their backend, their LLM calls. The backend gets genui's tools for its LLM requests and runs them through `@app-mcp/sdk`, server to server. The frontend renders the result as a web component with a shadow root ("light render") instead of an MCP Apps iframe. The company supplies what an MCP Apps host would (tool calls, messages, model context, theme, state) through the host adapter contract from HOST-ADAPTER-PLAN.md.
+Render app-mcp components in a company's own chat: their frontend, their backend, their LLM calls. The backend gets app-mcp's tools for its LLM requests and runs them through `@app-mcp/sdk`, server to server. The frontend renders the result as a web component with a shadow root ("light render") instead of an MCP Apps iframe. The company supplies what an MCP Apps host would (tool calls, messages, model context, theme, state) through the host adapter contract from HOST-ADAPTER-PLAN.md.
 
 **Status (2026-10-26)**
 - Proposed. Needs HOST-ADAPTER-PLAN steps 1–4 first: this is the contract's second implementation.
 - Decided:
-  - Each module defines its own custom element (`<genui-rating>`).
+  - Each module defines its own custom element (`<app-mcp-rating>`).
   - One version of a component per page. Two versions on one page aren't supported; the second one fails with a clear error.
-  - A React wrapper, `<GenUIView>`.
+  - A React wrapper, `<AppMcpView>`.
   - A CSS rewrite plugin for shadow roots.
   - Portals render into the shadow root.
 
@@ -18,37 +18,37 @@ Render genui components in a company's own chat: their frontend, their backend, 
 ## 1. The flow
 
 ```
-Browser (company chat UI)           Company backend                         genui
+Browser (company chat UI)           Company backend                         app-mcp
 ─────────────────────────           ───────────────                         ─────
                                     harness.tools("anthropic")              (SDK memory)
                                     LLM streams tool_use render_rating
 ◄── start { tool, module }          harness.module("render_rating")
-import /genui/modules/<hash>.js ──► GET: from SDK memory ─── once ────────► genui://module/<hash>
+import /app-mcp/modules/<hash>.js ──► GET: from SDK memory ─── once ────────► app-mcp://module/<hash>
 ◄── partial JSON                    input_json_delta
                                     harness.execute(name, args) ──────────► tools/call
 ◄── render { args, result }         forModel → tool_result → LLM
-view: tools.call("save_rating") ──► POST /genui/call → the company's tools
+view: tools.call("save_rating") ──► POST /app-mcp/call → the company's tools
 view: model.update / model.send ──► the company's chat state → next LLM request
 ```
 
-- How the backend streams to its browser (SSE, websockets, the Vercel AI SDK's message parts) stays the company's. genui defines only what travels: the module, the input and the render result.
+- How the backend streams to its browser (SSE, websockets, the Vercel AI SDK's message parts) stays the company's. app-mcp defines only what travels: the module, the input and the render result.
 - The module's hash is known when `tool_use` starts, so the browser loads the module while the arguments stream.
-- Browsers never talk to genui. Modules come from the company's backend, so its CSP needs nothing new (`script-src 'self'`).
+- Browsers never talk to app-mcp. Modules come from the company's backend, so its CSP needs nothing new (`script-src 'self'`).
 
 ---
 
 ## 2. Server: harness helpers in `@app-mcp/sdk`
 
-Built on `connectGenUI`, which already keeps genui's tools in memory, forwards calls and fetches content-hashed resources once.
+Built on `connectAppMcp`, which already keeps app-mcp's tools in memory, forwards calls and fetches content-hashed resources once.
 
 ```ts
-import { connectGenUI, genuiHarness } from "@app-mcp/sdk";
+import { connectAppMcp, appMcpHarness } from "@app-mcp/sdk";
 
-const genui = connectGenUI({ url: process.env.GENUI_MCP_URL, token: SERVER_TOKEN });
-const harness = genuiHarness(genui); // also prefetches the modules of the current tools
+const appMcp = connectAppMcp({ url: process.env.APP_MCP_MCP_URL, token: SERVER_TOKEN });
+const harness = appMcpHarness(appMcp); // also prefetches the modules of the current tools
 
 // Behind your own auth: modules, and tool calls from views.
-app.all("/genui/*", (c) => harness.handler({ callTool: (name, args, request) => myTools.call(name, args, request) })(c.req.raw));
+app.all("/app-mcp/*", (c) => harness.handler({ callTool: (name, args, request) => myTools.call(name, args, request) })(c.req.raw));
 
 // A chat turn (Anthropic shown).
 const stream = anthropic.messages.stream({
@@ -66,16 +66,16 @@ const { forModel, render } = await harness.execute(block.name, block.input);
 
 | Method | What |
 |---|---|
-| `tools(format)` | genui's model-visible tools, answered from memory. Formats:<br>• `"anthropic"`: `{ name, description, input_schema }`.<br>• `"openai"`: function tools, non-strict, because the form and chart schemas use unions that strict mode rejects.<br>• `"mcp"`: raw MCP `Tool`s, e.g. for the Vercel AI SDK's `jsonSchema`.<br>Leaves out app-only tools (`_meta.ui.visibility: ["app"]`) and tools without a module, which can't render here. |
+| `tools(format)` | app-mcp's model-visible tools, answered from memory. Formats:<br>• `"anthropic"`: `{ name, description, input_schema }`.<br>• `"openai"`: function tools, non-strict, because the form and chart schemas use unions that strict mode rejects.<br>• `"mcp"`: raw MCP `Tool`s, e.g. for the Vercel AI SDK's `jsonSchema`.<br>Leaves out app-only tools (`_meta.ui.visibility: ["app"]`) and tools without a module, which can't render here. |
 | `instructions()` | The environment's instructions, for the system prompt. |
-| `owns(name)` | Whether a tool is genui's, model-visible or app-only. Everything else is the company's. |
+| `owns(name)` | Whether a tool is app-mcp's, model-visible or app-only. Everything else is the company's. |
 | `module(name)` | `{ tag, hash }` of the module a tool renders with. |
-| `execute(name, args)` | Forwards the call to genui. Returns:<br>• `forModel: { text, isError }`, for the tool result;<br>• `render: { tool, module, args, result }`, with `result` in its MCP shape, untouched. It carries the render id and workspace theme.<br>When genui is down: the SDK's "genui is unavailable right now" error and no `render`. |
-| `handler({ callTool, base? })` | `(Request) => Response` under `base` (default `/genui`):<br>• `GET <base>/modules/<hash>.js`: from memory, else fetched once from genui. Any hash, so old messages load the code they were rendered with. `text/javascript`, `Cache-Control: public, max-age=31536000, immutable`.<br>• `POST <base>/call` `{ name, args }`: genui's app-only tools (`genui_validate`) go to genui; the rest go to `callTool`, which gets the `Request` for the company's auth. Plain JSON results are wrapped as `structuredContent`. |
+| `execute(name, args)` | Forwards the call to app-mcp. Returns:<br>• `forModel: { text, isError }`, for the tool result;<br>• `render: { tool, module, args, result }`, with `result` in its MCP shape, untouched. It carries the render id and workspace theme.<br>When app-mcp is down: the SDK's "app-mcp is unavailable right now" error and no `render`. |
+| `handler({ callTool, base? })` | `(Request) => Response` under `base` (default `/app-mcp`):<br>• `GET <base>/modules/<hash>.js`: from memory, else fetched once from app-mcp. Any hash, so old messages load the code they were rendered with. `text/javascript`, `Cache-Control: public, max-age=31536000, immutable`.<br>• `POST <base>/call` `{ name, args }`: app-mcp's app-only tools (`app_mcp_validate`) go to app-mcp; the rest go to `callTool`, which gets the `Request` for the company's auth. Plain JSON results are wrapped as `structuredContent`. |
 
-- Modules travel from genui to the SDK as MCP resources (`genui://module/<hash>`, `text/javascript`), over the existing connection and server token.
+- Modules travel from app-mcp to the SDK as MCP resources (`app-mcp://module/<hash>`, `text/javascript`), over the existing connection and server token.
 - Which of its tools `callTool` exposes is the company's call. A component's manifest lists the tools it uses (`tools`).
-- genui's tool names are `render_*`, `use_recipe` and `genui_*`. Avoiding clashes with the company's own tool names is the company's job.
+- app-mcp's tool names are `render_*`, `use_recipe` and `app_mcp_*`. Avoiding clashes with the company's own tool names is the company's job.
 
 ---
 
@@ -86,9 +86,9 @@ What a company installs in its chat frontend: the host for its views, a loader, 
 ### React wrapper
 
 ```tsx
-import { GenUIView } from "@app-mcp/element/react";
+import { AppMcpView } from "@app-mcp/element/react";
 
-<GenUIView
+<AppMcpView
   module={part.module}             // { tag, hash } from harness.module() or render.module
   input={part.input}               // partial JSON (text or object) while streaming, then the args
   streaming={part.streaming}
@@ -96,7 +96,7 @@ import { GenUIView } from "@app-mcp/element/react";
   cancelled={part.cancelled}
   theme={theme}                    // "light" | "dark"
   host={{ sendMessage, updateModelContext, openLink, state }}
-  base="/genui"                    // default; module URLs and the default callTool
+  base="/app-mcp"                    // default; module URLs and the default callTool
 />
 ```
 
@@ -110,8 +110,8 @@ import { GenUIView } from "@app-mcp/element/react";
 import { createHost, load } from "@app-mcp/element";
 
 const host = createHost({ sendMessage, updateModelContext });
-await load({ tag: "genui-rating", hash }, "/genui");
-const el = Object.assign(document.createElement("genui-rating"), { host });
+await load({ tag: "app-mcp-rating", hash }, "/app-mcp");
+const el = Object.assign(document.createElement("app-mcp-rating"), { host });
 container.append(el);
 
 host.partial(jsonText);    // while the model streams
@@ -130,7 +130,7 @@ The providers, the "contract" a company implements:
 | `updateModelContext(text, { viewId })` | no | `deliver` posts the details as a message instead | Keep the latest text per view id; add it to the next LLM request. |
 | `openLink(url)` | no | `window.open(url, "_blank", "noopener")` | |
 | `requestDisplayMode(mode)` | no | inline only | |
-| `state` | no | `localStorage` (`genui:<component>:<view id>`), else memory | A `StateBackend` on the company's message store gives state across devices. |
+| `state` | no | `localStorage` (`app-mcp:<component>:<view id>`), else memory | A `StateBackend` on the company's message store gives state across devices. |
 | `theme`, `locale`, `styles` | no | light | Changes emit `context`. |
 
 - Capabilities follow from what's provided, so views check them first (HOST-ADAPTER-PLAN §2).
@@ -174,27 +174,27 @@ export default view(rating, (root) => {
 - `mount` goes. This replaces `mount(…, { host })` in HOST-ADAPTER-PLAN §4.
 - The view store comes from the runtime, one per render. React components get it from a provider: `reactView(component, App)` in `@app-mcp/kit/react` sets it up, and `useViewState` reads it.
 - Theme variables, the dark class and host style variables go on the render's root: `<html>` in the iframe, the custom element in light mode (§5).
-- `genui init`, `examples/rating` and the kit's test fixture move to `view`.
+- `app-mcp init`, `examples/rating` and the kit's test fixture move to `view`.
 
-### What `dist/genui.module.js` is
+### What `dist/app-mcp.module.js` is
 
 - One ES module with no imports: Preact where used, the kit runtime, the view and its CSS.
-- On import, it defines `genui-<name>` (`genui-rating`; built-ins `genui-form`, `genui-chart`) unless that tag exists:
+- On import, it defines `app-mcp-<name>` (`app-mcp-rating`; built-ins `app-mcp-form`, `app-mcp-chart`) unless that tag exists:
   - **Same version:** nothing happens; the module was loaded twice.
-  - **Another version:** the import throws "genui-rating 1.1.0 is already on this page; 1.2.0 can't render next to it." Unsupported by design.
+  - **Another version:** the import throws "app-mcp-rating 1.1.0 is already on this page; 1.2.0 can't render next to it." Unsupported by design.
 - Exports `{ tag, name, version, contract }`.
 - The element:
-  - takes a `host` property (a `GenUIHost`);
-  - **when connected:** attaches an open shadow root, adopts the module's stylesheet, adds the document CSS (§5) to `<head>` once (`<style data-genui="rating">`), sets the dark class from `host.context()`, and runs `setup`. The stylesheet is built once and shared by all instances.
+  - takes a `host` property (a `AppMcpHost`);
+  - **when connected:** attaches an open shadow root, adopts the module's stylesheet, adds the document CSS (§5) to `<head>` once (`<style data-app-mcp="rating">`), sets the dark class from `host.context()`, and runs `setup`. The stylesheet is built once and shared by all instances.
   - **when disconnected:** tears down: aborts calls and saves state.
 
 ### Build
 
-The `genui()` plugin writes a second output in the same `vite build`:
+The `appMcp()` plugin writes a second output in the same `vite build`:
 - A generated entry, ES format, one chunk (`inlineDynamicImports`), `cssCodeSplit: false`, assets inlined.
-- **CSS:** in `generateBundle`, all emitted CSS is collected and run through the rewrite (§5). Its two outputs replace the placeholders `"__GENUI_SHADOW_CSS__"` and `"__GENUI_DOCUMENT_CSS__"` in the chunk as `JSON.stringify(...)`, and the CSS assets are deleted.
+- **CSS:** in `generateBundle`, all emitted CSS is collected and run through the rewrite (§5). Its two outputs replace the placeholders `"__APP_MCP_SHADOW_CSS__"` and `"__APP_MCP_DOCUMENT_CSS__"` in the chunk as `JSON.stringify(...)`, and the CSS assets are deleted.
 - **Checks,** as for the HTML: exactly one chunk, nothing left over, size within the budget and `MAX_BUNDLE_BYTES`.
-- **Manifest:** `genui.component.json` gets `module: "genui.module.js"` next to `bundle`.
+- **Manifest:** `app-mcp.component.json` gets `module: "app-mcp.module.js"` next to `bundle`.
 
 ---
 
@@ -213,7 +213,7 @@ The `genui()` plugin writes a second output in the same `vite build`:
 
 - **Reset first:** `:host { all: initial; display: block; … }`, plus base font, color and line-height from the host variables. The page's inherited font, color and line-height stop at the boundary. `all` leaves custom properties alone, so a page can still theme from outside.
 - **Why `:host`, not a wrapper element:** portals render straight into the shadow root (§6) and need the tokens and dark mode too.
-- **Workspace theme** (`--genui-*` from the render result) goes in a second adopted sheet as a `:host` rule, not in inline styles. Page CSS on the element (`genui-rating { --genui-primary: … }`) beats `:host` rules, so a company can override the workspace theme in its own chat.
+- **Workspace theme** (`--app-mcp-*` from the render result) goes in a second adopted sheet as a `:host` rule, not in inline styles. Page CSS on the element (`app-mcp-rating { --app-mcp-primary: … }`) beats `:host` rules, so a company can override the workspace theme in its own chat.
 - **Build check:** after the rewrite, the shadow CSS has no `:root`, `html`, `body`, `@property` or `@font-face`. Otherwise the build warns with the selector and its source (third-party CSS).
 - **Tests:** CSS fixtures in and out, plus a check on the built form module.
 
@@ -239,24 +239,24 @@ The `genui()` plugin writes a second output in the same `vite build`:
   - The HTML and the module live in separate rows, so each stays under D1's 2 MB.
   - Migration `0005_modules.sql`.
 - **Publish:**
-  - `POST /v1/components` takes `module` next to `html`. `genui publish` reads it from the manifest's `module`.
+  - `POST /v1/components` takes `module` next to `html`. `app-mcp publish` reads it from the manifest's `module`.
   - Re-publishing the same version must match the module hash too.
   - A version without a module (a hand-built bundle) still publishes and works in MCP Apps hosts. Custom chats don't list it.
-- **`@app-mcp/format`:** `MODULE_META_KEY = "genui/module"`, and `CatalogComponent.module?: { hash }`.
-- **`@app-mcp/runtime` `mountGenUI`:**
-  - `_meta["genui/module"] = { uri: "genui://module/<hash>", tag }` goes on `render_form`, `render_chart`, `use_recipe` (form module) and every component tool with a module.
-  - Resource template `genui://module/{hash}` (`text/javascript`). It resolves built-in modules first, then `CatalogSource.module(hash)`: workspace-scoped like `bundle`, any version.
-  - `@app-mcp/runtime/local` reads `dist/genui.module.js`, so `genui serve` works behind a local harness.
+- **`@app-mcp/format`:** `MODULE_META_KEY = "app-mcp/module"`, and `CatalogComponent.module?: { hash }`.
+- **`@app-mcp/runtime` `mountAppMcp`:**
+  - `_meta["app-mcp/module"] = { uri: "app-mcp://module/<hash>", tag }` goes on `render_form`, `render_chart`, `use_recipe` (form module) and every component tool with a module.
+  - Resource template `app-mcp://module/{hash}` (`text/javascript`). It resolves built-in modules first, then `CatalogSource.module(hash)`: workspace-scoped like `bundle`, any version.
+  - `@app-mcp/runtime/local` reads `dist/app-mcp.module.js`, so `app-mcp serve` works behind a local harness.
 - **`@app-mcp/sdk`:**
-  - `GenUIClient.module(hash)` reads a module and keeps it in memory. Modules are content-hashed, so there's nothing to invalidate.
-  - `genuiHarness` turns on prefetching the current tools' modules.
-  - `mountGenUI` on a company's MCP server passes `_meta` through as today and doesn't mirror module resources, since MCP Apps hosts don't use them.
+  - `AppMcpClient.module(hash)` reads a module and keeps it in memory. Modules are content-hashed, so there's nothing to invalidate.
+  - `appMcpHarness` turns on prefetching the current tools' modules.
+  - `mountAppMcp` on a company's MCP server passes `_meta` through as today and doesn't mirror module resources, since MCP Apps hosts don't use them.
 
 ---
 
 ## 8. Security and limits
 
-- **Shadow DOM isolates styles, not code.** A module runs in the company's page, with its cookies, storage, DOM and credentialed `fetch`. For the workspace's own components and genui's built-ins in the company's own chat, that's the trust the company already gives its own frontend code. The docs say so. Modules are served from the company's backend, pinned by content hash.
+- **Shadow DOM isolates styles, not code.** A module runs in the company's page, with its cookies, storage, DOM and credentialed `fetch`. For the workspace's own components and app-mcp's built-ins in the company's own chat, that's the trust the company already gives its own frontend code. The docs say so. Modules are served from the company's backend, pinned by content hash.
 - **Hoisted `@property` rules affect the whole page.** They register `--tw-*` page-wide, with the definitions a Tailwind v4 page registers itself. A page on an older Tailwind could see differences.
 - **`rem` sizes** follow the page's `html` font size. Left as is for now.
 - **Weight:** each module carries its own Preact and kit runtime, so three different components on a page load three copies (the form is ~200 KB gzipped). Sharing the runtime belongs to CDN-BUNDLES-PLAN.
@@ -270,21 +270,21 @@ The `genui()` plugin writes a second output in the same `vite build`:
 1. **Kit view API.**
    - `view(component, setup)`, a runtime and store per render, theme on the render's root.
    - The plugin generates the iframe entry from `src/view.ts`.
-   - `examples/rating`, `genui init` and the kit fixture move to it.
+   - `examples/rating`, `app-mcp init` and the kit fixture move to it.
    - What MCP Apps hosts get doesn't change.
 2. **Light build.**
    - Second output, placeholders, element definition and version check.
    - `shadowCss()` with fixture tests.
    - Rating builds both outputs.
 3. **`@app-mcp/element`.**
-   - `createHost`, partial JSON, `load`, and `<GenUIView>` in `@app-mcp/element/react`.
+   - `createHost`, partial JSON, `load`, and `<AppMcpView>` in `@app-mcp/element/react`.
    - Tests in Vitest browser mode (Chromium): shadow root, adopted sheets, document CSS added once, the version conflict.
 4. **Registry and runtime.**
    - `modules` table, publish API and CLI.
-   - `genui/module` meta and `genui://module/{hash}` resources.
-   - `genui serve`.
+   - `app-mcp/module` meta and `app-mcp://module/{hash}` resources.
+   - `app-mcp serve`.
 5. **SDK harness.**
-   - `genuiHarness`: `tools`, `instructions`, `owns`, `module`, `execute`, `handler`.
+   - `appMcpHarness`: `tools`, `instructions`, `owns`, `module`, `execute`, `handler`.
    - Module prefetch.
    - Tests against an in-process registry, like `mount.test.ts`.
 6. **Built-in views.**
@@ -292,11 +292,11 @@ The `genui()` plugin writes a second output in the same `vite build`:
    - Form and chart modules in `@app-mcp/runtime`.
    - Check that select, combobox and the date picker open, close and take keyboard input inside a shadow root.
 7. **Dev, demo and docs.**
-   - `genui dev`: a "Shadow DOM" render mode next to the iframe. Most CSS problems only show there.
+   - `app-mcp dev`: a "Shadow DOM" render mode next to the iframe. Most CSS problems only show there.
    - `apps/chat`, a minimal custom chat and the end-to-end test:
      - Hono backend with the Claude API, `claude-opus-5-5` by default;
      - the demo's mock tools as its own tools;
-     - a React frontend with `<GenUIView>`.
+     - a React frontend with `<AppMcpView>`.
    - README: a "Render in your own chat" section.
 
 ---
@@ -304,8 +304,8 @@ The `genui()` plugin writes a second output in the same `vite build`:
 ## 10. Out of scope, follow-ups
 
 - **Version conflicts in the harness.** Detecting two versions of one component in a conversation before rendering, instead of the import error.
-- **A harness that is an MCP client of the company's MCP server.** It would need `mountGenUI` to mirror module resources.
-- **Python harness helpers** (`genui-sdk`).
+- **A harness that is an MCP client of the company's MCP server.** It would need `mountAppMcp` to mirror module resources.
+- **Python harness helpers** (`app-mcp-sdk`).
 - **A shared runtime across modules**, and serving modules from a CDN.
 - **Slash commands in custom chats:** recipe and workflow prompts. `getPrompt` already exists on the client.
 - **`rem` normalization.**

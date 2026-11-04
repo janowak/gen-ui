@@ -5,7 +5,7 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import { devPlugin } from "./dev/plugin.js";
 import { DEFAULT_COMPONENT, loadManifest } from "./load.js";
 
-export interface GenUIPluginOptions {
+export interface AppMcpPluginOptions {
   /** Module whose default export is `defineComponent(...)`. Default `src/component.ts`. Must not touch the DOM. */
   component?: string;
   /** Warn above this bundle size, in KB. Default 500. The registry rejects bundles above 1.9 MB. */
@@ -15,14 +15,14 @@ export interface GenUIPluginOptions {
 const kb = (bytes: number) => `${Math.round(bytes / 1024)} KB`;
 
 /**
- * Builds a genui component: one self-contained HTML file (JS, CSS and assets inlined, as MCP Apps
- * hosts require) plus `genui.component.json` generated from the component definition, both in
- * the output directory, ready for `genui publish`.
+ * Builds an app-mcp component: one self-contained HTML file (JS, CSS and assets inlined, as MCP Apps
+ * hosts require) plus `app-mcp.component.json` generated from the component definition, both in
+ * the output directory, ready for `app-mcp publish`.
  *
- * In dev (`vite` or `genui dev`), serves a local MCP Apps host at `/` that renders the component
+ * In dev (`vite` or `app-mcp dev`), serves a local MCP Apps host at `/` that renders the component
  * with a props form, theme controls and mock tools, and reloads it when files change.
  */
-export function genui(options: GenUIPluginOptions = {}): PluginOption[] {
+export function appMcp(options: AppMcpPluginOptions = {}): PluginOption[] {
   const budget = (options.budgetKb ?? 500) * 1024;
   let root = process.cwd();
   let outDir = "dist";
@@ -30,7 +30,7 @@ export function genui(options: GenUIPluginOptions = {}): PluginOption[] {
   let summary: string | undefined;
 
   const plugin: Plugin = {
-    name: "genui",
+    name: "app-mcp",
     apply: "build",
     enforce: "post",
     configResolved(config) {
@@ -45,18 +45,18 @@ export function genui(options: GenUIPluginOptions = {}): PluginOption[] {
         const pages = Object.values(bundle).filter((file) => file.fileName.endsWith(".html"));
         const page = pages[0];
         if (pages.length !== 1 || !page || page.type !== "asset") {
-          this.error(`genui: a component builds to exactly one HTML page, found ${pages.length}. Use a single index.html entry.`);
+          this.error(`app-mcp: a component builds to exactly one HTML page, found ${pages.length}. Use a single index.html entry.`);
         }
         const leftovers = Object.keys(bundle).filter((name) => name !== page.fileName);
         if (leftovers.length) {
           this.error(
-            `genui: not inlined into ${page.fileName}: ${leftovers.join(", ")}. MCP Apps hosts load one HTML file; import assets from code so Vite can inline them.`,
+            `app-mcp: not inlined into ${page.fileName}: ${leftovers.join(", ")}. MCP Apps hosts load one HTML file; import assets from code so Vite can inline them.`,
           );
         }
 
         const bytes = Buffer.byteLength(page.source);
         if (bytes > MAX_BUNDLE_BYTES)
-          this.error(`genui: ${page.fileName} is ${kb(bytes)}; the registry accepts up to ${kb(MAX_BUNDLE_BYTES)}.`);
+          this.error(`app-mcp: ${page.fileName} is ${kb(bytes)}; the registry accepts up to ${kb(MAX_BUNDLE_BYTES)}.`);
         if (bytes > budget)
           this.warn(`${page.fileName} is ${kb(bytes)}, over the ${kb(budget)} budget. Large bundles render slowly in chat.`);
 
@@ -64,15 +64,15 @@ export function genui(options: GenUIPluginOptions = {}): PluginOption[] {
         try {
           manifest = await loadManifest(root, options.component);
         } catch (cause) {
-          this.error(`genui: ${cause instanceof Error ? cause.message : String(cause)}`);
+          this.error(`app-mcp: ${cause instanceof Error ? cause.message : String(cause)}`);
         }
 
         this.emitFile({
           type: "asset",
-          fileName: "genui.component.json",
+          fileName: "app-mcp.component.json",
           source: `${JSON.stringify({ ...manifest, bundle: page.fileName }, null, 2)}\n`,
         });
-        summary = `genui: ${manifest.name}@${manifest.version} → ${outDir}/${page.fileName} (${kb(bytes)}) + ${outDir}/genui.component.json`;
+        summary = `app-mcp: ${manifest.name}@${manifest.version} → ${outDir}/${page.fileName} (${kb(bytes)}) + ${outDir}/app-mcp.component.json`;
       },
     },
     closeBundle() {

@@ -1,11 +1,11 @@
 ---
 name: worktree
-description: Work on and test genui in an isolated git worktree with its own registry, ports and seeded data, so several agents can run the stack side by side. Use when asked to work in a worktree, to spin up agents that each change and test something, or when this session is in a linked worktree that has no .env.worktree yet.
+description: Work on and test app-mcp in an isolated git worktree with its own registry, ports and seeded data, so several agents can run the stack side by side. Use when asked to work in a worktree, to spin up agents that each change and test something, or when this session is in a linked worktree that has no .env.worktree yet.
 ---
 
 # Work in a worktree
 
-Each worktree runs its own stack: the registry on its own SQLite file, `genui serve`, the demo, the playground and the site, on a block of ports no other checkout uses. No wrangler, no tunnel: everything is tested locally.
+Each worktree runs its own stack: the registry on its own SQLite file, `app-mcp serve`, the demo, the playground and the site, on a block of ports no other checkout uses. No wrangler, no tunnel: everything is tested locally.
 
 ## Set it up
 
@@ -17,10 +17,10 @@ Each worktree runs its own stack: the registry on its own SQLite file, `genui se
 ## Run and test
 
 - **Services:** start them by name from `.claude/launch.json` (`registry`, `serve`, `demo`, `playground`, `site`). They are on this worktree's ports, not 4000/4100/3001/5173/5180.
-- **Demo → registry:** the demo uses this worktree's registry (`GENUI_MCP_URL`, `GENUI_MCP_TOKEN` in `.env.worktree`). Start the registry before the demo.
+- **Demo → registry:** the demo uses this worktree's registry (`APP_MCP_MCP_URL`, `APP_MCP_MCP_TOKEN` in `.env.worktree`). Start the registry before the demo.
 - **Playground:** open it with `?server=http://localhost:<demo port>/mcp`; setup prints the full URL.
-- **Registry UI:** sign in with `GENUI_DEV_EMAIL` / `GENUI_DEV_PASSWORD` from `.env.worktree`, or `.env.local` when it sets them.
-- **CLI:** `pnpm genui <command>` loads both env files, so it talks to this worktree's registry with the seeded admin token. A bare `genui` defaults to production: don't use it here.
+- **Registry UI:** sign in with `APP_MCP_DEV_EMAIL` / `APP_MCP_DEV_PASSWORD` from `.env.worktree`, or `.env.local` when it sets them.
+- **CLI:** `pnpm app-mcp <command>` loads both env files, so it talks to this worktree's registry with the seeded admin token. A bare `app-mcp` defaults to production: don't use it here.
 - **Tests:** `pnpm test`. They use in-memory databases and random ports, and also run the registry on a local D1 (Miniflare), so wrangler isn't needed.
 
 ## Don't

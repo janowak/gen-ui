@@ -138,7 +138,7 @@ describe("component runtime", () => {
     stars(first.ctx)[1](4); // before the render id arrives: kept, then saved
     expect(stars(first.ctx)[0]).toBe(4);
     await first.bridge.sendToolResult(result({}, "view-1"));
-    await vi.waitFor(() => expect(JSON.parse(storage.getItem("genui:rating:view-1")!).values).toEqual({ stars: 4 }));
+    await vi.waitFor(() => expect(JSON.parse(storage.getItem("app-mcp:rating:view-1")!).values).toEqual({ stars: 4 }));
     expect(first.ctx.viewId).toBe("view-1");
 
     const replay = await host({ storage });
@@ -192,12 +192,12 @@ describe("themeVariables", () => {
   it("maps only the tokens the workspace sets, per color scheme", () => {
     const theme = { radius: "0.5rem", light: { primary: "#111", chart: ["#a", "#b"] }, dark: { primary: "#eee" } };
     expect(themeVariables(theme, "light")).toEqual({
-      "--genui-primary": "#111",
-      "--genui-radius": "0.5rem",
-      "--genui-chart-1": "#a",
-      "--genui-chart-2": "#b",
+      "--app-mcp-primary": "#111",
+      "--app-mcp-radius": "0.5rem",
+      "--app-mcp-chart-1": "#a",
+      "--app-mcp-chart-2": "#b",
     });
-    expect(themeVariables(theme, "dark")).toEqual({ "--genui-primary": "#eee", "--genui-radius": "0.5rem" });
+    expect(themeVariables(theme, "dark")).toEqual({ "--app-mcp-primary": "#eee", "--app-mcp-radius": "0.5rem" });
     expect(themeVariables(undefined, "light")).toEqual({});
   });
 });

@@ -1,8 +1,8 @@
-"""genui demo server in Python: the mock company tools of apps/demo plus mount_genui.
+"""app-mcp demo server in Python: the mock company tools of apps/demo plus mount_app_mcp.
 
-genui's tools come from the registry's end-user MCP (a server token: `genui token server demo`):
+app-mcp's tools come from the registry's end-user MCP (a server token: `app-mcp token server demo`):
 
-    GENUI_MCP_URL=http://localhost:4000/w/<workspace>/mcp GENUI_MCP_TOKEN=... uv run python examples/demo_server.py
+    APP_MCP_MCP_URL=http://localhost:4000/w/<workspace>/mcp APP_MCP_MCP_TOKEN=... uv run python examples/demo_server.py
 
 The URL picks the environment: /w/<workspace>/<environment>/mcp for one other than prod. Then open the
 playground against it:
@@ -22,13 +22,13 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 from starlette.middleware.cors import CORSMiddleware
 
-from genui import connect_genui, mount_genui
+from app_mcp import connect_app_mcp, mount_app_mcp
 
 PORT = int(os.environ.get("PORT", "3002"))
 
-server = MCPServer("genui-demo-python", version="0.1.0")
+server = MCPServer("app-mcp-demo-python", version="0.1.0")
 
-# Mock "company" tools: what a real server would already expose before adding genui.
+# Mock "company" tools: what a real server would already expose before adding app-mcp.
 
 CUSTOMERS = [
     {"id": "c-1", "name": "Acme Corp", "country": "DE"},
@@ -116,19 +116,19 @@ async def get_revenue(year: int) -> dict[str, Any]:
 
 
 def main() -> None:
-    url = os.environ.get("GENUI_MCP_URL")
+    url = os.environ.get("APP_MCP_MCP_URL")
     if url:
-        genui = connect_genui(url, os.environ.get("GENUI_MCP_TOKEN", ""), refresh_seconds=10)
-        # This server is long-lived, so it can follow genui releases and tell clients about them.
-        mount_genui(server, genui, watch=True)
+        app_mcp = connect_app_mcp(url, os.environ.get("APP_MCP_MCP_TOKEN", ""), refresh_seconds=10)
+        # This server is long-lived, so it can follow app-mcp releases and tell clients about them.
+        mount_app_mcp(server, app_mcp, watch=True)
     else:
-        print("GENUI_MCP_URL is not set: serving the company tools only.")
+        print("APP_MCP_MCP_URL is not set: serving the company tools only.")
 
     app = server.streamable_http_app()
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["mcp-session-id"]
     )
-    print(f"genui Python demo MCP server on http://localhost:{PORT}/mcp" + (f" (genui: {url})" if url else ""))
+    print(f"app-mcp Python demo MCP server on http://localhost:{PORT}/mcp" + (f" (app-mcp: {url})" if url else ""))
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
 
 

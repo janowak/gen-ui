@@ -1,5 +1,5 @@
 {
-  "name": "genui",
+  "name": "app-mcp",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.14.2",
@@ -11,7 +11,7 @@
     "format": "oxfmt",
     "check": "oxfmt --check && oxlint --deny-warnings",
     "dev:setup": "node scripts/dev-setup.ts",
-    "genui": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.worktree packages/cli/dist/cli.js",
+    "app-mcp": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.worktree packages/cli/dist/cli.js",
     "deploy:site": "pnpm --filter @app-mcp/site run deploy",
     "deploy:registry": "pnpm --filter @app-mcp/registry run deploy"
   },

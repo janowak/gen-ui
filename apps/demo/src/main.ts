@@ -1,4 +1,4 @@
-import { connectGenUI, mountGenUI } from "@app-mcp/sdk";
+import { connectAppMcp, mountAppMcp } from "@app-mcp/sdk";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
@@ -7,21 +7,21 @@ import type { Request, Response } from "express";
 import { registerCompanyTools } from "./tools.js";
 
 // Not PORT: the registry reads that from the same .env files.
-const PORT = Number(process.env.GENUI_DEMO_PORT ?? 3001);
+const PORT = Number(process.env.APP_MCP_DEMO_PORT ?? 3001);
 
-// genui's end-user MCP and a server token for it. By default `genui serve` on this machine, which
+// app-mcp's end-user MCP and a server token for it. By default `app-mcp serve` on this machine, which
 // takes any token. On the registry, the URL picks the environment: /w/<workspace>/mcp for prod,
 // /w/<workspace>/<environment>/mcp for the others.
-const genuiUrl = process.env.GENUI_MCP_URL ?? "http://localhost:4100/mcp";
-const genui = connectGenUI({ url: genuiUrl, token: process.env.GENUI_MCP_TOKEN ?? "local", refreshSeconds: 10 });
+const appMcpUrl = process.env.APP_MCP_MCP_URL ?? "http://localhost:4100/mcp";
+const appMcp = connectAppMcp({ url: appMcpUrl, token: process.env.APP_MCP_MCP_TOKEN ?? "local", refreshSeconds: 10 });
 console.log(
-  `genui: ${genuiUrl}${process.env.GENUI_MCP_URL ? "" : " (genui serve; set GENUI_MCP_URL and GENUI_MCP_TOKEN in .env.local for a registry)"}`,
+  `app-mcp: ${appMcpUrl}${process.env.APP_MCP_MCP_URL ? "" : " (app-mcp serve; set APP_MCP_MCP_URL and APP_MCP_MCP_TOKEN in .env.local for a registry)"}`,
 );
 
 async function createServer(): Promise<McpServer> {
-  const server = new McpServer({ name: "genui-demo", version: "0.1.0" });
+  const server = new McpServer({ name: "app-mcp-demo", version: "0.1.0" });
   registerCompanyTools(server);
-  await mountGenUI(server, { genui });
+  await mountAppMcp(server, { appMcp });
   return server;
 }
 
@@ -45,11 +45,11 @@ app.all("/mcp", async (req: Request, res: Response) => {
   }
 });
 
-// genui calls this after every publish, theme, instructions or workflow change: genui env set <env> --refresh-url http://<this server>/genui/refresh
-app.post("/genui/refresh", (req: Request, res: Response) => {
+// app-mcp calls this after every publish, theme, instructions or workflow change: app-mcp env set <env> --refresh-url http://<this server>/app-mcp/refresh
+app.post("/app-mcp/refresh", (req: Request, res: Response) => {
   const revision: unknown = req.body?.revision;
-  void genui.refresh(typeof revision === "number" ? revision : undefined);
-  res.status(202).json({ revision: genui.revision() ?? null });
+  void appMcp.refresh(typeof revision === "number" ? revision : undefined);
+  res.status(202).json({ revision: appMcp.revision() ?? null });
 });
 
-app.listen(PORT, () => console.log(`genui demo MCP server on http://localhost:${PORT}/mcp (genui: ${genuiUrl})`));
+app.listen(PORT, () => console.log(`app-mcp demo MCP server on http://localhost:${PORT}/mcp (app-mcp: ${appMcpUrl})`));

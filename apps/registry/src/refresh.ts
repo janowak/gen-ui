@@ -17,7 +17,7 @@ export interface Refresher {
 
 /**
  * Calls an environment's refresh URL after every change to what it serves (a publish, a theme,
- * instructions or workflow save, from the API or the registry MCP), so the company's server re-lists genui's tools
+ * instructions or workflow save, from the API or the registry MCP), so the company's server re-lists app-mcp's tools
  * now instead of at its next check. Only the change's environment and revision are sent; the
  * answer is recorded as the environment's last refresh, never read. A failed call never fails the
  * write: the SDK's own check catches up.
@@ -39,7 +39,7 @@ export function refreshServers(store: Store, { allowPrivate = false, fetch: doFe
         const res = await doFetch(target.refreshUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ type: "genui.refresh", environment, revision: target.revision }),
+          body: JSON.stringify({ type: "app-mcp.refresh", environment, revision: target.revision }),
           redirect: "manual",
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
@@ -49,7 +49,7 @@ export function refreshServers(store: Store, { allowPrivate = false, fetch: doFe
         result = { at: new Date().toISOString(), ok: false, error: error instanceof Error ? error.message : String(error) };
       }
     }
-    if (!result.ok) console.warn(`[genui] refresh URL of ${environment} failed: ${result.error ?? `HTTP ${result.status}`}`);
+    if (!result.ok) console.warn(`[app-mcp] refresh URL of ${environment} failed: ${result.error ?? `HTTP ${result.status}`}`);
     await store.setLastRefresh(workspaceId, environment, result);
   }
 

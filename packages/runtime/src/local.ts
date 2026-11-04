@@ -37,7 +37,7 @@ function parseJson(text: string, path: string): unknown {
 }
 
 /**
- * Reads a component directory: a hand-written `genui.component.json` next to the sources, else the
+ * Reads a component directory: a hand-written `app-mcp.component.json` next to the sources, else the
  * one @app-mcp/kit/vite generates into dist/. The bundle is `bundle` from the manifest, relative to
  * the manifest, or dist/index.html. Throws with a message for the developer.
  */
@@ -45,12 +45,12 @@ export async function readComponentDir(dir: string): Promise<ComponentDir> {
   const root = resolve(dir);
   let manifestPath = "";
   let text: string | undefined;
-  for (const candidate of [resolve(root, "genui.component.json"), resolve(root, "dist/genui.component.json")]) {
+  for (const candidate of [resolve(root, "app-mcp.component.json"), resolve(root, "dist/app-mcp.component.json")]) {
     text = await readFile(candidate, "utf8").catch(() => undefined);
     manifestPath = candidate;
     if (text !== undefined) break;
   }
-  if (text === undefined) throw new Error(`no genui.component.json in ${root} or its dist/; build it first`);
+  if (text === undefined) throw new Error(`no app-mcp.component.json in ${root} or its dist/; build it first`);
 
   const raw = parseJson(text, manifestPath) as Record<string, unknown>;
   const parsed = ComponentManifest.safeParse(raw);
@@ -130,7 +130,7 @@ export async function readWorkflowDir(dir: string): Promise<WorkflowFile[]> {
 }
 
 export interface LocalCatalogOptions {
-  /** Component directories, as `genui publish` takes them, with their workflow files. A dir may hold only workflows. */
+  /** Component directories, as `app-mcp publish` takes them, with their workflow files. A dir may hold only workflows. */
   dirs: string[];
   /** Theme JSON file. */
   theme?: string;
@@ -198,7 +198,7 @@ async function load(options: LocalCatalogOptions): Promise<State> {
     try {
       const component = await readComponentDir(dir).catch((cause: unknown) => {
         // A dir with only workflows is fine.
-        if (hasWorkflows && message(cause).startsWith("no genui.component.json")) return undefined;
+        if (hasWorkflows && message(cause).startsWith("no app-mcp.component.json")) return undefined;
         throw cause;
       });
       if (!component) continue;
@@ -264,7 +264,7 @@ function describe(before: State, after: State): string[] {
 }
 
 /**
- * Components, workflows, theme and instructions read from files, for `genui serve`. A file that doesn't load
+ * Components, workflows, theme and instructions read from files, for `app-mcp serve`. A file that doesn't load
  * is reported in `problems()` and left out; the next `reload()` tries it again. Every bundle seen
  * since start stays available by hash, so messages rendered before a rebuild still load.
  */

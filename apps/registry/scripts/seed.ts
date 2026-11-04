@@ -9,21 +9,21 @@ import { openDatabase } from "../src/db-node.js";
 import { Store, type Scope } from "../src/store.js";
 
 const env = process.env;
-const db = openDatabase(env.GENUI_DB ?? "genui-registry.sqlite");
+const db = openDatabase(env.APP_MCP_DB ?? "app-mcp-registry.sqlite");
 const store = new Store(db);
 const config = { ...authConfigFromEnv(env), password: true };
 
 const first = await db.get<{ id: string }>("SELECT id FROM workspaces ORDER BY created_at LIMIT 1");
-const workspace = first?.id ?? (await store.createWorkspace(env.GENUI_WORKSPACE ?? "default"));
+const workspace = first?.id ?? (await store.createWorkspace(env.APP_MCP_WORKSPACE ?? "default"));
 
 async function token(scope: Scope, existing: string | undefined): Promise<string> {
   const info = existing ? await store.resolveToken(existing) : undefined;
   return info?.workspaceId === workspace && info.scope === scope ? existing! : store.createToken(workspace, scope, `dev-setup ${scope}`);
 }
 
-const email = env.GENUI_DEV_EMAIL ?? "dev@genui.test";
-const password = env.GENUI_DEV_PASSWORD ?? "";
-if (password.length < 8) throw new Error("GENUI_DEV_PASSWORD must be at least 8 characters");
+const email = env.APP_MCP_DEV_EMAIL ?? "dev@app-mcp.test";
+const password = env.APP_MCP_DEV_PASSWORD ?? "";
+if (password.length < 8) throw new Error("APP_MCP_DEV_PASSWORD must be at least 8 characters");
 const user = await db.get<{ id: string }>('SELECT id FROM "user" WHERE email = ?', email.toLowerCase());
 const auth = createAuth(db, store, config, fetch);
 const userId = user?.id ?? (await auth.api.signUpEmail({ body: { email, password, name: email } })).user.id;
@@ -40,8 +40,8 @@ console.error(
 );
 console.log(
   JSON.stringify({
-    GENUI_TOKEN: await token("admin", env.GENUI_TOKEN),
-    GENUI_MCP_URL: `${config.baseURL}/w/${workspace}/mcp`,
-    GENUI_MCP_TOKEN: await token("server", env.GENUI_MCP_TOKEN),
+    APP_MCP_TOKEN: await token("admin", env.APP_MCP_TOKEN),
+    APP_MCP_MCP_URL: `${config.baseURL}/w/${workspace}/mcp`,
+    APP_MCP_MCP_TOKEN: await token("server", env.APP_MCP_MCP_TOKEN),
   }),
 );

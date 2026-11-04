@@ -3,8 +3,8 @@ import { refreshUrlError } from "./url.js";
 
 describe("refresh URLs", () => {
   it("allows public https only", () => {
-    expect(refreshUrlError("https://acme.com/genui/refresh")).toBeUndefined();
-    expect(refreshUrlError("http://acme.com/genui/refresh")).toMatch(/https/);
+    expect(refreshUrlError("https://acme.com/app-mcp/refresh")).toBeUndefined();
+    expect(refreshUrlError("http://acme.com/app-mcp/refresh")).toMatch(/https/);
     for (const url of [
       "https://localhost/x",
       "https://127.0.0.1/x",

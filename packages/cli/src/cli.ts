@@ -9,15 +9,15 @@ import { readComponentDir, readWorkflowDir, readWorkflowFile, type ComponentDir,
 import type { ServeOptions } from "@app-mcp/runtime/serve";
 import { init } from "./init.js";
 
-/** genui cloud. Self-hosted registries pass --url or GENUI_URL. */
+/** app-mcp cloud. Self-hosted registries pass --url or APP_MCP_URL. */
 const DEFAULT_URL = "https://api.app-mcp.com";
 
-const USAGE = `genui <command> [options]
+const USAGE = `app-mcp <command> [options]
 
 Commands:
   init [dir] [--name n]             Start a new component in dir (default .), ready for dev and publish
   dev [dir] [--port n]              Develop the component in dir (default .) in a local host; no registry needed
-  serve [dirs...]                   A local genui MCP with these components and their workflows (default .
+  serve [dirs...]                   A local app-mcp MCP with these components and their workflows (default .
                                     if it is one); no registry, account or token. See "serve options" below
   publish [dir]                     Publish the component and workflows in dir (default .)           publish
   publish <name>@<version>          Serve an already published version in an environment, no rebuild  publish
@@ -37,9 +37,9 @@ Commands:
   icon <image> | --clear            Set or clear the connector icon (PNG, JPEG, WebP or SVG, 100 KB) admin
 
 Options:
-  --url <url>      Registry URL     (env GENUI_URL, default ${DEFAULT_URL})
-  --token <token>  Registry token   (env GENUI_TOKEN)
-  --env <name>     Environment for publish, theme, workflow and instructions (env GENUI_ENV, default prod)
+  --url <url>      Registry URL     (env APP_MCP_URL, default ${DEFAULT_URL})
+  --token <token>  Registry token   (env APP_MCP_TOKEN)
+  --env <name>     Environment for publish, theme, workflow and instructions (env APP_MCP_ENV, default prod)
   --json           Print the registry's response as JSON (publish, list, env list)
 
 Token scopes: server reads (SDK); publish publishes to any environment, or with --env only to
@@ -60,7 +60,7 @@ Everything reloads on save: components with a vite.config are rebuilt, and conne
 the new tools. Without a token, clients only render (no data tools); @app-mcp/sdk passes any token
 (e.g. "local") and gets data tools, as with a server token on the registry.
 
-A component dir contains a manifest (genui.component.json) and the built single-file HTML.
+A component dir contains a manifest (app-mcp.component.json) and the built single-file HTML.
 Built with @app-mcp/kit/vite, both are generated into dist/. A hand-written manifest sits next to
 the sources and points at dist/index.html by default (override with "bundle" in the manifest).
 
@@ -92,7 +92,7 @@ const { values, positionals } = parseArgs({
 });
 
 function fail(message: string): never {
-  console.error(`genui: ${message}`);
+  console.error(`app-mcp: ${message}`);
   process.exit(1);
 }
 
@@ -102,13 +102,13 @@ if (!command || values.help) {
   process.exit(command ? 0 : 1);
 }
 
-// Only registry commands need these: `genui dev` runs without a registry.
+// Only registry commands need these: `app-mcp dev` runs without a registry.
 function registry() {
-  const url = (values.url ?? (process.env.GENUI_URL || DEFAULT_URL)).replace(/\/$/, "");
+  const url = (values.url ?? (process.env.APP_MCP_URL || DEFAULT_URL)).replace(/\/$/, "");
   const token =
     values.token ??
-    process.env.GENUI_TOKEN ??
-    fail("missing --token or GENUI_TOKEN: create one in the genui connector, under Workspace → Tokens");
+    process.env.APP_MCP_TOKEN ??
+    fail("missing --token or APP_MCP_TOKEN: create one in the app-mcp connector, under Workspace → Tokens");
   return { url, token };
 }
 
@@ -132,9 +132,9 @@ function print(result: unknown, text: string) {
   console.log(values.json ? JSON.stringify(result, null, 2) : text);
 }
 
-/** --env, else GENUI_ENV, else prod. An unset CI variable often arrives as "", which means the default. */
+/** --env, else APP_MCP_ENV, else prod. An unset CI variable often arrives as "", which means the default. */
 function environment(): string {
-  const name = values.env ?? (process.env.GENUI_ENV || DEFAULT_ENVIRONMENT);
+  const name = values.env ?? (process.env.APP_MCP_ENV || DEFAULT_ENVIRONMENT);
   if (!EnvironmentName.safeParse(name).success) fail(`--env must be lowercase letters and digits, up to 15 characters (got "${name}")`);
   return name;
 }
@@ -248,18 +248,18 @@ async function dev(dir: string) {
   const { startDev } = (await kitDev(root)) ?? fail(`@app-mcp/kit not found from ${root}. Add it to the component: pnpm add @app-mcp/kit`);
   const port = values.port === undefined ? undefined : Number(values.port);
   const server = await startDev({ root, port }).catch((error: Error) => fail(error.message));
-  console.log("\n  genui dev: props form, theme and mock tools for your component\n");
+  console.log("\n  app-mcp dev: props form, theme and mock tools for your component\n");
   server.printUrls();
   server.bindCLIShortcuts({ print: true });
 }
 
-/** A local genui MCP for these component dirs: no registry, account or token. */
+/** A local app-mcp MCP for these component dirs: no registry, account or token. */
 async function serve(dirs: string[]) {
   const log = (line: string) => console.error(`  ${line}`);
   // Over stdio, stdout carries the protocol: anything else printed there would break it.
   if (values.stdio) console.log = console.error;
   if (!dirs.length) {
-    const here = ["genui.component.json", "dist/genui.component.json", ...VITE_CONFIGS].map((file) => resolve(file));
+    const here = ["app-mcp.component.json", "dist/app-mcp.component.json", ...VITE_CONFIGS].map((file) => resolve(file));
     if ((await Promise.all(here.map(exists))).some(Boolean)) dirs = ["."];
   }
   const suffix =
@@ -305,12 +305,12 @@ async function serve(dirs: string[]) {
   if (workflows.length) lines.push(`workflows: ${workflows.map(describeWorkflow).join(", ")}`);
   if (served.url) {
     lines.unshift(
-      `genui serve: ${served.url}`,
-      `Claude Code: claude mcp add --transport http genui ${served.url}`,
-      `@app-mcp/sdk:  connectGenUI({ url: "${served.url}", token: "local" })`,
+      `app-mcp serve: ${served.url}`,
+      `Claude Code: claude mcp add --transport http app-mcp ${served.url}`,
+      `@app-mcp/sdk:  connectAppMcp({ url: "${served.url}", token: "local" })`,
     );
   } else {
-    lines.unshift("genui serve over stdio");
+    lines.unshift("app-mcp serve over stdio");
   }
   console.error(`\n${lines.map((line) => `  ${line}`).join("\n")}\n`);
 
@@ -329,7 +329,7 @@ switch (command) {
 
   ${cd}npm install
   npm run dev                                       # try it in a local host
-  GENUI_TOKEN=<publish token> npm run genui:publish  # publish it to your workspace`);
+  APP_MCP_TOKEN=<publish token> npm run app-mcp:publish  # publish it to your workspace`);
     break;
   }
   case "dev":
@@ -342,11 +342,11 @@ switch (command) {
     await publish(args[0] ?? ".");
     break;
   case "remove": {
-    const name = args[0] ?? fail("usage: genui remove <name> [--env e]");
+    const name = args[0] ?? fail("usage: app-mcp remove <name> [--env e]");
     const env = environment();
     await api("DELETE", `/v1/components/${name}/environments/${env}`);
     console.log(
-      `${env} no longer serves ${name}. Its versions stay published: genui publish ${name}@<version> --env ${env} serves one again.`,
+      `${env} no longer serves ${name}. Its versions stay published: app-mcp publish ${name}@<version> --env ${env} serves one again.`,
     );
     break;
   }
@@ -368,7 +368,7 @@ switch (command) {
       const result = await api<{ environments: Environment[] }>("GET", "/v1/environments");
       print(result, result.environments.map(describeEnvironment).join("\n"));
     } else if (action === "set") {
-      const usage = 'usage: genui env set <name> [--refresh-url <url>] [--built-ins on|off]  (--refresh-url "" clears it)';
+      const usage = 'usage: app-mcp env set <name> [--refresh-url <url>] [--built-ins on|off]  (--refresh-url "" clears it)';
       const target = name ?? fail(usage);
       const url = values["refresh-url"];
       const builtIns = values["built-ins"];
@@ -391,22 +391,22 @@ switch (command) {
       print(updated, lines.join("\n"));
     } else if (action === "add") {
       const created = await api<{ name: string; path: string }>("POST", "/v1/environments", {
-        name: name ?? fail("usage: genui env add <name>"),
+        name: name ?? fail("usage: app-mcp env add <name>"),
       });
       print(
         created,
-        `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: genui publish --env ${created.name}`,
+        `Created ${created.name}. Its end-user MCP: ${registry().url}${created.path}\nPublish to it with: app-mcp publish --env ${created.name}`,
       );
     } else if (action === "rm") {
-      await api("DELETE", `/v1/environments/${name ?? fail("usage: genui env rm <name>")}`);
+      await api("DELETE", `/v1/environments/${name ?? fail("usage: app-mcp env rm <name>")}`);
       console.log(`Deleted ${name} with what it served: versions, theme, instructions and workflows.`);
-    } else fail("usage: genui env list | add <name> | rm <name> | set <name> [--refresh-url <url>] [--built-ins on|off]");
+    } else fail("usage: app-mcp env list | add <name> | rm <name> | set <name> [--refresh-url <url>] [--built-ins on|off]");
     break;
   }
   case "theme": {
     const theme = values.clear
       ? null
-      : Theme.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui theme <file.json> | --clear"), "utf8")));
+      : Theme.parse(JSON.parse(await readFile(args[0] ?? fail("usage: app-mcp theme <file.json> | --clear"), "utf8")));
     const env = environment();
     await api("PUT", `/v1/theme?environment=${env}`, { theme });
     console.log(theme ? `Theme updated in ${env}.` : `Theme cleared in ${env}.`);
@@ -414,8 +414,8 @@ switch (command) {
   }
   case "token": {
     const [scope, name] = args;
-    if (!scope || !name) fail("usage: genui token <server|publish|admin> <name> [--env a,b]");
-    // Only an explicit --env limits a token; GENUI_ENV is for publishing.
+    if (!scope || !name) fail("usage: app-mcp token <server|publish|admin> <name> [--env a,b]");
+    // Only an explicit --env limits a token; APP_MCP_ENV is for publishing.
     const environments = values.env
       ?.split(",")
       .map((e) => e.trim())
@@ -434,21 +434,21 @@ switch (command) {
         workflows.length ? workflows.map((w) => `${describeWorkflow(w)}  ${w.description}`).join("\n") : `No workflows in ${env} yet.`,
       );
     } else if (action === "set") {
-      const file = await readWorkflowFile(arg ?? fail("usage: genui workflow set <file> [--env e]")).catch((error: Error) =>
+      const file = await readWorkflowFile(arg ?? fail("usage: app-mcp workflow set <file> [--env e]")).catch((error: Error) =>
         fail(error.message),
       );
       await publishWorkflow(file, env);
     } else if (action === "rm") {
-      await api("DELETE", `/v1/workflows/${arg ?? fail("usage: genui workflow rm <name> [--env e]")}?environment=${env}`);
+      await api("DELETE", `/v1/workflows/${arg ?? fail("usage: app-mcp workflow rm <name> [--env e]")}?environment=${env}`);
       console.log(`Deleted workflow ${arg} from ${env}.`);
-    } else fail("usage: genui workflow list | set <file> | rm <name> [--env e]");
+    } else fail("usage: app-mcp workflow list | set <file> | rm <name> [--env e]");
     break;
   }
   case "instructions": {
     const env = environment();
     const instructions = values.clear
       ? null
-      : (await readFile(args[0] ?? fail("usage: genui instructions <file.md> | --clear [--env e]"), "utf8")).trim();
+      : (await readFile(args[0] ?? fail("usage: app-mcp instructions <file.md> | --clear [--env e]"), "utf8")).trim();
     if (instructions && instructions.length > MAX_ENVIRONMENT_INSTRUCTIONS)
       fail(`instructions are ${instructions.length} characters; at most ${MAX_ENVIRONMENT_INSTRUCTIONS}`);
     await api("PUT", `/v1/instructions?environment=${env}`, { instructions });
@@ -458,13 +458,13 @@ switch (command) {
     break;
   }
   case "branding": {
-    const branding = Branding.parse(JSON.parse(await readFile(args[0] ?? fail("usage: genui branding <file.json>"), "utf8")));
+    const branding = Branding.parse(JSON.parse(await readFile(args[0] ?? fail("usage: app-mcp branding <file.json>"), "utf8")));
     print(await api("PUT", "/v1/branding", branding), "Branding updated. Hosts show it the next time they connect.");
     break;
   }
   case "icon": {
     if (values.clear) await api("DELETE", "/v1/branding/icon");
-    else await api("PUT", "/v1/branding/icon", new Uint8Array(await readFile(args[0] ?? fail("usage: genui icon <image> | --clear"))));
+    else await api("PUT", "/v1/branding/icon", new Uint8Array(await readFile(args[0] ?? fail("usage: app-mcp icon <image> | --clear"))));
     console.log(values.clear ? "Icon cleared." : "Icon updated. Hosts show it the next time they connect.");
     break;
   }

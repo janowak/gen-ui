@@ -1,6 +1,6 @@
 # @app-mcp/kit
 
-Build components for MCP Apps hosts (Claude, ChatGPT, …) and publish them with genui. Describe the component once with `defineComponent`: props are a Zod schema, validated in the view and published as the tool's input schema. `mount` wires it to the host: props as the model streams them, host styles and your theme, per-render state, and tool calls.
+Build components for MCP Apps hosts (Claude, ChatGPT, …) and publish them with app-mcp. Describe the component once with `defineComponent`: props are a Zod schema, validated in the view and published as the tool's input schema. `mount` wires it to the host: props as the model streams them, host styles and your theme, per-render state, and tool calls.
 
 ```ts
 import { defineComponent, z } from "@app-mcp/kit";
@@ -13,6 +13,6 @@ export default defineComponent({
 });
 ```
 
-The `genui()` Vite plugin (`@app-mcp/kit/vite`) builds a single-file `dist/index.html` and `dist/genui.component.json`. Start a component with `npx @app-mcp/cli init`.
+The `appMcp()` Vite plugin (`@app-mcp/kit/vite`) builds a single-file `dist/index.html` and `dist/app-mcp.component.json`. Start a component with `npx @app-mcp/cli init`.
 
 See [app-mcp.com](https://app-mcp.com).

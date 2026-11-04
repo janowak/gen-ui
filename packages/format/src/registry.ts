@@ -16,7 +16,7 @@ export const RESERVED_NAMES = ["form", "chart"];
 
 export const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
-/** `genui.component.json`: published next to the single-file HTML bundle. */
+/** `app-mcp.component.json`: published next to the single-file HTML bundle. */
 export const ComponentManifest = z.object({
   name: z
     .string()
@@ -41,7 +41,7 @@ export type ComponentManifest = z.infer<typeof ComponentManifest>;
 export interface CatalogComponent {
   name: string;
   version: string;
-  /** Content hash of the bundle; part of its `ui://genui/c/<name>/<hash>` URI. */
+  /** Content hash of the bundle; part of its `ui://app-mcp/c/<name>/<hash>` URI. */
   hash: string;
   manifest: ComponentManifest;
 }

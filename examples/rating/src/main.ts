@@ -3,7 +3,7 @@ import rating from "./component";
 
 /**
  * A registry component built with @app-mcp/kit and no UI framework. The kit validates props,
- * applies host styles and the workspace theme (`--genui-*`), only calls tools the server
+ * applies host styles and the workspace theme (`--app-mcp-*`), only calls tools the server
  * approved, and keeps the rating per render (`ctx.useState`) so a re-rendered message stays rated.
  */
 

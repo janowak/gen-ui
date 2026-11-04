@@ -64,7 +64,7 @@ $<HTMLButtonElement>("signout").onclick = () => {
   location.reload();
 };
 
-const client = new Client({ name: "genui-playground", version: "0.1.0" });
+const client = new Client({ name: "app-mcp-playground", version: "0.1.0" });
 await client.connect(transport());
 const { tools } = await client.listTools();
 write("connected", { server: SERVER_URL, tools: tools.map((t) => t.name) });
@@ -128,7 +128,7 @@ async function show(replay: boolean) {
 
   const bridge = new AppBridge(
     client,
-    { name: "genui-playground", version: "0.1.0" },
+    { name: "app-mcp-playground", version: "0.1.0" },
     { serverTools: {}, openLinks: {}, logging: {}, updateModelContext: { text: {} }, message: { text: {} } },
     { hostContext: hostContext() },
   );

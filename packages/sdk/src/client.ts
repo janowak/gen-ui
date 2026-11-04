@@ -9,18 +9,18 @@ import {
   type Tool,
 } from "@modelcontextprotocol/client";
 
-export interface GenUIClientOptions {
+export interface AppMcpClientOptions {
   /**
-   * One environment's end-user MCP, on genui's cloud or your self-hosted genui:
-   * https://mcp.genui.example/w/<workspace>/mcp for prod, /w/<workspace>/<environment>/mcp for the others.
+   * One environment's end-user MCP, on app-mcp's cloud or your self-hosted app-mcp:
+   * https://mcp.app-mcp.example/w/<workspace>/mcp for prod, /w/<workspace>/<environment>/mcp for the others.
    * The URL alone picks the environment; to serve two, connect twice.
    */
   url: string;
   /** Workspace server token (scope: server). */
   token: string;
   /**
-   * When genui's tools are used and the copy is older than this, a check runs in the background:
-   * one small request, and a re-list only if genui changed. Default 60s; 0 checks only on refresh().
+   * When app-mcp's tools are used and the copy is older than this, a check runs in the background:
+   * one small request, and a re-list only if app-mcp changed. Default 60s; 0 checks only on refresh().
    */
   refreshSeconds?: number;
   /** Timeout for a forwarded call. Default 10s. */
@@ -29,21 +29,21 @@ export interface GenUIClientOptions {
   logger?: Pick<Console, "warn">;
 }
 
-/** What genui offers: the tools and prompts to mirror onto your server, and the environment's instructions. */
+/** What app-mcp offers: the tools and prompts to mirror onto your server, and the environment's instructions. */
 export interface Snapshot {
   tools: Tool[];
   prompts: Prompt[];
-  /** The MCP instructions set for this environment in genui, if any. */
+  /** The MCP instructions set for this environment in app-mcp, if any. */
   instructions?: string;
 }
 
-export interface GenUIClient {
+export interface AppMcpClient {
   /** Resolves after the first load attempt, successful or not. */
   ready(): Promise<void>;
-  /** The current tools and prompts, or undefined if genui was never reached. */
+  /** The current tools and prompts, or undefined if app-mcp was never reached. */
   snapshot(): Snapshot | undefined;
   /**
-   * The environment's MCP instructions from genui, for your server's own instructions
+   * The environment's MCP instructions from app-mcp, for your server's own instructions
    * (`new McpServer(info, { instructions })`). Hosts read them when they connect, so a long-lived
    * server picks up a change at its next start; per-request servers pick it up right away.
    */
@@ -51,13 +51,13 @@ export interface GenUIClient {
   /** A `ui://` resource a current tool points at. Content-hashed, so fetched once. */
   resource(uri: string): ReadResourceResult | undefined;
   readResource(uri: string): Promise<ReadResourceResult>;
-  /** Forwards a call to genui. When genui can't be reached, returns an error result the model can relay. */
+  /** Forwards a call to app-mcp. When app-mcp can't be reached, returns an error result the model can relay. */
   callTool(name: string, args: Record<string, unknown>): Promise<CallToolResult>;
   getPrompt(name: string, args: Record<string, string>): Promise<GetPromptResult>;
   /** The environment revision the current tools come from, or undefined before the first load. */
   revision(): number | undefined;
   /**
-   * Checks genui's revision and re-lists its tools if it changed. With `atLeast`, does nothing when
+   * Checks app-mcp's revision and re-lists its tools if it changed. With `atLeast`, does nothing when
    * this client already has that revision. Concurrent calls share one check.
    */
   refresh(atLeast?: number): Promise<void>;
@@ -66,7 +66,7 @@ export interface GenUIClient {
   close(): void;
 }
 
-export const UNAVAILABLE_TEXT = "genui is unavailable right now, try again shortly.";
+export const UNAVAILABLE_TEXT = "app-mcp is unavailable right now, try again shortly.";
 
 /** `ui://` resource a tool renders into (MCP Apps). */
 export function resourceUri(tool: Tool): string | undefined {
@@ -75,12 +75,12 @@ export function resourceUri(tool: Tool): string | undefined {
 }
 
 /**
- * Connects to genui's end-user MCP. Tools and prompts are listed in the background and kept in
+ * Connects to app-mcp's end-user MCP. Tools and prompts are listed in the background and kept in
  * memory, so listing them on your server costs no round trip; `ui://` resources are fetched once.
- * Calls always go to genui. The copy is checked in the background when it's used and older than
- * `refreshSeconds`, and right away when genui calls your refresh endpoint (`refreshHandler`).
+ * Calls always go to app-mcp. The copy is checked in the background when it's used and older than
+ * `refreshSeconds`, and right away when app-mcp calls your refresh endpoint (`refreshHandler`).
  */
-export function connectGenUI(options: GenUIClientOptions): GenUIClient {
+export function connectAppMcp(options: AppMcpClientOptions): AppMcpClient {
   const logger = options.logger ?? console;
   const timeout = (options.timeoutSeconds ?? 10) * 1000;
   const maxAge = (options.refreshSeconds ?? 60) * 1000;
@@ -96,7 +96,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
   function connect(): Promise<Client> {
     if (connection) return connection;
     const client = (async () => {
-      const created = new Client({ name: "genui-sdk", version: "0.1.0" });
+      const created = new Client({ name: "app-mcp-sdk", version: "0.1.0" });
       const headers = { authorization: `Bearer ${options.token}` };
       await created.connect(new StreamableHTTPClientTransport(new URL(options.url), { requestInit: { headers }, fetch: options.fetch }));
       return created;
@@ -145,7 +145,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
     for (const listener of listeners) listener();
   }
 
-  /** genui's current revision of this environment; undefined when the URL has no `/revision` next to it. */
+  /** app-mcp's current revision of this environment; undefined when the URL has no `/revision` next to it. */
   async function latestRevision(): Promise<number | undefined> {
     if (!revisionUrl) return undefined;
     const res = await (options.fetch ?? fetch)(revisionUrl, {
@@ -170,12 +170,12 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
       await load();
       revision = latest;
     } catch (error) {
-      logger.warn(`[genui] could not list genui's tools, keeping the current ones: ${error}`);
+      logger.warn(`[app-mcp] could not list app-mcp's tools, keeping the current ones: ${error}`);
     }
-    // Keep only the resources current tools point at; old ones are read from genui when asked for.
+    // Keep only the resources current tools point at; old ones are read from app-mcp when asked for.
     const wanted = new Set(snapshot?.tools.map(resourceUri));
     for (const uri of resources.keys()) if (!wanted.has(uri)) resources.delete(uri);
-    // Never loaded (genui down or a bad token at start): no genui tool is mounted to be used, so retry on a timer.
+    // Never loaded (app-mcp down or a bad token at start): no app-mcp tool is mounted to be used, so retry on a timer.
     if (!snapshot && maxAge > 0 && !closed) {
       retry = setTimeout(() => void refresh(), maxAge);
       retry.unref?.();
@@ -203,7 +203,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
     return queued;
   }
 
-  /** A host is using genui's tools: an old copy is checked in the background, never delaying the caller. */
+  /** A host is using app-mcp's tools: an old copy is checked in the background, never delaying the caller. */
   function used(): void {
     if (maxAge > 0 && !running && Date.now() - checkedAt > maxAge) void refresh();
   }
@@ -224,9 +224,9 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
       try {
         return await request((client) => client.callTool({ name, arguments: args }, { timeout }));
       } catch (error) {
-        // genui answered with an error: let it surface as the tool's error.
+        // app-mcp answered with an error: let it surface as the tool's error.
         if (error instanceof ProtocolError) throw error;
-        logger.warn(`[genui] ${name} failed, genui unreachable: ${error}`);
+        logger.warn(`[app-mcp] ${name} failed, app-mcp unreachable: ${error}`);
         return { isError: true, content: [{ type: "text", text: UNAVAILABLE_TEXT }] };
       }
     },
@@ -236,7 +236,7 @@ export function connectGenUI(options: GenUIClientOptions): GenUIClient {
         return await request((client) => client.getPrompt({ name, arguments: args }, { timeout }));
       } catch (error) {
         if (error instanceof ProtocolError) throw error;
-        logger.warn(`[genui] prompt ${name} failed, genui unreachable: ${error}`);
+        logger.warn(`[app-mcp] prompt ${name} failed, app-mcp unreachable: ${error}`);
         throw new Error(UNAVAILABLE_TEXT);
       }
     },

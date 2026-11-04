@@ -46,7 +46,7 @@ interface Registry {
 function create(env: Env): Registry {
   const settings = env as unknown as Record<string, string | undefined>;
   // A random secret per isolate would break every session and connector on the next isolate.
-  if (!settings.GENUI_AUTH_SECRET) throw new Error("GENUI_AUTH_SECRET is not set. Run: wrangler secret put GENUI_AUTH_SECRET");
+  if (!settings.APP_MCP_AUTH_SECRET) throw new Error("APP_MCP_AUTH_SECRET is not set. Run: wrangler secret put APP_MCP_AUTH_SECRET");
   const db = d1Database(env.DB);
   const config = authConfigFromEnv(settings);
   const { app, store, refresher } = createRegistryApp(db, { assets, baseURL: config.baseURL });

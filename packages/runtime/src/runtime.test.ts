@@ -4,7 +4,7 @@ import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } 
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { beforeAll, describe, expect, it } from "vitest";
-import { mountGenUI, type CatalogSource } from "./runtime.js";
+import { mountAppMcp, type CatalogSource } from "./runtime.js";
 import { viewBundles } from "./views.js";
 
 const require = createRequire(import.meta.url);
@@ -13,7 +13,7 @@ const views = viewBundles({ form: await view("form"), chart: await view("chart")
 
 async function connect() {
   const server = new McpServer({ name: "test", version: "1.0.0" });
-  await mountGenUI(server, { views, theme: { light: { primary: "#4f46e5" } } });
+  await mountAppMcp(server, { views, theme: { light: { primary: "#4f46e5" } } });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "1.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -34,7 +34,7 @@ const form = {
   submit: { toolName: "create_order" },
 };
 
-describe("mountGenUI", () => {
+describe("mountAppMcp", () => {
   let client: Client;
   beforeAll(async () => {
     client = await connect();
@@ -45,7 +45,7 @@ describe("mountGenUI", () => {
     const formTool = tools.find((t) => t.name === "render_form");
     const chartTool = tools.find((t) => t.name === "render_chart");
     const uri = (formTool?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri;
-    expect(uri).toMatch(/^ui:\/\/genui\/form\/[0-9a-f]{16}$/);
+    expect(uri).toMatch(/^ui:\/\/app-mcp\/form\/[0-9a-f]{16}$/);
     expect(chartTool).toBeDefined();
 
     const resource = await client.readResource({ uri: uri! });
@@ -68,7 +68,7 @@ describe("mountGenUI", () => {
 
   it("names tools preview_* in preview mode and flags their results as previews", async () => {
     const server = new McpServer({ name: "preview", version: "1.0.0" });
-    await mountGenUI(server, { views, preview: true });
+    await mountAppMcp(server, { views, preview: true });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const previewClient = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), previewClient.connect(a)]);
@@ -81,7 +81,7 @@ describe("mountGenUI", () => {
 
   it("suffixes tool names and titles outside prod, so an environment's connector can sit next to prod's", async () => {
     const server = new McpServer({ name: "staging", version: "1.0.0" });
-    await mountGenUI(server, { views, environment: "staging" });
+    await mountAppMcp(server, { views, environment: "staging" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const stagingClient = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), stagingClient.connect(a)]);
@@ -106,7 +106,7 @@ describe("mountGenUI", () => {
 
   it("rejects specs that use tools on a server without data tools", async () => {
     const server = new McpServer({ name: "render-only", version: "1.0.0" });
-    await mountGenUI(server, { views, dataTools: false });
+    await mountAppMcp(server, { views, dataTools: false });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const renderOnly = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), renderOnly.connect(a)]);
@@ -154,7 +154,7 @@ describe("workflows", () => {
 
   async function connectWith(options: { environment?: string; preview?: boolean } = {}) {
     const server = new McpServer({ name: "workflows", version: "1.0.0" });
-    await mountGenUI(server, { views, registry: source(), ...options });
+    await mountAppMcp(server, { views, registry: source(), ...options });
     const [a, b] = InMemoryTransport.createLinkedPair();
     const c = new Client({ name: "c", version: "1.0.0" });
     await Promise.all([server.connect(b), c.connect(a)]);
@@ -221,28 +221,28 @@ describe("components", () => {
 
   it("serves earlier versions by hash through the source's bundle lookup", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
-    await mountGenUI(server, { views, registry: source("bbbb", "1.1.0") });
+    await mountAppMcp(server, { views, registry: source("bbbb", "1.1.0") });
     const c = await connectTo(server);
     const { tools } = await c.listTools();
-    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://genui/c/rating/bbbb" });
-    const old = await c.readResource({ uri: "ui://genui/c/rating/aaaa" });
+    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://app-mcp/c/rating/bbbb" });
+    const old = await c.readResource({ uri: "ui://app-mcp/c/rating/aaaa" });
     expect((old.contents[0] as { text: string }).text).toBe("<p>rating 1.0.0</p>");
-    await expect(c.readResource({ uri: "ui://genui/c/rating/ffff" })).rejects.toThrow();
+    await expect(c.readResource({ uri: "ui://app-mcp/c/rating/ffff" })).rejects.toThrow();
   });
 
   it("remove() takes everything off the server, so it can be mounted again with a new snapshot", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
-    const mounted = await mountGenUI(server, { views, registry: source("aaaa", "1.0.0") });
+    const mounted = await mountAppMcp(server, { views, registry: source("aaaa", "1.0.0") });
     const c = await connectTo(server);
     const changed = new Promise<void>((resolve) => c.setNotificationHandler("notifications/tools/list_changed", () => resolve()));
 
     mounted.remove();
     expect((await c.listTools()).tools).toEqual([]);
-    await mountGenUI(server, { views, registry: source("bbbb", "1.1.0") });
+    await mountAppMcp(server, { views, registry: source("bbbb", "1.1.0") });
     await changed;
 
     const { tools } = await c.listTools();
-    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://genui/c/rating/bbbb" });
+    expect(tools.find((t) => t.name === "render_rating")?._meta?.ui).toEqual({ resourceUri: "ui://app-mcp/c/rating/bbbb" });
     expect(tools.map((t) => t.name).sort()).toEqual(["render_chart", "render_form", "render_rating"]);
   });
 });

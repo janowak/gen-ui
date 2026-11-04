@@ -4,7 +4,7 @@ import { AppBridge, PostMessageTransport } from "@modelcontextprotocol/ext-apps/
 import { fieldsOf, partials, starterProps, type Field } from "./props.js";
 
 /**
- * genui dev: a local MCP Apps host for one component. It stands in for the model (props,
+ * app-mcp dev: a local MCP Apps host for one component. It stands in for the model (props,
  * optionally streamed), the SDK (render result with view id, workspace theme and preview flag)
  * and the company's MCP server (mock tools), and logs everything the component sends back.
  */
@@ -96,7 +96,7 @@ function select(values: string[], current: string, onchange: (value: string) => 
 // ── State ──────────────────────────────────────────────────────────────────────
 
 const root = document.getElementById("app")!;
-const viewUrl = root.dataset.viewUrl ?? "/?genui-view";
+const viewUrl = root.dataset.viewUrl ?? "/?app-mcp-view";
 let manifest: ComponentManifest;
 let manifestError: string | undefined;
 let settings: Settings;
@@ -104,7 +104,7 @@ let propsTab: "form" | "json" = "form";
 
 async function fetchManifest(): Promise<ComponentManifest | undefined> {
   try {
-    const res = await fetch("/__genui/component.json");
+    const res = await fetch("/__app_mcp/component.json");
     const body = (await res.json()) as ComponentManifest & { error?: string };
     if (!res.ok) throw new Error(body.error ?? res.statusText);
     manifestError = undefined;
@@ -115,7 +115,7 @@ async function fetchManifest(): Promise<ComponentManifest | undefined> {
   }
 }
 
-const storageKey = () => `genui-dev:${manifest.name}`;
+const storageKey = () => `app-mcp-dev:${manifest.name}`;
 const defaultMock = (tool: string): Mock => ({ mode: "data", data: '{\n  "ok": true\n}', error: `${tool} failed`, delay: 300 });
 
 function loadSettings(): Settings {
@@ -164,7 +164,7 @@ const logList = h("div");
 
 function layout() {
   root.replaceChildren(
-    h("aside", {}, h("header", {}, h("b", {}, "genui dev"), nameEl, statusPill), propsSection, hostSection, toolsSection),
+    h("aside", {}, h("header", {}, h("b", {}, "app-mcp dev"), nameEl, statusPill), propsSection, hostSection, toolsSection),
     h(
       "main",
       {},
@@ -424,7 +424,7 @@ function renderHostSection() {
       { className: "row" },
       h(
         "label",
-        { title: "Workspace theme, sent in the render result like the SDK does (--genui-primary)" },
+        { title: "Workspace theme, sent in the render result like the SDK does (--app-mcp-primary)" },
         h("input", {
           type: "checkbox",
           checked: settings.workspace.on,
@@ -485,8 +485,8 @@ function renderHostSection() {
 /** ChatGPT's widget state per view id: what the host stores with each message. */
 const widgetStates = new Map<string, unknown>();
 
-// The dev page's `window.openai` shim (genui:dev) reads and writes through this, same origin.
-(window as { __genuiDev?: unknown }).__genuiDev = {
+// The dev page's `window.openai` shim (app-mcp:dev) reads and writes through this, same origin.
+(window as { __appMcpDev?: unknown }).__appMcpDev = {
   widgetState: () => (viewId ? (widgetStates.get(viewId) ?? null) : null),
   setWidgetState(state: unknown) {
     if (!viewId) return;
@@ -497,7 +497,7 @@ const widgetStates = new Map<string, unknown>();
 
 // The view writes localStorage from its own window, so this one hears about it.
 addEventListener("storage", ({ key, newValue }) => {
-  if (!key?.startsWith("genui:") || key === "genui:probe" || newValue === null) return;
+  if (!key?.startsWith("app-mcp:") || key === "app-mcp:probe" || newValue === null) return;
   try {
     write("state", "→ saved state", { key, ...(JSON.parse(newValue) as object) });
   } catch {
@@ -507,7 +507,7 @@ addEventListener("storage", ({ key, newValue }) => {
 
 function clearSavedState() {
   widgetStates.clear();
-  for (const key of Object.keys(localStorage)) if (key.startsWith("genui:")) localStorage.removeItem(key);
+  for (const key of Object.keys(localStorage)) if (key.startsWith("app-mcp:")) localStorage.removeItem(key);
   write("info", "saved state cleared");
 }
 
@@ -676,12 +676,12 @@ async function render({ replay = false } = {}) {
   const iframe = h("iframe", { title: manifest.title ?? manifest.name });
   // Same origin as the dev server so Vite can serve modules; real hosts also give each server its own origin.
   iframe.sandbox.add("allow-scripts", "allow-same-origin", "allow-forms");
-  iframe.src = `${viewUrl}&genui-host=${settings.hostState}`;
+  iframe.src = `${viewUrl}&app-mcp-host=${settings.hostState}`;
   frame.replaceChildren(iframe);
 
   const next = new AppBridge(
     null,
-    { name: "genui-dev", version: "0.1.0" },
+    { name: "app-mcp-dev", version: "0.1.0" },
     { serverTools: {}, openLinks: {}, logging: {}, updateModelContext: { text: {} }, message: { text: {} } },
     { hostContext: hostContext() },
   );
@@ -737,7 +737,7 @@ async function render({ replay = false } = {}) {
 // ── Live reload ────────────────────────────────────────────────────────────────
 
 function listen() {
-  const events = new EventSource("/__genui/events");
+  const events = new EventSource("/__app_mcp/events");
   events.onopen = () => setLive(true);
   events.onerror = () => setLive(false);
   events.addEventListener("reload", async (event) => {
@@ -761,9 +761,9 @@ function listen() {
 const first = await fetchManifest();
 if (!first) {
   root.replaceChildren(
-    h("pre", { className: "error", style: "padding: 16px" }, `genui dev: ${manifestError}\n\nFix it and save; the page reloads.`),
+    h("pre", { className: "error", style: "padding: 16px" }, `app-mcp dev: ${manifestError}\n\nFix it and save; the page reloads.`),
   );
-  new EventSource("/__genui/events").addEventListener("reload", () => location.reload());
+  new EventSource("/__app_mcp/events").addEventListener("reload", () => location.reload());
 } else {
   manifest = first;
   settings = loadSettings();

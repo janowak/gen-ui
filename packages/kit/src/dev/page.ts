@@ -1,11 +1,11 @@
 /**
  * Runs in the view before its modules (a classic inline script), for the host page's "Saved state"
- * setting (`genui-host` in the view URL): `chatgpt` stands in for ChatGPT's `window.openai` widget
+ * setting (`app-mcp-host` in the view URL): `chatgpt` stands in for ChatGPT's `window.openai` widget
  * state, kept by the host page per view id; `none` blocks localStorage like an opaque sandbox.
  */
 export const VIEW_SHIM = `(() => {
-  const mode = new URLSearchParams(location.search).get("genui-host");
-  const dev = window.parent !== window ? window.parent.__genuiDev : undefined;
+  const mode = new URLSearchParams(location.search).get("app-mcp-host");
+  const dev = window.parent !== window ? window.parent.__appMcpDev : undefined;
   if (mode === "chatgpt" && dev) {
     window.openai = {
       get widgetState() { return dev.widgetState(); },
@@ -25,12 +25,12 @@ export function harnessPage(viewParam: string): string {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>genui dev</title>
+    <title>app-mcp dev</title>
     <style>${CSS}</style>
   </head>
   <body>
     <div id="app" data-view-url="/?${viewParam}"></div>
-    <script type="module" src="/__genui/harness.js"></script>
+    <script type="module" src="/__app_mcp/harness.js"></script>
   </body>
 </html>
 `;

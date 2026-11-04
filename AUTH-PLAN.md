@@ -1,6 +1,6 @@
 # Auth plan
 
-People sign in to genui cloud with Google or GitHub. better-auth, inside the registry at `https://api.app-mcp.com`, is our only login system. Claude and ChatGPT connectors use it, and so does any web page of ours that needs a login.
+People sign in to app-mcp cloud with Google or GitHub. better-auth, inside the registry at `https://api.app-mcp.com`, is our only login system. Claude and ChatGPT connectors use it, and so does any web page of ours that needs a login.
 
 **Status (2026-10-24)**
 - Proposed. Launch needs no code change: the registry already signs people in with Google and GitHub (`GOOGLE_*`, `GITHUB_*`). The work is Google and GitHub setup (§5) and settings (§6).
@@ -25,7 +25,7 @@ our web pages ────session cookie──┘    one user list and workspace
 - **Connectors:** Claude and ChatGPT register themselves (Client ID Metadata Documents), the person signs in and consents, and the token is bound to `https://api.app-mcp.com/mcp`.
 - **Web pages:** the same Google and GitHub buttons give a session cookie on `api.app-mcp.com`. Today only `/sign-in` and `/consent` use it. A dashboard would later use the same sessions (§7). The landing page is public and has no login.
 
-**No Auth0.** Auth0 is a hosted login system of the same kind as better-auth. In front of better-auth it would be a second one. In place of better-auth, it can't take Claude and ChatGPT on its own today: an admin imports each client by hand, and it rejects ChatGPT's registration document (forum thread, Sept–Oct 2026). If a cloud customer later wants their company login (Okta, Entra), any OIDC provider plugs in through `GENUI_OIDC_*`. People are matched by verified email, so their accounts carry over.
+**No Auth0.** Auth0 is a hosted login system of the same kind as better-auth. In front of better-auth it would be a second one. In place of better-auth, it can't take Claude and ChatGPT on its own today: an admin imports each client by hand, and it rejects ChatGPT's registration document (forum thread, Sept–Oct 2026). If a cloud customer later wants their company login (Okta, Entra), any OIDC provider plugs in through `APP_MCP_OIDC_*`. People are matched by verified email, so their accounts carry over.
 
 **Cost:** $0.
 
@@ -39,7 +39,7 @@ our web pages ────session cookie──┘    one user list and workspace
 | `app-mcp.com` | Landing, plus `/privacy` and `/terms` for Google's consent screen | [LANDING-DEPLOY-PLAN](LANDING-DEPLOY-PLAN.md) |
 
 - **`api-staging`, not `api.staging`:** Cloudflare's free certificate covers one level of subdomains.
-- **One hostname for both MCPs.** Connector URLs still never change when the end-user MCP moves: a tunnel ingress rule (its own container) or a Worker route on `api.app-mcp.com/w/*` (the edge) takes those paths, and the rest keeps going to the registry. `GENUI_HOSTED_URL` isn't needed: hosted URLs share `GENUI_PUBLIC_URL`.
+- **One hostname for both MCPs.** Connector URLs still never change when the end-user MCP moves: a tunnel ingress rule (its own container) or a Worker route on `api.app-mcp.com/w/*` (the edge) takes those paths, and the rest keeps going to the registry. `APP_MCP_HOSTED_URL` isn't needed: hosted URLs share `APP_MCP_PUBLIC_URL`.
 
 ## 3. Sign-in from a connector, step by step
 
@@ -51,7 +51,7 @@ our web pages ────session cookie──┘    one user list and workspace
 
 ## 4. Before you start
 
-- **The name** (LANDING-DEPLOY-PLAN §8). It shows on Google's consent screen and GitHub's authorize page, and Google's brand check compares it with what `app-mcp.com` shows. This plan writes `genui`; use the winner everywhere.
+- **The name** (LANDING-DEPLOY-PLAN §8). It shows on Google's consent screen and GitHub's authorize page, and Google's brand check compares it with what `app-mcp.com` shows. This plan writes `app-mcp`; use the winner everywhere.
 - **Landing live** with `/privacy` and `/terms` (§9.1). Google's consent screen links to them.
 - **No VPS needed yet:** §6.3 runs the whole flow from your laptop.
 
@@ -59,18 +59,18 @@ our web pages ────session cookie──┘    one user list and workspace
 
 ### 5.1 Google: one project, two clients
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → new project `genui-auth`.
+1. [console.cloud.google.com](https://console.cloud.google.com) → new project `app-mcp-auth`.
 2. [Google Search Console](https://search.google.com/search-console) → add a **Domain** property `app-mcp.com` → copy the TXT record → add it in Cloudflare DNS → Verify. Google needs it for the authorized domain.
 3. **Google Auth Platform → Branding:**
-   - App name `genui`, user support email (your Google account, or a Google Group you manage).
+   - App name `app-mcp`, user support email (your Google account, or a Google Group you manage).
    - Home page `https://app-mcp.com`, privacy policy `https://app-mcp.com/privacy`, terms `https://app-mcp.com/terms`.
    - Authorized domain `app-mcp.com`; developer contact email.
    - A logo is optional and sends the app to brand review (a few business days).
 4. **Audience:** External → **Publish app**. In Testing, only listed test users can sign in. `openid`, `email` and `profile` are non-sensitive scopes, so there's no security review.
 5. **Data access:** add `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`.
 6. **Clients → Create client → Web application**, twice. No JavaScript origins.
-   - `genui prod`, redirect URI `https://api.app-mcp.com/api/auth/callback/google`
-   - `genui dev`, redirect URIs `https://api-staging.app-mcp.com/api/auth/callback/google` and `https://api-dev.app-mcp.com/api/auth/callback/google`
+   - `app-mcp prod`, redirect URI `https://api.app-mcp.com/api/auth/callback/google`
+   - `app-mcp dev`, redirect URIs `https://api-staging.app-mcp.com/api/auth/callback/google` and `https://api-dev.app-mcp.com/api/auth/callback/google`
 
    Separate secrets, so a leaked dev secret can't touch prod.
 7. Copy each client ID and secret into your password manager. Secrets are shown once.
@@ -81,9 +81,9 @@ A GitHub OAuth App takes a single callback URL, so each host gets its own app. C
 
 | Application name | Homepage URL | Authorization callback URL |
 |---|---|---|
-| `genui` | `https://app-mcp.com` | `https://api.app-mcp.com/api/auth/callback/github` |
-| `genui staging` | `https://app-mcp.com` | `https://api-staging.app-mcp.com/api/auth/callback/github` |
-| `genui dev` | `https://app-mcp.com` | `https://api-dev.app-mcp.com/api/auth/callback/github` |
+| `app-mcp` | `https://app-mcp.com` | `https://api.app-mcp.com/api/auth/callback/github` |
+| `app-mcp staging` | `https://app-mcp.com` | `https://api-staging.app-mcp.com/api/auth/callback/github` |
+| `app-mcp dev` | `https://app-mcp.com` | `https://api-dev.app-mcp.com/api/auth/callback/github` |
 
 For each: device flow off → **Generate a new client secret** → copy the ID and secret → upload the logo. better-auth asks GitHub only for `read:user` and `user:email`, never repository access.
 
@@ -103,23 +103,23 @@ The tunnel itself is V1-PLAN §9 Stage 0. For sign-in:
 In the compose env file on the VPS, never in git:
 
 ```
-GENUI_MODE=hosted
-GENUI_PUBLIC_URL=https://api.app-mcp.com
-GENUI_AUTH_SECRET=<openssl rand -hex 32>
-GOOGLE_CLIENT_ID=<genui prod client ID>
-GOOGLE_CLIENT_SECRET=<genui prod client secret>
-GITHUB_CLIENT_ID=<genui app client ID>
-GITHUB_CLIENT_SECRET=<genui app client secret>
-GENUI_ALLOWED_EMAILS=<you@example.com,@yourcompany.com>
+APP_MCP_MODE=hosted
+APP_MCP_PUBLIC_URL=https://api.app-mcp.com
+APP_MCP_AUTH_SECRET=<openssl rand -hex 32>
+GOOGLE_CLIENT_ID=<app-mcp prod client ID>
+GOOGLE_CLIENT_SECRET=<app-mcp prod client secret>
+GITHUB_CLIENT_ID=<app-mcp app client ID>
+GITHUB_CLIENT_SECRET=<app-mcp app client secret>
+APP_MCP_ALLOWED_EMAILS=<you@example.com,@yourcompany.com>
 ```
 
-- Leave unset: `GENUI_OIDC_*`, `GENUI_PASSWORD_LOGIN`, `GENUI_ALLOW_DCR`.
-- `GENUI_PUBLIC_URL` exactly as above, with no path: tokens are bound to `<GENUI_PUBLIC_URL>/mcp`, and the Google and GitHub callback URLs are built from it.
-- **`GENUI_AUTH_SECRET`:** generate it once and keep it in the password manager. better-auth encrypts its token-signing keys with it, so losing or changing it breaks every connector and session.
+- Leave unset: `APP_MCP_OIDC_*`, `APP_MCP_PASSWORD_LOGIN`, `APP_MCP_ALLOW_DCR`.
+- `APP_MCP_PUBLIC_URL` exactly as above, with no path: tokens are bound to `<APP_MCP_PUBLIC_URL>/mcp`, and the Google and GitHub callback URLs are built from it.
+- **`APP_MCP_AUTH_SECRET`:** generate it once and keep it in the password manager. better-auth encrypts its token-signing keys with it, so losing or changing it breaks every connector and session.
 
 ### 6.2 Staging
 
-The same, with `GENUI_PUBLIC_URL=https://api-staging.app-mcp.com`, the `genui dev` Google client, the `genui staging` GitHub app and its own `GENUI_AUTH_SECRET`.
+The same, with `APP_MCP_PUBLIC_URL=https://api-staging.app-mcp.com`, the `app-mcp dev` Google client, the `app-mcp staging` GitHub app and its own `APP_MCP_AUTH_SECRET`.
 
 ### 6.3 Your laptop
 
@@ -129,25 +129,25 @@ Claude and ChatGPT can't reach `localhost`, so give the laptop a fixed name once
 cloudflared tunnel login
 ```
 ```bash
-cloudflared tunnel create genui-dev
+cloudflared tunnel create app-mcp-dev
 ```
 ```bash
-cloudflared tunnel route dns genui-dev api-dev.app-mcp.com
+cloudflared tunnel route dns app-mcp-dev api-dev.app-mcp.com
 ```
 
 Then, each session, run the tunnel:
 
 ```bash
-cloudflared tunnel run --url http://localhost:4000 genui-dev
+cloudflared tunnel run --url http://localhost:4000 app-mcp-dev
 ```
 
-In the repo root's `.env.local`: `GENUI_MODE=hosted`, `GENUI_PUBLIC_URL=https://api-dev.app-mcp.com`, the `genui dev` Google client and the `genui dev` GitHub app. Start the registry:
+In the repo root's `.env.local`: `APP_MCP_MODE=hosted`, `APP_MCP_PUBLIC_URL=https://api-dev.app-mcp.com`, the `app-mcp dev` Google client and the `app-mcp dev` GitHub app. Start the registry:
 
 ```bash
 pnpm --filter @app-mcp/registry start
 ```
 
-For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://localhost:4000` and `GENUI_PASSWORD_LOGIN=true`.
+For quick work without a connector, skip the tunnel: `APP_MCP_PUBLIC_URL=http://localhost:4000` and `APP_MCP_PASSWORD_LOGIN=true`.
 
 ### 6.4 Checks
 
@@ -160,7 +160,7 @@ For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://lo
    curl -s https://api.app-mcp.com/.well-known/oauth-authorization-server | jq .client_id_metadata_document_supported
    ```
    `true`.
-2. **Claude:** Settings → Connectors → Add custom connector → `https://api.app-mcp.com/mcp` → Connect → Google → consent. Ask "show my genui components": the components view renders.
+2. **Claude:** Settings → Connectors → Add custom connector → `https://api.app-mcp.com/mcp` → Connect → Google → consent. Ask "show my app-mcp components": the components view renders.
 3. In a private window, connect again with GitHub on the same email: the same workspace (§8).
 4. **ChatGPT:** add a custom connector (developer mode) with the same URL and sign in.
 
@@ -173,26 +173,26 @@ For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://lo
 ## 8. Known behavior
 
 - **One person, two providers.** Signing in with Google and with GitHub on the same email gives one person, when both providers report the email as verified. better-auth reads GitHub's own verified flag for that address. If it's unverified, the second provider's sign-in is refused and the person keeps using the first. Don't mark a provider as trusted to work around it: that would let an unverified GitHub email take over the Google account with that address.
-- **Sign-up gate.** Without `GENUI_ALLOWED_EMAILS`, anyone with Google or GitHub who finds `api.app-mcp.com` gets a workspace. With it, people not on the list sign in but get no workspace: the MCP answers 403 "Ask a workspace admin to invite your email". An invite lets them in on their next connect, and existing members are never locked out. Keep it set until quotas are in (V1-PLAN §9 Stage 0, step 6).
+- **Sign-up gate.** Without `APP_MCP_ALLOWED_EMAILS`, anyone with Google or GitHub who finds `api.app-mcp.com` gets a workspace. With it, people not on the list sign in but get no workspace: the MCP answers 403 "Ask a workspace admin to invite your email". An invite lets them in on their next connect, and existing members are never locked out. Keep it set until quotas are in (V1-PLAN §9 Stage 0, step 6).
 - **Roles and invites.** Everyone is admin of their own workspace. An admin invites people from the workspace view (`manage_workspace`). An invite, matched by verified email, wins at the next sign-in even over a workspace the person already has; an unused one (only them, nothing published, no recipes or tokens) is deleted. People in more than one workspace get the one they joined last.
 - **Server tokens.** Admins create and revoke them in the workspace view. A new token is shown once, in the view only: app-only tool results never reach the model.
-- **Public end-user MCP.** `/w/<workspace>/mcp` is public by default, anonymous, with no data tools. An admin who only uses it through their own server (server token) turns Public off in the workspace view. A login on the public MCP would be the customer's own identity provider, validated as JWTs per workspace, not genui's; not before someone needs it.
+- **Public end-user MCP.** `/w/<workspace>/mcp` is public by default, anonymous, with no data tools. An admin who only uses it through their own server (server token) turns Public off in the workspace view. A login on the public MCP would be the customer's own identity provider, validated as JWTs per workspace, not app-mcp's; not before someone needs it.
 
 ## 9. Code follow-ups
 
 None block the first sign-in.
 
 1. **`/privacy` and `/terms` on the landing site.** Google's consent screen links to them. The text needs your input; the DPA (V1-PLAN §9) can reuse it.
-2. ~~Sign-up gate~~ Done (2026-10-26): `GENUI_ALLOWED_EMAILS`, see §6.1 and §8.
+2. ~~Sign-up gate~~ Done (2026-10-26): `APP_MCP_ALLOWED_EMAILS`, see §6.1 and §8.
 3. **A sign-in page message for refused people.** Today the refusal shows up as the connector's 403. Showing it on `/sign-in` instead needs the check at consent time.
 
 ## 10. Where each secret goes
 
 | Value | From | To |
 |---|---|---|
-| `genui prod` Google client ID and secret | Google Cloud → Clients | Prod env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-| `genui dev` Google client ID and secret | Google Cloud → Clients | Staging env and `.env.local` |
-| `genui` GitHub app ID and secret | GitHub → OAuth Apps | Prod env: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` |
-| `genui staging` GitHub app ID and secret | GitHub → OAuth Apps | Staging env |
-| `genui dev` GitHub app ID and secret | GitHub → OAuth Apps | `.env.local` |
-| `GENUI_AUTH_SECRET` (one per environment) | `openssl rand -hex 32` | That environment's env file, and the password manager |
+| `app-mcp prod` Google client ID and secret | Google Cloud → Clients | Prod env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| `app-mcp dev` Google client ID and secret | Google Cloud → Clients | Staging env and `.env.local` |
+| `app-mcp` GitHub app ID and secret | GitHub → OAuth Apps | Prod env: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` |
+| `app-mcp staging` GitHub app ID and secret | GitHub → OAuth Apps | Staging env |
+| `app-mcp dev` GitHub app ID and secret | GitHub → OAuth Apps | `.env.local` |
+| `APP_MCP_AUTH_SECRET` (one per environment) | `openssl rand -hex 32` | That environment's env file, and the password manager |
