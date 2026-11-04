@@ -110,10 +110,7 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
         allowUnauthenticatedClientRegistration: Boolean(config.dynamicRegistration),
         customAccessTokenClaims: async ({ user }) => {
           if (!user) return {};
-          const membership = await store.resolveMembership(
-            { id: user.id, email: user.email, emailVerified: Boolean(user.emailVerified), name: user.name },
-            { mode: config.mode, adminEmails: config.adminEmails, allowedEmails: config.allowedEmails },
-          );
+          const membership = await resolveMembership(store, config, user);
           return membership ? { [WORKSPACE_CLAIM]: membership.workspaceId } : {};
         },
       }),
@@ -139,6 +136,18 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
 }
 
 export type Auth = ReturnType<typeof createAuth>;
+
+/** The person's workspace, joined or made at sign-in: by an access token for MCP clients, by the session for the web console. */
+export function resolveMembership(
+  store: Store,
+  config: AuthConfig,
+  user: { id: string; email: string; emailVerified?: boolean | null; name?: string | null },
+) {
+  return store.resolveMembership(
+    { id: user.id, email: user.email, emailVerified: Boolean(user.emailVerified), name: user.name ?? undefined },
+    { mode: config.mode, adminEmails: config.adminEmails, allowedEmails: config.allowedEmails },
+  );
+}
 
 /** What the sign-in page offers. */
 export function signInOptions(config: AuthConfig) {

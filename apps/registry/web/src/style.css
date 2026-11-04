@@ -134,3 +134,89 @@ code {
   text-decoration: underline;
   font-weight: 400;
 }
+
+/* The web console (manage.html): a full-width page instead of the centered sign-in card. */
+body.console {
+  display: block;
+  place-items: normal;
+  padding: 0;
+}
+.console header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.console header select {
+  font: inherit;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+}
+.console label,
+.console #me {
+  color: var(--muted);
+}
+.console .spacer {
+  flex: 1;
+}
+.console nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 8px 16px 0;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.console nav a {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.console nav a[aria-current] {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--fg);
+}
+.console .error {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.console #stage {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px 16px 32px;
+}
+.console #stage iframe {
+  display: block;
+  /* the view reports its content height; the border goes outside it */
+  box-sizing: content-box;
+  width: calc(100% - 2px);
+  min-height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.console.fullscreen #stage {
+  position: fixed;
+  inset: 0;
+  max-width: none;
+  padding: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.console.fullscreen #stage iframe {
+  height: 100% !important;
+  border: 0;
+  border-radius: 0;
+}

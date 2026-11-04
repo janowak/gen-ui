@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workspace · app-mcp</title>
+  </head>
+  <body class="console">
+    <header>
+      <strong>app-mcp</strong>
+      <span id="workspace"></span>
+      <label id="environment-picker" hidden
+        >Environment
+        <select id="environment"></select
+      ></label>
+      <span class="spacer"></span>
+      <span id="me"></span>
+      <button class="link" id="signout" type="button">Sign out</button>
+    </header>
+    <nav id="tabs" aria-label="Workspace sections"></nav>
+    <div class="error" id="error" role="alert"></div>
+    <section id="stage"></section>
+    <script type="module" src="./src/manage.ts"></script>
+  </body>
+</html>

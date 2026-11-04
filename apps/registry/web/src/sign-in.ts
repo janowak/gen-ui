@@ -11,9 +11,21 @@ interface Options {
 const error = $<HTMLDivElement>("error");
 const fail = (message?: string) => (error.textContent = message ?? "Sign-in failed. Try again.");
 
+// An AI assistant's OAuth flow brings a signed query; without one, this is a sign-in to the web console.
+const oauth = new URLSearchParams(location.search).has("sig");
+const CONSOLE = "/manage";
+if (!oauth) $<HTMLParagraphElement>("lead").textContent = "to manage your workspace.";
+// A failed social sign-in comes back with ?error=.
+const returned = new URLSearchParams(location.search).get("error");
+if (returned) fail(returned.replaceAll("_", " "));
+
 const options = (await fetch("/auth/options").then((r) => r.json())) as Options;
 const providers = $<HTMLDivElement>("providers");
 providers.style.cssText = "display:flex;flex-direction:column;gap:8px";
+
+/** In an OAuth flow the provider's callback resumes it; otherwise it lands on the console. */
+const social = (provider: string) =>
+  authClient.signIn.social({ provider: provider as "github", ...(oauth ? {} : { callbackURL: CONSOLE, errorCallbackURL: "/sign-in" }) });
 
 function providerButton(label: string, start: () => Promise<{ data: unknown; error: { message?: string } | null }>) {
   const button = document.createElement("button");
@@ -33,10 +45,10 @@ function providerButton(label: string, start: () => Promise<{ data: unknown; err
 if (options.sso) {
   const { providerId, name } = options.sso;
   // Generic OIDC providers register as social providers under their providerId.
-  providerButton(`Continue with ${name}`, () => authClient.signIn.social({ provider: providerId as "github" }));
+  providerButton(`Continue with ${name}`, () => social(providerId));
 }
-if (options.github) providerButton("Continue with GitHub", () => authClient.signIn.social({ provider: "github" }));
-if (options.google) providerButton("Continue with Google", () => authClient.signIn.social({ provider: "google" }));
+if (options.github) providerButton("Continue with GitHub", () => social("github"));
+if (options.google) providerButton("Continue with Google", () => social("google"));
 
 if (options.password) {
   const form = $<HTMLFormElement>("password");
@@ -67,7 +79,8 @@ if (options.password) {
     if (err) {
       submit.disabled = false;
       fail(err.message);
-    } else if (!follow(data)) {
+    } else if (!oauth) location.href = CONSOLE;
+    else if (!follow(data)) {
       submit.disabled = false;
       fail("Signed in, but the authorization request has expired. Start again from your AI assistant.");
     }

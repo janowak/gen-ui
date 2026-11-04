@@ -10,6 +10,7 @@ import tokens from "@app-mcp/ui/views/tokens.html";
 import connector from "@app-mcp/ui/views/connector.html";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
+import manage from "../dist-web/manage.html";
 import { createRegistryApp, type Refresher } from "./app.js";
 import { authConfigFromEnv, type MetadataFetch } from "./auth.js";
 import { d1Database, type D1Binding } from "./db-d1.js";
@@ -25,7 +26,7 @@ interface Env {
 
 const assets: Assets = {
   views: { form, chart, manager, theme, workflows, workspace, members, tokens, connector, instructions },
-  pages: { "sign-in": signIn, consent },
+  pages: { "sign-in": signIn, consent, manage },
 };
 
 /**

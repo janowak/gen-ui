@@ -11,8 +11,8 @@ export type ManagementViewName = (typeof MANAGEMENT_VIEWS)[number];
 export interface Assets {
   /** Single-file views from @app-mcp/ui. */
   views: Record<ViewName | ManagementViewName, string>;
-  /** Sign-in and consent pages, built from web/ into dist-web/. */
-  pages: Record<"sign-in" | "consent", string>;
+  /** Sign-in, consent and the web console, built from web/ into dist-web/. */
+  pages: Record<"sign-in" | "consent" | "manage", string>;
 }
 
 const hashed = new WeakMap<Assets, Record<ViewName, ViewBundle>>();

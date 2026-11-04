@@ -507,3 +507,42 @@ describe("management MCP", () => {
     expect(auth).toBeDefined();
   });
 });
+
+describe("web console", () => {
+  it("sends people without a session to sign in, and signed-in people to the console", async () => {
+    expect((await fetch(`${base}/`, { redirect: "manual" })).headers.get("location")).toBe("/manage");
+    const page = await fetch(`${base}/manage`, { redirect: "manual" });
+    expect(page.status).toBe(302);
+    expect(page.headers.get("location")).toBe("/sign-in");
+
+    const cookie = await signUp("erin@acme.test");
+    expect((await fetch(`${base}/manage`, { headers: { cookie } })).status).toBe(200);
+    const signIn = await fetch(`${base}/sign-in`, { headers: { cookie }, redirect: "manual" });
+    expect(signIn.headers.get("location")).toBe("/manage");
+    // An AI assistant's OAuth flow still gets the sign-in page, to pick the account.
+    expect((await fetch(`${base}/sign-in?sig=abc`, { headers: { cookie }, redirect: "manual" })).status).toBe(200);
+  });
+
+  it("serves the management MCP to the session, from the registry's own origin only", async () => {
+    const cookie = await signUp("heidi@acme.test");
+    const list = (headers: Record<string, string>) =>
+      fetch(`${base}/manage/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...headers },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      });
+    expect((await list({ origin: base })).status).toBe(401);
+    expect((await list({ cookie, origin: "https://evil.test" })).status).toBe(403);
+    expect((await list({ cookie })).status).toBe(403);
+
+    const web = new Client({ name: "app-mcp-web", version: "0.1.0" });
+    await web.connect(
+      new StreamableHTTPClientTransport(new URL(`${base}/manage/mcp`), { requestInit: { headers: { cookie, origin: base } } }),
+    );
+    const names = (await web.listTools()).tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["show_workspace", "list_members", "manage_components"]));
+    expect(names).not.toContain("list_tokens");
+    const workspace = await web.callTool({ name: "show_workspace", arguments: {} });
+    expect(workspace.structuredContent).toMatchObject({ role: "member", workspace: { name: "acme" } });
+  });
+});

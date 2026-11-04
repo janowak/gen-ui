@@ -3,7 +3,7 @@ import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } fr
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createAuth, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
+import { createAuth, resolveMembership, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
 import type { Database } from "./db.js";
 import { createRegistryMcp } from "./mcp.js";
 import type { Membership, Store } from "./store.js";
@@ -19,6 +19,7 @@ export interface ManagementRuntime {
  * Management in chat: better-auth (OAuth for MCP clients, sign-in, consent) plus the
  * registry MCP at /mcp. Tokens are bound to `${baseURL}/mcp`; the person's role is read
  * from the database on every request, so role changes apply immediately.
+ * The web console at /manage serves the same MCP and views to a browser signed in with a session.
  */
 export function enableManagement(
   app: Hono,
@@ -59,8 +60,14 @@ export function enableManagement(
     app.get(`/.well-known/openid-configuration${suffix}`, (c) => openIdMetadata(c.req.raw));
   }
 
-  // Sign-in and consent pages (better-auth's client resumes the OAuth flow from them).
-  app.get("/sign-in", (c) => c.html(assets.pages["sign-in"]));
+  const session = (request: Request) => auth.api.getSession({ headers: request.headers });
+
+  // Sign-in and consent pages (better-auth's client resumes the OAuth flow from them). A sign-in that
+  // isn't part of an OAuth flow (no signed query) is for the web console, so a session goes straight there.
+  app.get("/sign-in", async (c) => {
+    if (!c.req.query("sig") && (await session(c.req.raw))) return c.redirect("/manage");
+    return c.html(assets.pages["sign-in"]);
+  });
   app.get("/consent", (c) => c.html(assets.pages.consent));
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
 
@@ -99,6 +106,21 @@ export function enableManagement(
     { resource, jwksUrl: jwks },
   );
   app.all("/mcp", (c) => protectedMcp(c.req.raw));
+
+  // The web console: the management views in a page, calling the same MCP with the session cookie.
+  // better-auth's cookies are SameSite=Lax; the origin check also stops cross-site POSTs from same-site hosts.
+  app.get("/", (c) => c.redirect("/manage"));
+  app.get("/manage", async (c) => ((await session(c.req.raw)) ? c.html(assets.pages.manage) : c.redirect("/sign-in")));
+  const origin = new URL(config.baseURL).origin;
+  app.all("/manage/mcp", async (c) => {
+    if (c.req.method !== "GET" && c.req.header("origin") !== origin) return c.json({ error: "Cross-origin request" }, 403);
+    const signedIn = await session(c.req.raw);
+    if (!signedIn) return c.json({ error: "Sign in at /sign-in" }, 401);
+    const member = await resolveMembership(store, config, signedIn.user);
+    if (!member)
+      return c.json({ error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." }, 403);
+    return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "app-mcp-web", scopes: [], extra: { member } } });
+  });
 
   return auth;
 }
