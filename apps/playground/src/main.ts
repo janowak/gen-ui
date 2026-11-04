@@ -48,8 +48,10 @@ function write(label: string, value: unknown) {
   log.textContent = `[${new Date().toLocaleTimeString()}] ${label}\n${text}\n\n${log.textContent}`;
 }
 
-for (const name of Object.keys(PRESETS)) presetSelect.add(new Option(name, name));
-const loadPreset = () => (argsInput.value = JSON.stringify(PRESETS[presetSelect.value]!.args, null, 2));
+// The presets, then (once connected) every other view tool the server lists.
+const choices: Record<string, { tool: string; args: Record<string, unknown> }> = { ...PRESETS };
+for (const name of Object.keys(choices)) presetSelect.add(new Option(name, name));
+const loadPreset = () => (argsInput.value = JSON.stringify(choices[presetSelect.value]!.args, null, 2));
 presetSelect.onchange = loadPreset;
 loadPreset();
 document.body.dataset.theme = themeSelect.value;
@@ -68,6 +70,17 @@ const client = new Client({ name: "app-mcp-playground", version: "0.1.0" });
 await client.connect(transport());
 const { tools } = await client.listTools();
 write("connected", { server: SERVER_URL, tools: tools.map((t) => t.name) });
+
+const uiResource = (tool: (typeof tools)[number]) => (tool._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri;
+
+// Views the presets don't cover (a company's own components), so any MCP Apps server can be tried here.
+const presetTools = new Set(Object.values(PRESETS).map((p) => p.tool));
+for (const tool of tools) {
+  if (!uiResource(tool) || presetTools.has(tool.name)) continue;
+  const name = `Server: ${tool.name}`;
+  choices[name] = { tool: tool.name, args: {} };
+  presetSelect.add(new Option(name, name));
+}
 
 function hostContext(): McpUiHostContext {
   const theme = themeSelect.value as "light" | "dark";
@@ -101,12 +114,12 @@ let current: { bridge: AppBridge; iframe: HTMLIFrameElement } | undefined;
 let last: { tool: string; args: Record<string, unknown>; result: ToolResult } | undefined;
 
 async function show(replay: boolean) {
-  const preset = PRESETS[presetSelect.value]!;
+  const preset = choices[presetSelect.value]!;
   if (replay && !last) return write("error", "Nothing to replay yet: call a tool first.");
   const call = replay ? last! : { tool: preset.tool, args: JSON.parse(argsInput.value) as Record<string, unknown> };
   const args = call.args;
   const tool = tools.find((t) => t.name === call.tool);
-  const uri = (tool?._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri;
+  const uri = tool && uiResource(tool);
   if (!uri) return write("error", `${call.tool} has no ui resource`);
 
   if (current) {
