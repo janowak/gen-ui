@@ -66,11 +66,14 @@ export function enableManagement(
 
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
   // A switch of environment changes the preview tools: open listen streams re-list.
-  const mcp = createMcpHandler((ctx) =>
-    createRegistryMcp(store, (ctx.authInfo!.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
-      mcp.notify.toolsChanged();
-      mcp.notify.resourcesChanged();
-    }),
+  // The handler answers a failure with a bare "Internal server error"; onerror is the only place the cause shows.
+  const mcp = createMcpHandler(
+    (ctx) =>
+      createRegistryMcp(store, (ctx.authInfo!.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
+        mcp.notify.toolsChanged();
+        mcp.notify.resourcesChanged();
+      }),
+    { onerror: (error) => console.error("[app-mcp] management MCP:", error) },
   );
 
   const protectedMcp = requireMcpAuth(
