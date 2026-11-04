@@ -3,45 +3,45 @@ import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { genui } from "../vite.js";
+import { appMcp } from "../vite.js";
 
 const root = resolve(import.meta.dirname, "../../test/fixture");
 let server: ViteDevServer;
 let base: string;
 
 beforeAll(async () => {
-  server = await createServer({ root, configFile: false, logLevel: "silent", plugins: [genui()], server: { port: 0 } });
+  server = await createServer({ root, configFile: false, logLevel: "silent", plugins: [appMcp()], server: { port: 0 } });
   await server.listen();
   base = `http://localhost:${(server.httpServer!.address() as AddressInfo).port}`;
 });
 
 afterAll(() => server.close());
 
-describe("genui dev server", () => {
-  it("serves the host page at / and the component at /?genui-view", async () => {
+describe("app-mcp dev server", () => {
+  it("serves the host page at / and the component at /?app-mcp-view", async () => {
     const host = await (await fetch(`${base}/`)).text();
-    expect(host).toContain('<script type="module" src="/__genui/harness.js">');
-    expect(host).toContain('data-view-url="/?genui-view"');
+    expect(host).toContain('<script type="module" src="/__app_mcp/harness.js">');
+    expect(host).toContain('data-view-url="/?app-mcp-view"');
 
-    const view = await (await fetch(`${base}/?genui-view`)).text();
+    const view = await (await fetch(`${base}/?app-mcp-view`)).text();
     expect(view).toContain('<p id="out">');
     expect(view).toContain("/@vite/client"); // served through Vite, so modules transform on the fly
     expect(view).toContain("window.openai = {"); // the saved-state shim, run before the view's modules
 
-    const harness = await fetch(`${base}/__genui/harness.js`);
+    const harness = await fetch(`${base}/__app_mcp/harness.js`);
     expect(harness.status).toBe(200);
     expect(harness.headers.get("content-type")).toContain("javascript");
   });
 
   it("serves the manifest fresh from the component definition", async () => {
-    const res = await fetch(`${base}/__genui/component.json`);
+    const res = await fetch(`${base}/__app_mcp/component.json`);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ name: "fixture_badge", version: "2.1.0", tools: ["lookup"], contract: 1 });
   });
 
   it("pushes file changes to the host page instead of letting Vite reload the view", async () => {
     const controller = new AbortController();
-    const res = await fetch(`${base}/__genui/events`, { signal: controller.signal });
+    const res = await fetch(`${base}/__app_mcp/events`, { signal: controller.signal });
     const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
     expect((await reader.read()).value).toContain(": connected");
 

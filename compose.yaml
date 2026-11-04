@@ -1,4 +1,4 @@
-# Self-hosted genui: the registry on SQLite, its data in the genui-data volume.
+# Self-hosted app-mcp: the registry on SQLite, its data in the app-mcp-data volume.
 #   cp registry.env.example registry.env   # then fill it in
 #   docker compose up -d
 #   docker compose logs registry            # the first start prints an admin token
@@ -7,13 +7,13 @@ services:
     build:
       context: .
       dockerfile: apps/registry/Dockerfile
-    image: genui-registry
+    image: app-mcp-registry
     env_file: registry.env
     ports:
       - "4000:4000"
     volumes:
-      - genui-data:/data
+      - app-mcp-data:/data
     restart: unless-stopped
 
 volumes:
-  genui-data:
+  app-mcp-data:

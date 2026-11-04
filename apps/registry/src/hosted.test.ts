@@ -104,8 +104,8 @@ describe("hosted end-user MCP", () => {
     // Prod serves what was published to prod, with prod's theme and no preview flag.
     expect(await resourceText(client, "render_rating")).toBe(html("rating v1"));
     const rendered = await client.callTool({ name: "render_rating", arguments: { question: "How was it?" } });
-    expect(rendered._meta).toMatchObject({ "genui/theme": { light: { primary: "#16a34a" } } });
-    expect(rendered._meta).not.toHaveProperty("genui/preview");
+    expect(rendered._meta).toMatchObject({ "app-mcp/theme": { light: { primary: "#16a34a" } } });
+    expect(rendered._meta).not.toHaveProperty("app-mcp/preview");
   });
 
   it("serves another environment at its own address, with suffixed names and its own workflows", async () => {
@@ -119,7 +119,7 @@ describe("hosted end-user MCP", () => {
     expect(client.getServerCapabilities()?.prompts).toBeUndefined();
     expect(client.getInstructions()).toBeUndefined();
     const rendered = await client.callTool({ name: "render_rating_staging", arguments: { question: "How was it?" } });
-    expect(rendered._meta).not.toHaveProperty("genui/theme");
+    expect(rendered._meta).not.toHaveProperty("app-mcp/theme");
 
     await store.saveWorkflow(acme, "staging", addItem);
     const again = await mcpClient(`/w/${acme}/staging/mcp`);
@@ -219,9 +219,9 @@ describe("upstream for a company's own server (server token)", () => {
     expect(await resourceText(await mcpClient(`/w/${acme}/prod/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
     expect(await resourceText(await mcpClient(`/w/${acme}/staging/mcp`, bearer(token)), "render_rating_staging")).toBe(html("rating v1.1"));
     // The old channel header does nothing.
-    expect(await resourceText(await mcpClient(`/w/${acme}/mcp`, { ...bearer(token), "x-genui-channel": "staging" }), "render_rating")).toBe(
-      html("rating v1"),
-    );
+    expect(
+      await resourceText(await mcpClient(`/w/${acme}/mcp`, { ...bearer(token), "x-app-mcp-channel": "staging" }), "render_rating"),
+    ).toBe(html("rating v1"));
   });
 
   it("keeps every component version readable for old messages", async () => {
@@ -234,7 +234,7 @@ describe("upstream for a company's own server (server token)", () => {
     // Prod serves 1.0.0, yet still reads the 1.1.0 bundle by its hash.
     const prod = await mcpClient(`/w/${acme}/mcp`, bearer(token));
     expect(((await prod.readResource({ uri: stagingUri })).contents[0] as { text?: string }).text).toBe(html("rating v1.1"));
-    await expect(prod.readResource({ uri: "ui://genui/c/rating/0000000000000000" })).rejects.toThrow();
+    await expect(prod.readResource({ uri: "ui://app-mcp/c/rating/0000000000000000" })).rejects.toThrow();
   });
 
   it("rejects bad tokens, other workspaces' tokens and non-server scopes", async () => {

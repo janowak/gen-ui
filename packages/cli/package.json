@@ -1,19 +1,19 @@
 {
   "name": "@app-mcp/cli",
-  "version": "0.1.0",
-  "description": "genui CLI: start, develop, serve and publish MCP Apps components",
+  "version": "0.2.0",
+  "description": "app-mcp CLI: start, develop, serve and publish MCP Apps components",
   "type": "module",
   "license": "MIT",
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",
     "mcp-apps",
-    "genui",
+    "app-mcp",
     "claude",
     "chatgpt"
   ],
   "bin": {
-    "genui": "./dist/cli.js"
+    "app-mcp": "./dist/cli.js"
   },
   "files": [
     "dist"

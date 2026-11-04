@@ -4,7 +4,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { connectGenUI, mountGenUI, refreshHandler, type GenUIClient } from "./index.js";
+import { connectAppMcp, mountAppMcp, refreshHandler, type AppMcpClient } from "./index.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
 const rating = (version: string) => ({
@@ -27,7 +27,7 @@ const counted: typeof fetch = (input, init) => {
   return fetch(input, init);
 };
 const servers: ServerType[] = [];
-const clients: GenUIClient[] = [];
+const clients: AppMcpClient[] = [];
 
 function listen(fetchHandler: (request: Request) => Response | Promise<Response>): Promise<ServerType> {
   const server = serve({ fetch: fetchHandler, port: 0 });
@@ -36,16 +36,16 @@ function listen(fetchHandler: (request: Request) => Response | Promise<Response>
 }
 const port = (server: ServerType) => (server.address() as AddressInfo).port;
 
-function connect(refreshSeconds = 0): GenUIClient {
-  const genui = connectGenUI({ url, token, refreshSeconds, fetch: counted, logger: { warn: () => {} } });
-  clients.push(genui);
-  return genui;
+function connect(refreshSeconds = 0): AppMcpClient {
+  const appMcp = connectAppMcp({ url, token, refreshSeconds, fetch: counted, logger: { warn: () => {} } });
+  clients.push(appMcp);
+  return appMcp;
 }
 
-/** The company's own server with genui's tools, as a host sees it. */
-async function companyServer(genui: GenUIClient) {
+/** The company's own server with app-mcp's tools, as a host sees it. */
+async function companyServer(appMcp: AppMcpClient) {
   const server = new McpServer({ name: "acme", version: "1.0.0" });
-  await mountGenUI(server, { genui, watch: true });
+  await mountAppMcp(server, { appMcp, watch: true });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "host", version: "1.0.0" });
   await Promise.all([server.connect(b), client.connect(a)]);
@@ -77,25 +77,25 @@ afterAll(() => {
 });
 
 describe("refresh", () => {
-  it("re-lists genui's tools only when the environment's revision changed", async () => {
-    const genui = connect();
-    await genui.ready();
-    expect(genui.revision()).toBe((await store.environment(acme, "prod"))?.revision);
+  it("re-lists app-mcp's tools only when the environment's revision changed", async () => {
+    const appMcp = connect();
+    await appMcp.ready();
+    expect(appMcp.revision()).toBe((await store.environment(acme, "prod"))?.revision);
 
     const before = upstream;
-    await genui.refresh();
+    await appMcp.refresh();
     expect(upstream).toBe(before + 1); // the revision, nothing else
 
     await store.deployVersion(acme, "rating", "1.1.0", "prod");
-    await genui.refresh();
+    await appMcp.refresh();
     expect(upstream).toBeGreaterThan(before + 2);
-    expect(genui.revision()).toBe((await store.environment(acme, "prod"))?.revision);
+    expect(appMcp.revision()).toBe((await store.environment(acme, "prod"))?.revision);
     await store.deployVersion(acme, "rating", "1.0.0", "prod");
   });
 
-  it("checks an old copy in the background when genui's tools are used", async () => {
-    const genui = connect(0.05);
-    const { client, notified } = await companyServer(genui);
+  it("checks an old copy in the background when app-mcp's tools are used", async () => {
+    const appMcp = connect(0.05);
+    const { client, notified } = await companyServer(appMcp);
     const before = await ratingUri(client);
 
     await store.deployVersion(acme, "rating", "1.1.0", "prod");
@@ -107,12 +107,12 @@ describe("refresh", () => {
     await store.deployVersion(acme, "rating", "1.0.0", "prod");
   });
 
-  it("updates a watching server right away when genui calls its refresh endpoint", async () => {
-    const genui = connect();
-    const { client, notified } = await companyServer(genui);
+  it("updates a watching server right away when app-mcp calls its refresh endpoint", async () => {
+    const appMcp = connect();
+    const { client, notified } = await companyServer(appMcp);
     const before = await ratingUri(client);
-    const endpoint = await listen(refreshHandler(genui));
-    await store.setRefreshUrl(acme, "prod", `http://localhost:${port(endpoint)}/genui/refresh`);
+    const endpoint = await listen(refreshHandler(appMcp));
+    await store.setRefreshUrl(acme, "prod", `http://localhost:${port(endpoint)}/app-mcp/refresh`);
 
     await store.deployVersion(acme, "rating", "1.1.0", "prod");
     await refresher.idle();
@@ -125,19 +125,19 @@ describe("refresh", () => {
   });
 
   it("ignores refresh calls for a revision it already has, and anything but POST", async () => {
-    const genui = connect();
-    await genui.ready();
-    const handle = refreshHandler(genui);
-    const post = (body: unknown) => handle(new Request("http://acme.test/genui/refresh", { method: "POST", body: JSON.stringify(body) }));
+    const appMcp = connect();
+    await appMcp.ready();
+    const handle = refreshHandler(appMcp);
+    const post = (body: unknown) => handle(new Request("http://acme.test/app-mcp/refresh", { method: "POST", body: JSON.stringify(body) }));
 
     const before = upstream;
-    const res = await post({ type: "genui.refresh", environment: "prod", revision: genui.revision() });
+    const res = await post({ type: "app-mcp.refresh", environment: "prod", revision: appMcp.revision() });
     expect(res.status).toBe(202);
-    expect(await res.json()).toEqual({ revision: genui.revision() });
+    expect(await res.json()).toEqual({ revision: appMcp.revision() });
     expect(upstream).toBe(before);
-    expect((await handle(new Request("http://acme.test/genui/refresh"))).status).toBe(405);
+    expect((await handle(new Request("http://acme.test/app-mcp/refresh"))).status).toBe(405);
 
-    await post({ revision: genui.revision()! + 1 });
+    await post({ revision: appMcp.revision()! + 1 });
     await vi.waitFor(() => expect(upstream).toBe(before + 1));
   });
 });

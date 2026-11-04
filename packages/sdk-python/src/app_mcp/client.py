@@ -1,11 +1,11 @@
-"""genui client: lists genui's tools and prompts, and forwards calls to genui's end-user MCP.
+"""app-mcp client: lists app-mcp's tools and prompts, and forwards calls to app-mcp's end-user MCP.
 
 A port of `packages/sdk/src/client.ts`. Listing runs on a daemon thread with its own event loop,
 so the client works the same under `server.run()`, an ASGI server or an async main. Calls run on
 the caller's event loop.
 
 The copy is checked in the background when it's used and older than `refresh_seconds`, and right
-away when genui calls your refresh endpoint (`refresh_endpoint`).
+away when app-mcp calls your refresh endpoint (`refresh_endpoint`).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolResult, GetPromptResult, Prompt, ReadResourceResult, TextContent, Tool
 
-UNAVAILABLE_TEXT = "genui is unavailable right now, try again shortly."
+UNAVAILABLE_TEXT = "app-mcp is unavailable right now, try again shortly."
 
 Listener = Callable[[], None]
 ClientFactory = Callable[[], Client]
@@ -37,7 +37,7 @@ _MCP_PATH = re.compile(r"/mcp/?$")
 
 @dataclass(frozen=True)
 class Snapshot:
-    """What genui offers: the tools and prompts to mirror onto your server."""
+    """What app-mcp offers: the tools and prompts to mirror onto your server."""
 
     tools: list[Tool]
     prompts: list[Prompt]
@@ -53,8 +53,8 @@ def resource_uri(tool: Tool) -> str | None:
     return uri if isinstance(uri, str) else None
 
 
-class GenUIClient:
-    """Use `connect_genui`. Tools and prompts are kept in memory; `ui://` resources are fetched once."""
+class AppMcpClient:
+    """Use `connect_app_mcp`. Tools and prompts are kept in memory; `ui://` resources are fetched once."""
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class GenUIClient:
         self._fetch_revision = fetch_revision
         # The environment's revision sits next to its MCP: .../mcp -> .../revision.
         self._revision_url = _MCP_PATH.sub("/revision", url) if _MCP_PATH.search(url) else None
-        self._logger = logger or logging.getLogger("genui")
+        self._logger = logger or logging.getLogger("app-mcp")
         self._snapshot: Snapshot | None = None
         self._revision: int | None = None
         self._checked_at = 0.0
@@ -88,7 +88,7 @@ class GenUIClient:
         self._requested = 0
         self._completed = 0
         self._loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._run, name="genui", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="app-mcp", daemon=True)
         self._thread.start()
 
     def ready(self, timeout: float | None = None) -> bool:
@@ -96,7 +96,7 @@ class GenUIClient:
         return self._ready.wait(timeout)
 
     def snapshot(self) -> Snapshot | None:
-        """The current tools and prompts, or None if genui was never reached."""
+        """The current tools and prompts, or None if app-mcp was never reached."""
         return self._snapshot
 
     def resource(self, uri: str) -> ReadResourceResult | None:
@@ -108,7 +108,7 @@ class GenUIClient:
         return self._revision
 
     def refresh(self, at_least: int | None = None, *, wait: bool = True) -> None:
-        """Checks genui's revision and re-lists its tools and prompts if it changed. Listeners run on the client's thread.
+        """Checks app-mcp's revision and re-lists its tools and prompts if it changed. Listeners run on the client's thread.
 
         Args:
             at_least: Do nothing when this client already has this revision.
@@ -129,15 +129,15 @@ class GenUIClient:
             return await client.read_resource(uri)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
-        """Forwards a call to genui. When genui can't be reached, returns an error result the model can relay."""
+        """Forwards a call to app-mcp. When app-mcp can't be reached, returns an error result the model can relay."""
         self._used()
         try:
             async with self._session() as client:
                 return await client.call_tool(name, arguments)
         except MCPError:
-            raise  # genui answered with an error: let it surface as the tool's error
+            raise  # app-mcp answered with an error: let it surface as the tool's error
         except Exception as error:
-            self._logger.warning("[genui] %s failed, genui unreachable: %s", name, error)
+            self._logger.warning("[app-mcp] %s failed, app-mcp unreachable: %s", name, error)
             return CallToolResult(content=[TextContent(type="text", text=UNAVAILABLE_TEXT)], is_error=True)
 
     async def get_prompt(self, name: str, arguments: dict[str, str]) -> GetPromptResult:
@@ -148,11 +148,11 @@ class GenUIClient:
         except MCPError:
             raise
         except Exception as error:
-            self._logger.warning("[genui] prompt %s failed, genui unreachable: %s", name, error)
+            self._logger.warning("[app-mcp] prompt %s failed, app-mcp unreachable: %s", name, error)
             raise RuntimeError(UNAVAILABLE_TEXT) from error
 
     def on_change(self, listener: Listener) -> Callable[[], None]:
-        """Calls `listener()` when genui's tools or prompts change. Returns an unsubscribe function."""
+        """Calls `listener()` when app-mcp's tools or prompts change. Returns an unsubscribe function."""
         self._listeners.append(listener)
 
         def unsubscribe() -> None:
@@ -166,7 +166,7 @@ class GenUIClient:
         self._closed.set()
         self._listeners.clear()
 
-    def __enter__(self) -> GenUIClient:
+    def __enter__(self) -> AppMcpClient:
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -200,7 +200,7 @@ class GenUIClient:
             listener()
 
     async def _latest_revision(self) -> int | None:
-        """genui's current revision of this environment; None when it can't be asked (no `/revision` next to the URL)."""
+        """app-mcp's current revision of this environment; None when it can't be asked (no `/revision` next to the URL)."""
         if self._fetch_revision is not None:
             return await self._fetch_revision()
         if self._client_factory is not None or self._revision_url is None:
@@ -220,8 +220,8 @@ class GenUIClient:
             await self._load()
             self._revision = latest
         except Exception as error:  # keep serving the current tools
-            self._logger.warning("[genui] could not list genui's tools, keeping the current ones: %s", error)
-        # Keep only the resources current tools point at; old ones are read from genui when asked for.
+            self._logger.warning("[app-mcp] could not list app-mcp's tools, keeping the current ones: %s", error)
+        # Keep only the resources current tools point at; old ones are read from app_mcp when asked for.
         wanted = {resource_uri(t) for t in self._snapshot.tools} if self._snapshot else set()
         for uri in [u for u in self._resources if u not in wanted]:
             del self._resources[uri]
@@ -238,7 +238,7 @@ class GenUIClient:
             self._completed = started
 
     def _used(self) -> None:
-        """A host is using genui's tools: an old copy is checked in the background, never delaying the caller."""
+        """A host is using app-mcp's tools: an old copy is checked in the background, never delaying the caller."""
         if self._interval > 0 and not self._lock.locked() and time.monotonic() - self._checked_at > self._interval:
             asyncio.run_coroutine_threadsafe(self._refresh(), self._loop)
 
@@ -247,7 +247,7 @@ class GenUIClient:
             await self._refresh()
         finally:
             self._ready.set()
-        # Never loaded (genui down or a bad token at start): no genui tool is mounted to be used, so retry on a timer.
+        # Never loaded (app-mcp down or a bad token at start): no app-mcp tool is mounted to be used, so retry on a timer.
         while self._snapshot is None and self._interval > 0 and not self._closed.is_set():
             await asyncio.sleep(self._interval)
             if not self._closed.is_set():
@@ -259,7 +259,7 @@ class GenUIClient:
         self._loop.run_forever()
 
 
-def connect_genui(
+def connect_app_mcp(
     url: str,
     token: str,
     *,
@@ -268,23 +268,23 @@ def connect_genui(
     client_factory: ClientFactory | None = None,
     fetch_revision: RevisionSource | None = None,
     logger: logging.Logger | None = None,
-) -> GenUIClient:
-    """Connects to one environment of genui's end-user MCP, once per process.
+) -> AppMcpClient:
+    """Connects to one environment of app-mcp's end-user MCP, once per process.
 
     The URL picks the environment. A process that serves two environments connects twice.
 
     Args:
-        url: The workspace's end-user MCP, or your self-hosted genui: e.g. https://mcp.genui.example/w/<workspace>/mcp
-            for prod, https://mcp.genui.example/w/<workspace>/<environment>/mcp for another environment.
+        url: The workspace's end-user MCP, or your self-hosted app-mcp: e.g. https://mcp.app-mcp.example/w/<workspace>/mcp
+            for prod, https://mcp.app-mcp.example/w/<workspace>/<environment>/mcp for another environment.
         token: Workspace server token (scope: server).
-        refresh_seconds: When genui's tools are used and the copy is older than this, a check runs in the
-            background: one small request, and a re-list only if genui changed. 0 checks only on refresh().
+        refresh_seconds: When app-mcp's tools are used and the copy is older than this, a check runs in the
+            background: one small request, and a re-list only if app-mcp changed. 0 checks only on refresh().
         timeout: Per-request timeout in seconds.
         client_factory: Builds the MCP client, for tests (e.g. an in-process server).
-        fetch_revision: Reads genui's revision, for tests with client_factory. Without one, such clients
+        fetch_revision: Reads app-mcp's revision, for tests with client_factory. Without one, such clients
             re-list on every check.
     """
-    return GenUIClient(
+    return AppMcpClient(
         url,
         token,
         refresh_seconds=refresh_seconds,

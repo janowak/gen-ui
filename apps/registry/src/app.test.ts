@@ -87,7 +87,7 @@ describe("publishing to environments", () => {
   it("fails for an environment that doesn't exist, saying how to create it", async () => {
     const typo = await publish(publisher, "1.1.0", "v1.1", "stagng");
     expect(typo.status).toBe(404);
-    expect(typo.body.error).toContain("genui env add stagng");
+    expect(typo.body.error).toContain("app-mcp env add stagng");
   });
 
   it("treats re-publishing the same version and content as a no-op", async () => {
@@ -97,7 +97,7 @@ describe("publishing to environments", () => {
     });
     const changed = await publish(publisher, "1.1.0", "v1.1 rebuilt", "prod");
     expect(changed.status).toBe(409);
-    expect(changed.body.error).toContain("genui publish rating@1.1.0 --env prod");
+    expect(changed.body.error).toContain("app-mcp publish rating@1.1.0 --env prod");
     expect(
       (await call("POST", "/v1/components", publisher, { manifest: { ...manifest("1.1.0"), description: "Changed." }, html: HTML("v1.1") }))
         .status,

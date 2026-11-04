@@ -1,3 +1,3 @@
-export { connectGenUI, type GenUIClient, type GenUIClientOptions, type Snapshot } from "./client.js";
-export { mountGenUI, type GenUIOptions, type GenUIHandle } from "./mount.js";
+export { connectAppMcp, type AppMcpClient, type AppMcpClientOptions, type Snapshot } from "./client.js";
+export { mountAppMcp, type AppMcpOptions, type AppMcpHandle } from "./mount.js";
 export { refreshHandler } from "./refresh.js";

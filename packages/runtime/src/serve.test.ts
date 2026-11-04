@@ -18,7 +18,7 @@ describe("startServe", () => {
   const logs: string[] = [];
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "genui-serve-"));
+    dir = await mkdtemp(join(tmpdir(), "app-mcp-serve-"));
     logs.length = 0;
   });
   afterEach(async () => {
@@ -33,7 +33,7 @@ describe("startServe", () => {
     await writeFile(join(dir, path), typeof content === "string" ? content : JSON.stringify(content));
   };
   const component = async (version: string) => {
-    await write("rating/dist/genui.component.json", { ...manifest, version, bundle: "index.html" });
+    await write("rating/dist/app-mcp.component.json", { ...manifest, version, bundle: "index.html" });
     await write("rating/dist/index.html", `<p>rating ${version}</p>`);
   };
   const start = async (options: Partial<Parameters<typeof startServe>[0]> = {}) => {
@@ -108,7 +108,7 @@ describe("startServe", () => {
   it("keeps serving when a component doesn't load, and picks it up once built", async () => {
     await mkdir(join(dir, "rating"));
     const { url } = await start();
-    expect(logs).toEqual([expect.stringContaining("no genui.component.json")]);
+    expect(logs).toEqual([expect.stringContaining("no app-mcp.component.json")]);
     const client = await connect(url!);
     expect((await client.listTools()).tools.map((t) => t.name)).not.toContain("render_rating");
 

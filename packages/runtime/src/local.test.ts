@@ -12,7 +12,7 @@ const html = "<!doctype html><p>rating</p>";
 describe("readComponentDir", () => {
   let dir: string;
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "genui-component-"));
+    dir = await mkdtemp(join(tmpdir(), "app-mcp-component-"));
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
@@ -22,7 +22,7 @@ describe("readComponentDir", () => {
   };
 
   it("reads the manifest @app-mcp/kit/vite generates into dist/, with its bundle next to it", async () => {
-    await write("dist/genui.component.json", JSON.stringify({ ...manifest, bundle: "index.html" }));
+    await write("dist/app-mcp.component.json", JSON.stringify({ ...manifest, bundle: "index.html" }));
     await write("dist/index.html", html);
     const component = await readComponentDir(dir);
     expect(component.manifest).toMatchObject({ name: "rating", version: "1.2.0", tools: [] });
@@ -32,21 +32,21 @@ describe("readComponentDir", () => {
   });
 
   it("prefers a hand-written manifest next to the sources, with the bundle in dist/index.html by default", async () => {
-    await write("genui.component.json", JSON.stringify({ ...manifest, version: "2.0.0" }));
-    await write("dist/genui.component.json", JSON.stringify(manifest));
+    await write("app-mcp.component.json", JSON.stringify({ ...manifest, version: "2.0.0" }));
+    await write("dist/app-mcp.component.json", JSON.stringify(manifest));
     await write("dist/index.html", html);
     const component = await readComponentDir(dir);
     expect(component.manifest.version).toBe("2.0.0");
-    expect(component.manifestPath).toBe(join(dir, "genui.component.json"));
+    expect(component.manifestPath).toBe(join(dir, "app-mcp.component.json"));
   });
 
   it("says what is missing or wrong", async () => {
-    await expect(readComponentDir(dir)).rejects.toThrow("no genui.component.json");
-    await write("genui.component.json", "{ nope");
+    await expect(readComponentDir(dir)).rejects.toThrow("no app-mcp.component.json");
+    await write("app-mcp.component.json", "{ nope");
     await expect(readComponentDir(dir)).rejects.toThrow("invalid JSON");
-    await write("genui.component.json", JSON.stringify({ ...manifest, name: "form" }));
+    await write("app-mcp.component.json", JSON.stringify({ ...manifest, name: "form" }));
     await expect(readComponentDir(dir)).rejects.toThrow(/invalid manifest[\s\S]*name: reserved/);
-    await write("genui.component.json", JSON.stringify(manifest));
+    await write("app-mcp.component.json", JSON.stringify(manifest));
     await expect(readComponentDir(dir)).rejects.toThrow("bundle not found");
     await write("dist/index.html", "x".repeat(MAX_BUNDLE_BYTES + 1));
     await expect(readComponentDir(dir)).rejects.toThrow("the registry accepts up to");
@@ -56,7 +56,7 @@ describe("readComponentDir", () => {
 describe("localCatalog", () => {
   let dir: string;
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "genui-local-"));
+    dir = await mkdtemp(join(tmpdir(), "app-mcp-local-"));
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
@@ -65,7 +65,7 @@ describe("localCatalog", () => {
     await writeFile(join(dir, path), typeof content === "string" ? content : JSON.stringify(content));
   };
   const component = async (path: string, name: string, version: string, body = `<p>${name} ${version}</p>`) => {
-    await write(`${path}/dist/genui.component.json`, { ...manifest, name, version, bundle: "index.html" });
+    await write(`${path}/dist/app-mcp.component.json`, { ...manifest, name, version, bundle: "index.html" });
     await write(`${path}/dist/index.html`, body);
   };
   const workflow = (description: string, params = "") => `---\ndescription: ${description}\n${params}---\nSteps for ${description}\n`;
@@ -103,7 +103,7 @@ describe("localCatalog", () => {
     const catalog = await localCatalog({ dirs: [join(dir, "rating"), join(dir, "poll")], theme: join(dir, "theme.json") });
     expect(catalog.components().map((c) => c.manifest.name)).toEqual(["rating"]);
     expect(catalog.problems().map((p) => p.message)).toEqual([
-      expect.stringContaining("no genui.component.json"),
+      expect.stringContaining("no app-mcp.component.json"),
       expect.stringContaining("invalid JSON"),
     ]);
 
@@ -174,7 +174,7 @@ describe("workflow files", () => {
   });
 
   it("finds workflows next to a component and in its workflows/, and rejects duplicate names", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "genui-workflows-"));
+    const dir = await mkdtemp(join(tmpdir(), "app-mcp-workflows-"));
     await mkdir(join(dir, "workflows"));
     await writeFile(join(dir, "feedback.workflow.md"), file("description: After an order.", "Ask for a rating."));
     await writeFile(join(dir, "workflows", "create_order.workflow.md"), file("description: Create an order.", "Show the form."));

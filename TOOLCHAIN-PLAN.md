@@ -48,7 +48,7 @@ Vite+ itself was tried on gen-ui and dropped (see "Why not Vite+"). All work hap
 
 **Principle: use each upstream tool directly.** Nothing that is published or deployed changes:
 - `@app-mcp/kit` and `@app-mcp/cli` keep `vite` as a peer.
-- `genui init` still scaffolds plain Vite projects.
+- `app-mcp init` still scaffolds plain Vite projects.
 - Docker, Workers, Pages and the VPS run the same outputs as before.
 
 ## Why not Vite+
@@ -372,4 +372,4 @@ Run Step g0 again and record the times here.
 - replacing `tsx` (gen-ui) or `node --experimental-strip-types` and Bun scripts (geogeo)
 - commit hooks
 - CI (neither repo has any)
-- `genui init` scaffolding TypeScript 7 (it still writes `typescript: ^5.9.3`)
+- `app-mcp init` scaffolding TypeScript 7 (it still writes `typescript: ^5.9.3`)

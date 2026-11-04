@@ -79,7 +79,7 @@ export function enableManagement(
       const member = claims.sub ? await store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
       if (!member)
         return Response.json(
-          { error: "You are not a member of any genui workspace. Ask a workspace admin to invite your email." },
+          { error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." },
           { status: 403 },
         );
       return mcp.fetch(request, {

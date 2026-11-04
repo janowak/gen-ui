@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "genui dev .",
+    "dev": "app-mcp dev .",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "genui:publish": "genui publish ."
+    "app-mcp:publish": "app-mcp publish ."
   },
   "dependencies": {
     "@app-mcp/kit": "workspace:*"

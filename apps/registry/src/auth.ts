@@ -7,7 +7,7 @@ import type { Database } from "./db.js";
 import type { Store } from "./store.js";
 
 /** Claims the access token carries; the role is re-read from the database on every MCP request. */
-export const WORKSPACE_CLAIM = "genui/workspace";
+export const WORKSPACE_CLAIM = "app-mcp/workspace";
 
 export interface AuthConfig {
   /** Public URL of the registry, e.g. https://registry.example.com. The MCP resource is `${baseURL}/mcp`. */
@@ -51,27 +51,27 @@ export function authConfigFromEnv(env: Record<string, string | undefined>): Auth
       .split(",")
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
-  const secret = env.GENUI_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
-  if (!secret) console.warn("[genui] GENUI_AUTH_SECRET is not set; using a random secret (sessions reset on restart).");
+  const secret = env.APP_MCP_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
+  if (!secret) console.warn("[app-mcp] APP_MCP_AUTH_SECRET is not set; using a random secret (sessions reset on restart).");
   return {
-    baseURL: (env.GENUI_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`).replace(/\/$/, ""),
+    baseURL: (env.APP_MCP_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`).replace(/\/$/, ""),
     secret: secret ?? randomBytes(32).toString("hex"),
-    mode: env.GENUI_MODE === "hosted" ? "hosted" : "self-hosted",
-    adminEmails: emails(env.GENUI_ADMIN_EMAILS),
-    allowedEmails: emails(env.GENUI_ALLOWED_EMAILS),
+    mode: env.APP_MCP_MODE === "hosted" ? "hosted" : "self-hosted",
+    adminEmails: emails(env.APP_MCP_ADMIN_EMAILS),
+    allowedEmails: emails(env.APP_MCP_ALLOWED_EMAILS),
     github: pair(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
     google: pair(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
     oidc:
-      env.GENUI_OIDC_ISSUER && env.GENUI_OIDC_CLIENT_ID && env.GENUI_OIDC_CLIENT_SECRET
+      env.APP_MCP_OIDC_ISSUER && env.APP_MCP_OIDC_CLIENT_ID && env.APP_MCP_OIDC_CLIENT_SECRET
         ? {
-            name: env.GENUI_OIDC_NAME ?? "SSO",
-            issuer: env.GENUI_OIDC_ISSUER.replace(/\/$/, ""),
-            clientId: env.GENUI_OIDC_CLIENT_ID,
-            clientSecret: env.GENUI_OIDC_CLIENT_SECRET,
+            name: env.APP_MCP_OIDC_NAME ?? "SSO",
+            issuer: env.APP_MCP_OIDC_ISSUER.replace(/\/$/, ""),
+            clientId: env.APP_MCP_OIDC_CLIENT_ID,
+            clientSecret: env.APP_MCP_OIDC_CLIENT_SECRET,
           }
         : undefined,
-    password: env.GENUI_PASSWORD_LOGIN === "true",
-    dynamicRegistration: env.GENUI_ALLOW_DCR === "true",
+    password: env.APP_MCP_PASSWORD_LOGIN === "true",
+    dynamicRegistration: env.APP_MCP_ALLOW_DCR === "true",
   };
 }
 

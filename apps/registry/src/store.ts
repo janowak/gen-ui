@@ -109,7 +109,7 @@ export interface PublishResult {
   warnings: string[];
 }
 
-/** What genui last got back from an environment's refresh URL. */
+/** What app-mcp last got back from an environment's refresh URL. */
 export interface LastRefresh {
   at: string;
   ok: boolean;
@@ -121,7 +121,7 @@ export interface EnvironmentInfo {
   name: string;
   /** Bumped by every change to what the environment serves. */
   revision: number;
-  /** The company's server endpoint genui calls on each change (@app-mcp/sdk's refresh handler). */
+  /** The company's server endpoint app-mcp calls on each change (@app-mcp/sdk's refresh handler). */
   refreshUrl: string | null;
   lastRefresh: LastRefresh | null;
   /** Whether the end-user MCP offers the built-in render_form and render_chart. */
@@ -371,7 +371,7 @@ export class Store {
   /** Environments are created explicitly, so a typo fails instead of creating one. */
   async requireEnvironment(workspaceId: string, name: string): Promise<void> {
     if (!(await this.hasEnvironment(workspaceId, name)))
-      throw new RegistryError(404, `Environment "${name}" doesn't exist. Create it with: genui env add ${name}`);
+      throw new RegistryError(404, `Environment "${name}" doesn't exist. Create it with: app-mcp env add ${name}`);
   }
 
   async createEnvironment(workspaceId: string, name: string): Promise<void> {
@@ -403,7 +403,7 @@ export class Store {
     return rows.map(environmentInfo);
   }
 
-  /** Sets or clears (null) the URL genui calls when what the environment serves changes. */
+  /** Sets or clears (null) the URL app-mcp calls when what the environment serves changes. */
   async setRefreshUrl(workspaceId: string, name: string, url: string | null): Promise<void> {
     await this.requireEnvironment(workspaceId, name);
     await this.db.run(
@@ -753,7 +753,7 @@ export class Store {
       if (same.hash !== hash || same.manifest !== json) {
         throw new RegistryError(
           409,
-          `${manifest.name}@${manifest.version} already exists with different content; versions are immutable. To serve it here without rebuilding: genui publish ${manifest.name}@${manifest.version} --env ${environment}`,
+          `${manifest.name}@${manifest.version} already exists with different content; versions are immutable. To serve it here without rebuilding: app-mcp publish ${manifest.name}@${manifest.version} --env ${environment}`,
         );
       }
       return this.deploy(

@@ -3,7 +3,7 @@
 Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a laptop with one command, `pnpm deploy:site`. CI deploys can come later. The domain is registered through Cloudflare, so the zone already exists.
 
 **Status (2026-10-26)**
-- Live since 2026-10-25: `pnpm deploy:site` deployed the `genui-site` Worker and created the `app-mcp.com` custom domain. §4 is done.
+- Live since 2026-10-25: `pnpm deploy:site` deployed the `app-mcp-site` Worker and created the `app-mcp.com` custom domain. §4 is done.
 - Next, in the dashboard (§5): Always Use HTTPS (plain http still answers 200), the www record and redirect, and Email Routing (mail to `hello@` bounces until then).
 - Changes V1-PLAN §9: the landing page and playground run on Workers static assets, not Pages (§2).
 
@@ -42,7 +42,7 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
 1. **`apps/site/wrangler.jsonc`**, plus `wrangler` as a dev dependency of the site so local and CI deploys use the same version:
    ```jsonc
    {
-     "name": "genui-site",
+     "name": "app-mcp-site",
      "account_id": "9341ca52ab56b808dfd9a4a673fce52c",
      "compatibility_date": "2026-10-01",
      "assets": { "directory": "./dist", "not_found_handling": "404-page" },
@@ -68,7 +68,7 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
    HTML keeps the default (revalidate by ETag), so a deploy shows on the next load. No script CSP: the page takes no input and loads no third-party script besides analytics, and the inline theme script would need a hash kept in sync by hand.
 5. **`index.html` head:** canonical `https://app-mcp.com/`, Open Graph and Twitter card tags, and `public/og.png` (1200×630). Without them a link shared in Slack, X or LinkedIn previews as a bare URL.
 6. **`public/robots.txt`** (allow all, link the sitemap) and **`public/sitemap.xml`** (one URL).
-7. **Early access:** replace the empty `mailto:` (the TODO in `index.html`) with `mailto:hello@app-mcp.com?subject=genui%20early%20access`, and print the address next to the button for visitors without a mail client.
+7. **Early access:** replace the empty `mailto:` (the TODO in `index.html`) with `mailto:hello@app-mcp.com?subject=app-mcp%20early%20access`, and print the address next to the button for visitors without a mail client.
 8. **Web Analytics:** Cloudflare's beacon snippet in `index.html`, with the site's token (§5.6). No cookies, so no consent banner.
 9. **Deploy script:** `pnpm deploy:site` at the repo root runs the site's `deploy` script: build, then `wrangler deploy --tag <commit>`, so the Worker's Deployments tab shows which commit is live. `wrangler.jsonc` names the account (`9341ca52…`), which must be the one holding `app-mcp.com`. Inside `apps/site`, use `pnpm run deploy`: plain `pnpm deploy` is a pnpm command.
 
@@ -87,7 +87,7 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
 
 ## 6. First deploy and checks
 
-1. From a clean checkout of the branch to ship, run `pnpm deploy:site`. The first run creates the `genui-site` Worker and the `app-mcp.com` custom domain.
+1. From a clean checkout of the branch to ship, run `pnpm deploy:site`. The first run creates the `app-mcp-site` Worker and the `app-mcp.com` custom domain.
 2. If it fails on the custom domain, the zone is in another account: fix `account_id` in `wrangler.jsonc`, or `wrangler login` to that account.
 3. Check:
    - `curl -sI https://app-mcp.com/`: 200, with the `_headers` headers.
@@ -95,7 +95,7 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
    - `curl -sI 'https://www.app-mcp.com/x?y=1'`: 301 to `https://app-mcp.com/x?y=1`.
    - `curl -sI http://app-mcp.com/`: 301 to HTTPS.
    - `curl -sI https://app-mcp.com/nope`: 404, and the browser shows the 404 page.
-   - `genui-site.<account>.workers.dev` doesn't answer.
+   - `app-mcp-site.<account>.workers.dev` doesn't answer.
    - Mail to `hello@app-mcp.com` arrives.
    - Pasting the URL in Slack shows the title, description and image.
    - Lighthouse on mobile is clean; Web Analytics records the visit.
@@ -109,4 +109,4 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
 
 ## 8. Open question
 
-- **Name.** The page says genui; the domain says app-mcp. The title, Open Graph tags, email subject and footer follow whichever name wins. The deploy doesn't depend on it.
+- **Name.** The page says app-mcp; the domain says app-mcp. The title, Open Graph tags, email subject and footer follow whichever name wins. The deploy doesn't depend on it.

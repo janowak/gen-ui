@@ -1,8 +1,8 @@
-// genui cloud: the registry as a Worker (src/worker.ts) on D1. One deployment, production (README "Deploy").
+// app-mcp cloud: the registry as a Worker (src/worker.ts) on D1. One deployment, production (README "Deploy").
 // Self-hosting runs the same registry from the Docker image, on SQLite.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "genui-registry",
+  "name": "app-mcp-registry",
   // The Cloudflare account that holds the app-mcp.com zone
   "account_id": "9341ca52ab56b808dfd9a4a673fce52c",
   "main": "src/worker.ts",
@@ -18,14 +18,14 @@
   "dev": { "port": 8788, "host": "localhost:8788", "upstream_protocol": "http" },
   "workers_dev": false,
   "routes": [{ "pattern": "api.app-mcp.com", "custom_domain": true }],
-  // Created with: wrangler d1 create genui --jurisdiction eu (data stays in the EU)
+  // Created with: wrangler d1 create app-mcp --jurisdiction eu (data stays in the EU)
   "d1_databases": [
-    { "binding": "DB", "database_name": "genui", "database_id": "06af2a5c-2d2d-48e1-9393-37b3854eb81d", "migrations_dir": "migrations" },
+    { "binding": "DB", "database_name": "app-mcp", "database_id": "48612e6f-7b92-40e1-9727-09952a776da3", "migrations_dir": "migrations" },
   ],
-  // Secrets (wrangler secret put): GENUI_AUTH_SECRET, GOOGLE_CLIENT_ID and _SECRET, GITHUB_CLIENT_ID and _SECRET.
+  // Secrets (wrangler secret put): APP_MCP_AUTH_SECRET, GOOGLE_CLIENT_ID and _SECRET, GITHUB_CLIENT_ID and _SECRET.
   // Local development reads .dev.vars instead (see .dev.vars.example).
   "vars": {
-    "GENUI_MODE": "hosted",
-    "GENUI_PUBLIC_URL": "https://api.app-mcp.com",
+    "APP_MCP_MODE": "hosted",
+    "APP_MCP_PUBLIC_URL": "https://api.app-mcp.com",
   },
 }

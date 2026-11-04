@@ -8,14 +8,14 @@ import { THEME_VARIABLES, themeVariables } from "./theme.js";
  * Connects a component to its MCP Apps host and calls `render` with the same live context
  * whenever it changes: props stream in or complete, the render result and workspace theme
  * arrive, the host theme changes, or state is set. Host styles (`--color-*`, fonts, dark mode)
- * and the workspace theme (`--genui-*`) are applied to the document before each render.
+ * and the workspace theme (`--app-mcp-*`) are applied to the document before each render.
  */
 export function mount<P extends z.ZodObject, T extends string>(
   component: ComponentDefinition<P, T>,
   render: (ctx: ComponentContext<z.output<P>, T>) => void,
   options: RuntimeOptions = {},
 ): ComponentContext<z.output<P>, T> {
-  const app = new App({ name: `genui-${component.name}`, version: component.version });
+  const app = new App({ name: `app-mcp-${component.name}`, version: component.version });
   const root = document.documentElement;
   let host: McpUiHostContext | undefined;
   let themed: string | undefined;

@@ -245,7 +245,7 @@ export function WorkflowsView() {
         {state.workflows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No workflows yet. Ask to draft one, e.g. "make a workflow for returning an order", or keep them in your repo and publish with
-            genui publish.
+            app-mcp publish.
           </p>
         ) : (
           <Table>

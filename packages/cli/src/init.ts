@@ -22,10 +22,10 @@ const files = (name: string): Record<string, string> => ({
       private: true,
       type: "module",
       scripts: {
-        dev: "genui dev .",
+        dev: "app-mcp dev .",
         build: "tsc --noEmit && vite build",
-        serve: "genui serve .",
-        "genui:publish": "npm run build && genui publish .",
+        serve: "app-mcp serve .",
+        "app-mcp:publish": "npm run build && app-mcp publish .",
       },
       dependencies: { "@app-mcp/kit": `^${version}` },
       devDependencies: { "@app-mcp/cli": `^${version}`, typescript: "^5.9.3", vite: "^8.3.5" },
@@ -33,11 +33,11 @@ const files = (name: string): Record<string, string> => ({
     null,
     2,
   )}\n`,
-  "vite.config.ts": `import { genui } from "@app-mcp/kit/vite";
+  "vite.config.ts": `import { appMcp } from "@app-mcp/kit/vite";
 import { defineConfig } from "vite";
 
-// Builds a single-file dist/index.html plus dist/genui.component.json from src/component.ts.
-export default defineConfig({ plugins: [genui()] });
+// Builds a single-file dist/index.html plus dist/app-mcp.component.json from src/component.ts.
+export default defineConfig({ plugins: [appMcp()] });
 `,
   "tsconfig.json": `${JSON.stringify(
     {
@@ -65,14 +65,14 @@ export default defineConfig({ plugins: [genui()] });
     <meta charset="UTF-8" />
     <title>${name}</title>
     <style>
-      /* Host colors and fonts arrive as CSS variables; --genui-* come from your workspace theme. */
+      /* Host colors and fonts arrive as CSS variables; --app-mcp-* come from your workspace theme. */
       :root { color-scheme: light dark; }
       html, body { margin: 0; background: transparent; font-family: var(--font-sans, system-ui, sans-serif); color: var(--color-text-primary, #141413); }
       .card { margin: 1px; padding: 16px; border-radius: 12px; border: 1px solid var(--color-border-primary, #e5e5e5); background: var(--color-background-primary, #fff); }
       h1 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
       .options { display: flex; flex-wrap: wrap; gap: 8px; }
       button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--color-border-primary, #d4d4d4); background: transparent; color: inherit; }
-      button[aria-pressed="true"] { background: var(--genui-primary, #2563eb); border-color: transparent; color: #fff; }
+      button[aria-pressed="true"] { background: var(--app-mcp-primary, #2563eb); border-color: transparent; color: #fff; }
       button:disabled { cursor: default; }
     </style>
   </head>
@@ -135,7 +135,7 @@ mount(component, render);
 `,
   "README.md": `# ${name}
 
-A genui component, built with [@app-mcp/kit](https://www.npmjs.com/package/@app-mcp/kit).
+A app-mcp component, built with [@app-mcp/kit](https://www.npmjs.com/package/@app-mcp/kit).
 
 \`\`\`bash
 npm install
@@ -143,10 +143,10 @@ npm run dev        # props form, theme and mock tools in a local host
 npm run serve      # a local MCP with this component: http://localhost:4100/mcp
 \`\`\`
 
-Publish it to your workspace with a publish token (Workspace → Tokens in the genui connector):
+Publish it to your workspace with a publish token (Workspace → Tokens in the app-mcp connector):
 
 \`\`\`bash
-GENUI_TOKEN=<publish token> npm run genui:publish
+APP_MCP_TOKEN=<publish token> npm run app-mcp:publish
 \`\`\`
 
 Your workspace's MCP then offers \`render_${name}\`. Bump \`version\` in \`src/component.ts\` for every publish.

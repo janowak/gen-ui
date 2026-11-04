@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { build } from "vite";
 import { afterAll, describe, expect, it } from "vitest";
 import { defineComponent, toManifest, z } from "./index.js";
-import { genui } from "./vite.js";
+import { appMcp } from "./vite.js";
 
 describe("toManifest", () => {
   it("publishes props as JSON Schema with the contract version", () => {
@@ -31,21 +31,21 @@ describe("toManifest", () => {
   });
 });
 
-describe("genui() Vite plugin", () => {
+describe("appMcp() Vite plugin", () => {
   const root = resolve(import.meta.dirname, "../test/fixture");
   let outDir: string;
   afterAll(() => rm(outDir, { recursive: true, force: true }));
 
   it("builds one self-contained HTML file plus the generated manifest", async () => {
-    outDir = await mkdtemp(join(tmpdir(), "genui-kit-"));
-    await build({ root, configFile: false, logLevel: "silent", plugins: [genui()], build: { outDir, emptyOutDir: true } });
+    outDir = await mkdtemp(join(tmpdir(), "app-mcp-kit-"));
+    await build({ root, configFile: false, logLevel: "silent", plugins: [appMcp()], build: { outDir, emptyOutDir: true } });
 
-    expect((await readdir(outDir)).sort()).toEqual(["genui.component.json", "index.html"]);
+    expect((await readdir(outDir)).sort()).toEqual(["app-mcp.component.json", "index.html"]);
     const html = await readFile(join(outDir, "index.html"), "utf8");
     expect(html).not.toMatch(/<script[^>]+src=/);
     expect(html).toContain("fixture_badge");
 
-    const manifest = JSON.parse(await readFile(join(outDir, "genui.component.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(join(outDir, "app-mcp.component.json"), "utf8"));
     expect(manifest).toMatchObject({
       name: "fixture_badge",
       version: "2.1.0",

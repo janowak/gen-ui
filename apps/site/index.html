@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>genui: your flows, in the chat</title>
+    <title>app-mcp: your flows, in the chat</title>
     <meta
       name="description"
-      content="Build the components your customers' flows need and publish them to genui. They show up in Claude, ChatGPT and other MCP Apps hosts, where your customers use them."
+      content="Build the components your customers' flows need and publish them to app-mcp. They show up in Claude, ChatGPT and other MCP Apps hosts, where your customers use them."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://app-mcp.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="genui" />
+    <meta property="og:site_name" content="app-mcp" />
     <meta property="og:url" content="https://app-mcp.com/" />
-    <meta property="og:title" content="genui: your flows, in the chat" />
+    <meta property="og:title" content="app-mcp: your flows, in the chat" />
     <meta
       property="og:description"
       content="Your own components, shaped around your customers' flows, inside Claude, ChatGPT and other MCP Apps hosts."
@@ -21,7 +21,7 @@
     <meta property="og:image" content="https://app-mcp.com/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="genui: UI for MCP Apps, released like code. A New order form rendered in a chat." />
+    <meta property="og:image:alt" content="app-mcp: UI for MCP Apps, released like code. A New order form rendered in a chat." />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Before first paint: apply the saved theme or the system's (shadcn's .dark class), and animate the
@@ -50,13 +50,13 @@
 
     <header class="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
-        <a class="flex items-center gap-2 font-semibold tracking-tight" href="/" aria-label="genui home">
+        <a class="flex items-center gap-2 font-semibold tracking-tight" href="/" aria-label="app-mcp home">
           <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true">
             <rect class="fill-foreground" x="2" y="3" width="20" height="18" rx="5" />
             <rect class="fill-background" x="6" y="8" width="12" height="3" rx="1.5" />
             <rect class="fill-background" x="6" y="13.5" width="7" height="3" rx="1.5" />
           </svg>
-          genui
+          app-mcp
         </a>
         <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
           <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
@@ -114,8 +114,8 @@
             Your flows, in the chat.
           </h1>
           <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-            Build the components your customers' flows need, write the flows down in your own words, and publish them to genui. They show up
-            in Claude, ChatGPT and other MCP Apps hosts: UX that fits the job, not a generic chat reply. No MCP server needed to start.
+            Build the components your customers' flows need, write the flows down in your own words, and publish them to app-mcp. They show
+            up in Claude, ChatGPT and other MCP Apps hosts: UX that fits the job, not a generic chat reply. No MCP server needed to start.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a class="btn btn-lg" href="#start">Get started</a>
@@ -311,7 +311,7 @@
                 Publish, add your address as a connector in Claude or ChatGPT, and try the flow as your customers will. Change it and
                 publish again.
               </p>
-              <pre class="code"><code>$ <span class="k">genui publish</span>
+              <pre class="code"><code>$ <span class="k">app-mcp publish</span>
 # serves rating 1.3.0</code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
@@ -340,11 +340,11 @@
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Everything runs through two connectors: genui's, where you manage your workspace, and your workspace's own, the one your
+            Everything runs through two connectors: app-mcp's, where you manage your workspace, and your workspace's own, the one your
             customers add. Custom connectors need a paid Claude plan or ChatGPT's developer mode.
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 p-4 ring-1 ring-foreground/10">
-            <span class="text-sm text-muted-foreground">genui's connector</span>
+            <span class="text-sm text-muted-foreground">app-mcp's connector</span>
             <code class="font-mono text-sm text-foreground">https://api.app-mcp.com/mcp</code>
             <button class="btn btn-outline ml-auto" type="button" data-copy="https://api.app-mcp.com/mcp">Copy</button>
           </div>
@@ -356,7 +356,7 @@
                   aria-hidden="true"
                   >1</span
                 >
-                Add genui and sign in
+                Add app-mcp and sign in
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
                 In Claude: Settings → Connectors → Add custom connector, with the address above. Connect, then sign in with Google or
@@ -375,10 +375,10 @@
                 Try the built-ins
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Ask Claude to open your genui workspace. It shows your workspace's MCP address: add it as a second connector, then ask for a
-                form or a chart.
+                Ask Claude to open your app-mcp workspace. It shows your workspace's MCP address: add it as a second connector, then ask for
+                a form or a chart.
               </p>
-              <pre class="code"><code><span class="k">"Open my genui workspace"</span>
+              <pre class="code"><code><span class="k">"Open my app-mcp workspace"</span>
 → <span class="s">https://api.app-mcp.com/w/&lt;workspace&gt;/mcp</span></code></pre>
             </li>
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
@@ -391,8 +391,8 @@
                 Build your component
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Start one with <code class="font-mono text-[0.9em] text-foreground">genui init</code>, then try it in a local host with live
-                props and theme. It's TypeScript with <code class="font-mono text-[0.9em] text-foreground">@app-mcp/kit</code>; use any
+                Start one with <code class="font-mono text-[0.9em] text-foreground">app-mcp init</code>, then try it in a local host with
+                live props and theme. It's TypeScript with <code class="font-mono text-[0.9em] text-foreground">@app-mcp/kit</code>; use any
                 framework you like.
               </p>
               <pre class="code"><code>$ <span class="k">npx @app-mcp/cli init</span> my_poll
@@ -413,7 +413,7 @@ $ <span class="k">npm run dev</span></code></pre>
                 <code class="font-mono text-[0.9em] text-foreground">render_my_poll</code>. Remove components or turn off the built-in forms
                 and charts under Manage components.
               </p>
-              <pre class="code"><code>$ GENUI_TOKEN=gnu_publish_… <span class="k">npm run genui:publish</span>
+              <pre class="code"><code>$ APP_MCP_TOKEN=gnu_publish_… <span class="k">npm run app-mcp:publish</span>
 # Published my_poll@0.1.0 to prod</code></pre>
             </li>
           </ol>
@@ -424,7 +424,7 @@ $ <span class="k">npm run dev</span></code></pre>
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">What you can build</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Whatever your customers' flows need. genui handles the plumbing around it, so your team writes the component.
+            Whatever your customers' flows need. app-mcp handles the plumbing around it, so your team writes the component.
           </p>
           <dl class="mt-12 divide-y border-y">
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
@@ -456,7 +456,7 @@ $ <span class="k">npm run dev</span></code></pre>
                 Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and chart colors for each
                 environment, with a live preview in the chat.
               </dd>
-              <dd><code class="badge badge-outline font-mono">--genui-primary</code></dd>
+              <dd><code class="badge badge-outline font-mono">--app-mcp-primary</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Environments</dt>
@@ -464,7 +464,7 @@ $ <span class="k">npm run dev</span></code></pre>
                 Add staging or any other environment when you want one. Each has its own address, versions, theme and workflows, so testers
                 can keep it next to prod in the same chat. Publish a tested version to prod without rebuilding it.
               </dd>
-              <dd><code class="badge badge-outline font-mono">genui publish --env staging</code></dd>
+              <dd><code class="badge badge-outline font-mono">app-mcp publish --env staging</code></dd>
             </div>
             <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
               <dt class="font-medium">Loading states</dt>
@@ -481,7 +481,7 @@ $ <span class="k">npm run dev</span></code></pre>
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="further-title">Going further</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Start hosted. Add your own data when a flow needs it, and run genui yourself when nothing may leave your network.
+            Start hosted. Add your own data when a flow needs it, and run app-mcp yourself when nothing may leave your network.
           </p>
           <ol class="mt-12 grid list-none gap-4 md:grid-cols-3">
             <li class="card px-5 ring-2 ring-primary">
@@ -497,13 +497,13 @@ $ <span class="k">npm run dev</span></code></pre>
             <li class="card px-5">
               <p class="font-medium">With your data</p>
               <p class="text-muted-foreground">
-                Plus your MCP server with the genui SDK. Views search, load and submit through your tools; genui never sees the results.
+                Plus your MCP server with the app-mcp SDK. Views search, load and submit through your tools; app-mcp never sees the results.
               </p>
               <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#data">Connect your data</a>
             </li>
             <li class="card px-5">
               <p class="font-medium">Self-hosted</p>
-              <p class="text-muted-foreground">Plus genui inside your network, with your own database and your company's sign-in.</p>
+              <p class="text-muted-foreground">Plus app-mcp inside your network, with your own database and your company's sign-in.</p>
               <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#self-host">Self-host</a>
             </li>
           </ol>
@@ -516,7 +516,7 @@ $ <span class="k">npm run dev</span></code></pre>
             Need your own data? Connect your MCP server
           </h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            When a flow needs your customers, orders or prices, mount genui in the MCP server you already run. Your data stays on your
+            When a flow needs your customers, orders or prices, mount app-mcp in the MCP server you already run. Your data stays on your
             server.
           </p>
 
@@ -527,8 +527,8 @@ $ <span class="k">npm run dev</span></code></pre>
                 Your components, forms and charts become tools on your server, next to the ones you have, and your workflows become its
                 slash commands.
               </p>
-              <pre class="code"><code><span class="k">await</span> mountGenUI(server, {
-  genui: connectGenUI({
+              <pre class="code"><code><span class="k">await</span> mountAppMcp(server, {
+  appMcp: connectAppMcp({
     url: <span class="s">"…/w/&lt;workspace&gt;/mcp"</span>,
     token,
   }),
@@ -558,16 +558,16 @@ $ <span class="k">npm run dev</span></code></pre>
             <div class="link link-a"><span>Tool calls and results</span></div>
             <div class="node-server rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <p class="font-medium">Your MCP server</p>
-              <p class="mt-1 text-muted-foreground">With the genui SDK inside, forwarding genui's tools to genui.</p>
+              <p class="mt-1 text-muted-foreground">With the app-mcp SDK inside, forwarding app-mcp's tools to app-mcp.</p>
             </div>
             <div class="link link-b"><span>Your code, as today</span></div>
             <div class="node-tools rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <p class="font-medium">Your tools and APIs</p>
               <p class="mt-1 text-muted-foreground">Customers, orders, billing: whatever your tools already reach.</p>
             </div>
-            <div class="link link-c"><span>Calls to genui's tools</span></div>
+            <div class="link link-c"><span>Calls to app-mcp's tools</span></div>
             <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
-              <p class="font-medium">genui</p>
+              <p class="font-medium">app-mcp</p>
               <p class="mt-1 text-muted-foreground">
                 Serves forms, charts, workflows and your components. It sees calls to its own tools, never your tools' calls or their
                 results.
@@ -597,14 +597,14 @@ $ <span class="k">npm run dev</span></code></pre>
         <div class="mx-auto grid max-w-6xl gap-6 px-4 py-16 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:py-20">
           <div class="max-w-2xl">
             <h2 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl" id="self-host-title">
-              Nothing may leave your network? Run genui yourself
+              Nothing may leave your network? Run app-mcp yourself
             </h2>
             <p class="mt-3 text-muted-foreground">
               The same registry as one container with a SQLite file, inside your network. People sign in with GitHub, Google or your
               company's OIDC provider, and everything above works the same.
             </p>
           </div>
-          <a class="btn btn-lg btn-outline w-fit" href="mailto:hello@app-mcp.com?subject=genui%20self-hosting">Talk to us</a>
+          <a class="btn btn-lg btn-outline w-fit" href="mailto:hello@app-mcp.com?subject=app-mcp%20self-hosting">Talk to us</a>
         </div>
       </section>
 
@@ -617,7 +617,7 @@ $ <span class="k">npm run dev</span></code></pre>
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
               <a class="btn btn-lg" href="#start">Get started</a>
-              <a class="btn btn-lg btn-outline" href="mailto:hello@app-mcp.com?subject=genui%20first%20flow">Talk to us</a>
+              <a class="btn btn-lg btn-outline" href="mailto:hello@app-mcp.com?subject=app-mcp%20first%20flow">Talk to us</a>
               <span class="text-sm text-muted-foreground">
                 or write to
                 <a class="font-medium text-foreground underline-offset-4 hover:underline" href="mailto:hello@app-mcp.com"
@@ -632,7 +632,7 @@ $ <span class="k">npm run dev</span></code></pre>
 
     <footer class="border-t">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6">
-        <span class="font-semibold tracking-tight text-foreground">genui</span>
+        <span class="font-semibold tracking-tight text-foreground">app-mcp</span>
         <span>Your components, in every AI chat.</span>
       </div>
     </footer>

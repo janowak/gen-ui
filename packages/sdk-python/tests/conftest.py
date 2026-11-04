@@ -22,8 +22,8 @@ def html(label: str) -> str:
     return f"<!doctype html><html><body>{label}</body></html>"
 
 
-class FakeGenUI:
-    """One environment of genui's end-user MCP, served in-process: built per request like apps/registry.
+class FakeAppMcp:
+    """One environment of app-mcp's end-user MCP, served in-process: built per request like apps/registry.
 
     Publishing a rating version makes it the current one.
     """
@@ -40,7 +40,7 @@ class FakeGenUI:
 
     @staticmethod
     def uri(version: str) -> str:
-        return f"ui://genui/c/rating/{version.replace('.', '')}"
+        return f"ui://app-mcp/c/rating/{version.replace('.', '')}"
 
     def build(self) -> MCPServer:
         server = MCPServer("Acme")
@@ -49,15 +49,15 @@ class FakeGenUI:
             view_id = str(uuid.uuid4())
             return CallToolResult(
                 content=[TextContent(type="text", text=text)],
-                structured_content={"genui": {"id": view_id}},
-                _meta={"genui/theme": THEME, "genui/viewId": view_id},
+                structured_content={"appMcp": {"id": view_id}},
+                _meta={"app-mcp/theme": THEME, "app-mcp/viewId": view_id},
             )
 
-        @server.tool(name="render_form", title="Show form", description="Show a form.", meta={"ui": {"resourceUri": "ui://genui/form/aaaa"}})
+        @server.tool(name="render_form", title="Show form", description="Show a form.", meta={"ui": {"resourceUri": "ui://app-mcp/form/aaaa"}})
         def render_form(fields: list[dict[str, Any]], title: str | None = None) -> CallToolResult:
             return result(f"Showing form ({len(fields)} fields).")
 
-        server.add_resource(TextResource(uri="ui://genui/form/aaaa", name="genui form", mime_type=MIME, text=html("form")))
+        server.add_resource(TextResource(uri="ui://app-mcp/form/aaaa", name="app-mcp form", mime_type=MIME, text=html("form")))
 
         version = self.rating
         assert version is not None
@@ -66,9 +66,9 @@ class FakeGenUI:
         def render_rating(question: str) -> CallToolResult:
             return result("Showing Star rating.")
 
-        server.add_resource(TextResource(uri=self.uri(version), name="genui rating", mime_type=MIME, text=self.versions[version]))
+        server.add_resource(TextResource(uri=self.uri(version), name="app-mcp rating", mime_type=MIME, text=self.versions[version]))
 
-        @server.resource("ui://genui/c/rating/{digest}", mime_type=MIME)
+        @server.resource("ui://app-mcp/c/rating/{digest}", mime_type=MIME)
         def rating_version(digest: str) -> str:
             return next(body for v, body in self.versions.items() if v.replace(".", "") == digest)
 
@@ -80,13 +80,13 @@ class FakeGenUI:
 
     def client(self, mode: str = "legacy") -> Client:
         if self.down:
-            raise ConnectionError("genui is down")
+            raise ConnectionError("app-mcp is down")
         self.sessions += 1
         return Client(self.build(), mode=mode)
 
 
 @pytest.fixture
-def fake_genui() -> FakeGenUI:
-    fake = FakeGenUI()
+def fake_app_mcp() -> FakeAppMcp:
+    fake = FakeAppMcp()
     fake.publish("1.0.0")
     return fake

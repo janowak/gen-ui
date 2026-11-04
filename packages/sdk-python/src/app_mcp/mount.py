@@ -1,7 +1,7 @@
-"""`mount_genui`: puts genui's tools, `ui://` resources and workflow prompts on your MCPServer.
+"""`mount_app_mcp`: puts app-mcp's tools, `ui://` resources and workflow prompts on your MCPServer.
 
-A port of `packages/sdk/src/mount.ts`. Calls are forwarded to genui; your own tools stay on your
-server, where genui's views call them through the host.
+A port of `packages/sdk/src/mount.ts`. Calls are forwarded to app-mcp; your own tools stay on your
+server, where app-mcp's views call them through the host.
 """
 
 from __future__ import annotations
@@ -20,24 +20,24 @@ from mcp.server.mcpserver.resources import FunctionResource
 from mcp.server.subscriptions import PromptsListChanged, ResourcesListChanged, SubscriptionBus, ToolsListChanged
 from mcp.types import CallToolResult, Prompt, Tool
 
-from .client import GenUIClient, resource_uri
+from .client import AppMcpClient, resource_uri
 
 RESOURCE_MIME_TYPE = "text/html;profile=mcp-app"
 
 
-class GenUIHandle:
-    """What `mount_genui` returns."""
+class AppMcpHandle:
+    """What `mount_app_mcp` returns."""
 
     def __init__(self, tools: Callable[[], list[str]], close: Callable[[], None]):
         self._tools = tools
         self._close = close
 
     def tools(self) -> list[str]:
-        """genui tools currently on the server."""
+        """app-mcp tools currently on the server."""
         return self._tools()
 
     def close(self) -> None:
-        """Stops watching genui."""
+        """Stops watching app-mcp."""
         self._close()
 
 
@@ -129,24 +129,24 @@ class _Notifier:
             await self._bus.publish(PromptsListChanged())
 
 
-def mount_genui(
+def mount_app_mcp(
     server: MCPServer,
-    genui: GenUIClient,
+    app_mcp: AppMcpClient,
     *,
     watch: bool = False,
     bus: SubscriptionBus | None = None,
-) -> GenUIHandle:
-    """Puts genui's tools (render_form, render_chart, render_<component>), their `ui://`
+) -> AppMcpHandle:
+    """Puts app-mcp's tools (render_form, render_chart, render_<component>), their `ui://`
     resources and the workflow prompts on your server, next to your own tools.
 
     Args:
         server: The MCPServer that also serves your data and submit tools.
-        genui: From `connect_genui`, once per process. Its URL picks the environment this server serves.
-        watch: Re-sync when genui's tools change (on a publish or a theme, instructions or workflow save) and notify clients (list_changed).
+        app_mcp: From `connect_app_mcp`, once per process. Its URL picks the environment this server serves.
+        watch: Re-sync when app-mcp's tools change (on a publish or a theme, instructions or workflow save) and notify clients (list_changed).
         bus: The SubscriptionBus passed to MCPServer(subscriptions=...), used for watch notifications to
             2026-07-28 clients. Defaults to the server's own bus.
     """
-    genui.ready()
+    app_mcp.ready()
     tools: dict[str, str] = {}
     prompts: dict[str, str] = {}
     resources: set[str] = set()
@@ -158,7 +158,7 @@ def mount_genui(
         async def call(ctx: Context) -> CallToolResult:
             params = ctx.request_context.params or {}
             arguments = params.get("arguments")
-            return await genui.call_tool(tool.name, dict(arguments) if isinstance(arguments, dict) else {})
+            return await app_mcp.call_tool(tool.name, dict(arguments) if isinstance(arguments, dict) else {})
 
         server.add_tool(
             call,
@@ -176,7 +176,7 @@ def mount_genui(
     def add_prompt(prompt: Prompt) -> None:
         async def forward(**arguments: Any) -> list[dict[str, Any]]:
             values = {name: str(value) for name, value in arguments.items() if value is not None}
-            result = await genui.get_prompt(prompt.name, values)
+            result = await app_mcp.get_prompt(prompt.name, values)
             return [message.model_dump(mode="json", by_alias=True, exclude_none=True) for message in result.messages]
 
         server.add_prompt(
@@ -190,15 +190,15 @@ def mount_genui(
         )
 
     async def read(uri: str) -> str:
-        content = (await genui.read_resource(uri)).contents[0]
+        content = (await app_mcp.read_resource(uri)).contents[0]
         return getattr(content, "text", "")
 
     def add_resource(uri: str) -> None:
-        # MCPServer has no remove_resource: earlier versions stay listed, read from genui when asked for.
+        # MCPServer has no remove_resource: earlier versions stay listed, read from app_mcp when asked for.
         if uri in resources:
             return
         resources.add(uri)
-        cached = genui.resource(uri)
+        cached = app_mcp.resource(uri)
         mime_type = cached.contents[0].mime_type if cached and cached.contents else None
 
         async def load() -> str:
@@ -206,14 +206,14 @@ def mount_genui(
 
         server.add_resource(FunctionResource(uri=uri, name=uri, mime_type=mime_type or RESOURCE_MIME_TYPE, fn=load))
 
-    # Earlier component versions, for old messages the host renders again: read from genui.
-    @server.resource("ui://genui/c/{name}/{digest}", name="genui component version", mime_type=RESOURCE_MIME_TYPE)
+    # Earlier component versions, for old messages the host renders again: read from app_mcp.
+    @server.resource("ui://app-mcp/c/{name}/{digest}", name="app-mcp component version", mime_type=RESOURCE_MIME_TYPE)
     async def component_version(name: str, digest: str) -> str:
-        return await read(f"ui://genui/c/{name}/{digest}")
+        return await read(f"ui://app-mcp/c/{name}/{digest}")
 
     def sync() -> tuple[bool, bool]:
         """Returns whether tools and prompts changed."""
-        snapshot = genui.snapshot()
+        snapshot = app_mcp.snapshot()
         if snapshot is None:
             return False, False
         tools_changed = _mirror(tools, snapshot.tools, add_tool, server.remove_tool)
@@ -239,13 +239,13 @@ def mount_genui(
             if tools_changed or prompts_changed:
                 notifier.notify(tools=tools_changed, prompts=prompts_changed)
 
-        cleanup.append(genui.on_change(on_change))
+        cleanup.append(app_mcp.on_change(on_change))
 
     def close() -> None:
         while cleanup:
             cleanup.pop()()
 
-    return GenUIHandle(tools=lambda: list(tools), close=close)
+    return AppMcpHandle(tools=lambda: list(tools), close=close)
 
 
-__all__ = ["GenUIHandle", "mount_genui"]
+__all__ = ["AppMcpHandle", "mount_app_mcp"]

@@ -2,7 +2,7 @@
 //
 // Main checkout: install and build; the ports are the ones in .claude/launch.json.
 // Linked worktree (an agent's): its own block of ports, a seeded registry on its own SQLite file, and
-// .env.worktree, which the registry, the demo and `pnpm genui` load after .env.local, so its values win.
+// .env.worktree, which the registry, the demo and `pnpm app-mcp` load after .env.local, so its values win.
 // .claude/launch.json gets the worktree's ports, hidden from git with --skip-worktree. No wrangler, no tunnel.
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -67,7 +67,7 @@ const listening = (port: number, host: string) =>
  * moment never get the same one. A claim whose worktree is gone is taken over.
  */
 function claim(slot: number): boolean {
-  const file = join(commonDir, `genui-dev-slot-${slot}`);
+  const file = join(commonDir, `app-mcp-dev-slot-${slot}`);
   try {
     writeFileSync(file, root, { flag: "wx" });
     return true;
@@ -89,28 +89,29 @@ async function pickSlot(): Promise<number> {
   throw new Error("dev:setup: no free port slot");
 }
 
-const slot = Number(previous.GENUI_DEV_SLOT) && claim(Number(previous.GENUI_DEV_SLOT)) ? Number(previous.GENUI_DEV_SLOT) : await pickSlot();
+const slot =
+  Number(previous.APP_MCP_DEV_SLOT) && claim(Number(previous.APP_MCP_DEV_SLOT)) ? Number(previous.APP_MCP_DEV_SLOT) : await pickSlot();
 const ports = slotPorts(slot);
 const registryUrl = `http://localhost:${ports.registry}`;
 
 const values: Record<string, string> = {
-  GENUI_DEV_SLOT: String(slot),
+  APP_MCP_DEV_SLOT: String(slot),
   // The registry's port; the demo has its own variable so the two don't share it.
   PORT: String(ports.registry),
-  GENUI_DEMO_PORT: String(ports.demo),
+  APP_MCP_DEMO_PORT: String(ports.demo),
   // Replaces the main checkout's tunnel: the worktree's registry is only reached locally.
-  GENUI_PUBLIC_URL: registryUrl,
-  GENUI_URL: registryUrl,
-  GENUI_PASSWORD_LOGIN: "true",
+  APP_MCP_PUBLIC_URL: registryUrl,
+  APP_MCP_URL: registryUrl,
+  APP_MCP_PASSWORD_LOGIN: "true",
 };
 // Shared values come from .env.local; made up here only when it has none.
 const own = (key: string, make: () => string) => {
   if (!shared[key]) values[key] = previous[key] ?? make();
 };
-own("GENUI_AUTH_SECRET", () => randomBytes(32).toString("hex"));
-own("GENUI_DEV_EMAIL", () => "dev@genui.test");
-own("GENUI_DEV_PASSWORD", () => randomBytes(12).toString("base64url"));
-for (const key of ["GENUI_TOKEN", "GENUI_MCP_URL", "GENUI_MCP_TOKEN"]) if (previous[key]) values[key] = previous[key];
+own("APP_MCP_AUTH_SECRET", () => randomBytes(32).toString("hex"));
+own("APP_MCP_DEV_EMAIL", () => "dev@app-mcp.test");
+own("APP_MCP_DEV_PASSWORD", () => randomBytes(12).toString("base64url"));
+for (const key of ["APP_MCP_TOKEN", "APP_MCP_MCP_URL", "APP_MCP_MCP_TOKEN"]) if (previous[key]) values[key] = previous[key];
 
 function writeEnv() {
   const header = [
@@ -156,9 +157,9 @@ writeEnv();
 const demo = `http://localhost:${ports.demo}/mcp`;
 console.log(`
 Worktree ready (slot ${slot}). Start services by name from .claude/launch.json:
-  registry    ${registryUrl}  (sign in with GENUI_DEV_EMAIL / GENUI_DEV_PASSWORD from .env.worktree or .env.local)
+  registry    ${registryUrl}  (sign in with APP_MCP_DEV_EMAIL / APP_MCP_DEV_PASSWORD from .env.worktree or .env.local)
   serve       http://localhost:${ports.serve}/mcp
-  demo        ${demo}  (uses this registry: GENUI_MCP_URL)
+  demo        ${demo}  (uses this registry: APP_MCP_MCP_URL)
   playground  http://localhost:${ports.playground}/?server=${demo}
   site        http://localhost:${ports.site}
-CLI against this registry: pnpm genui <command>`);
+CLI against this registry: pnpm app-mcp <command>`);

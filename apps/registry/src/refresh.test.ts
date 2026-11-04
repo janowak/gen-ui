@@ -27,7 +27,7 @@ let admin: string;
 let reader: string;
 let otherReader: string;
 
-// The company's server: its refresh endpoint records what genui sent and answers 202, slowly when asked.
+// The company's server: its refresh endpoint records what app-mcp sent and answers 202, slowly when asked.
 let receiver: Server;
 let refreshUrl: string;
 let received: { environment: string; revision: number; type: string }[] = [];
@@ -59,7 +59,7 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => receiver.listen(0, "127.0.0.1", resolve));
-  refreshUrl = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/genui/refresh`;
+  refreshUrl = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/app-mcp/refresh`;
 });
 
 afterAll(() => receiver.close());
@@ -119,12 +119,12 @@ describe("refresh URLs", () => {
     const published = await call("POST", "/v1/components", admin, { manifest: rating("1.1.0"), html: html("v1.1") });
     expect(published.status).toBe(201);
     await refresher.idle();
-    expect(received).toEqual([{ type: "genui.refresh", environment: "prod", revision: await revision() }]);
+    expect(received).toEqual([{ type: "app-mcp.refresh", environment: "prod", revision: await revision() }]);
 
     // Saves from the registry MCP go through the same store: theme, instructions and workflows too.
     await store.setTheme(acme, "prod", null);
     await refresher.idle();
-    expect(received.at(-1)).toEqual({ type: "genui.refresh", environment: "prod", revision: await revision() });
+    expect(received.at(-1)).toEqual({ type: "app-mcp.refresh", environment: "prod", revision: await revision() });
 
     // Another environment's change doesn't reach prod's server.
     await store.deployVersion(acme, "rating", "1.1.0", "staging");
@@ -148,7 +148,7 @@ describe("refresh URLs", () => {
   });
 
   it("record a failed call without failing the write", async () => {
-    await call("PUT", "/v1/environments/prod", admin, { refreshUrl: "http://127.0.0.1:9/genui/refresh" });
+    await call("PUT", "/v1/environments/prod", admin, { refreshUrl: "http://127.0.0.1:9/app-mcp/refresh" });
     expect((await call("PUT", "/v1/theme", admin, { theme: { light: { primary: "#000000" } } })).status).toBe(200);
     await refresher.idle();
     expect((await store.environment(acme, "prod"))?.lastRefresh).toMatchObject({ ok: false, error: expect.any(String) });
@@ -168,13 +168,13 @@ describe("refresh URLs", () => {
         body: JSON.stringify(body),
       });
 
-    expect(await (await put({ refreshUrl: "http://mcp.acme.test/genui/refresh" })).json()).toEqual({
+    expect(await (await put({ refreshUrl: "http://mcp.acme.test/app-mcp/refresh" })).json()).toEqual({
       error: "The refresh URL must use https.",
     });
-    expect(await (await put({ refreshUrl: "https://127.0.0.1/genui/refresh" })).json()).toEqual({
+    expect(await (await put({ refreshUrl: "https://127.0.0.1/app-mcp/refresh" })).json()).toEqual({
       error: "The refresh URL must be a public address.",
     });
-    expect((await put({ refreshUrl: "https://mcp.acme.test/genui/refresh" })).status).toBe(200);
+    expect((await put({ refreshUrl: "https://mcp.acme.test/app-mcp/refresh" })).status).toBe(200);
     expect((await put({ refreshUrl: null }, await strict.store.createToken(ws, "publish", "ci"))).status).toBe(403);
     expect((await call("PUT", "/v1/environments/nope", admin, { refreshUrl })).status).toBe(404);
   });

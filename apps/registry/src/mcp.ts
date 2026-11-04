@@ -14,7 +14,7 @@ import {
   MAX_ICON_BYTES,
 } from "@app-mcp/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { contentHash, mountGenUI } from "@app-mcp/runtime";
+import { contentHash, mountAppMcp } from "@app-mcp/runtime";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { endUserPath } from "./api.js";
@@ -31,7 +31,7 @@ function managementViews(assets: Assets): ManagementViews {
   if (!views) {
     const load = (name: ManagementViewName) => ({
       html: assets.views[name],
-      uri: `ui://genui-registry/${name}/${contentHash(assets.views[name])}`,
+      uri: `ui://app-mcp-registry/${name}/${contentHash(assets.views[name])}`,
     });
     hashed.set(
       assets,
@@ -72,7 +72,7 @@ export async function createRegistryMcp(
   { baseURL, assets }: { baseURL: string; assets: Assets },
   toolsChanged: () => void = () => {},
 ): Promise<McpServer> {
-  const server = new McpServer({ name: "genui-registry", version: "0.1.0" });
+  const server = new McpServer({ name: "app-mcp-registry", version: "0.1.0" });
   const VIEWS = managementViews(assets);
   const isAdmin = member.role === "admin";
   const ws = member.workspaceId;
@@ -83,7 +83,7 @@ export async function createRegistryMcp(
   // No data tools here: those live on the customer's server, so only inline data works.
   const catalog = await store.catalog(ws, env);
   const theme = catalog.theme;
-  await mountGenUI(server, { views: builtInViews(assets), preview: true, theme: theme ?? undefined });
+  await mountAppMcp(server, { views: builtInViews(assets), preview: true, theme: theme ?? undefined });
 
   for (const view of Object.values(VIEWS)) {
     registerAppResource(server, view.uri, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
@@ -105,7 +105,7 @@ export async function createRegistryMcp(
     {
       title: "Manage components",
       description:
-        "Show the workspace's genui components and the version each environment (prod, staging, …) serves, and whether the built-in forms and charts are on. " +
+        "Show the workspace's app-mcp components and the version each environment (prod, staging, …) serves, and whether the built-in forms and charts are on. " +
         "CI publishes versions to environments; nothing moves between them here. Admins can stop serving a component or turn the built-ins off from the view.",
       inputSchema: z.object({}),
       _meta: { ui: { resourceUri: VIEWS.manager.uri } },
@@ -150,7 +150,7 @@ export async function createRegistryMcp(
     "open_theme_controller",
     {
       title: "Theme controller",
-      description: `Open the theme controller for ${env}: colors and radius used by every genui form, chart and component there, with a live preview.`,
+      description: `Open the theme controller for ${env}: colors and radius used by every app-mcp form, chart and component there, with a live preview.`,
       inputSchema: z.object({}),
       _meta: { ui: { resourceUri: VIEWS.theme.uri } },
     },
@@ -197,7 +197,7 @@ export async function createRegistryMcp(
         `Draft a workflow for review in ${env}. \`description\`: when to use it. \`instructions\`: the steps for the AI, naming the tools to use in order: ` +
         "render_form for forms (with the customer server's submit tool), render_chart, render_<component> for the workspace's components, and the customer server's own tools. " +
         "Add `params` only for what a user would type when starting it as a slash command; without params it is always-on guidance. " +
-        "Nothing is saved: an admin reviews the draft and clicks Save. Workflows usually live in the repo next to the components and go out with genui publish.",
+        "Nothing is saved: an admin reviews the draft and clicks Save. Workflows usually live in the repo next to the components and go out with app-mcp publish.",
       inputSchema: Workflow,
       _meta: { ui: { resourceUri: VIEWS.workflows.uri } },
     },
@@ -322,7 +322,7 @@ export async function createRegistryMcp(
   for (const [i, component] of catalog.components.entries()) {
     const html = bundles[i];
     if (!html) continue;
-    const uri = `ui://genui-registry/preview/${component.name}/${component.hash}`;
+    const uri = `ui://app-mcp-registry/preview/${component.name}/${component.hash}`;
     registerAppResource(server, uri, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
       contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html }],
     }));
@@ -360,7 +360,7 @@ export async function createRegistryMcp(
     {
       title: "Stop serving component",
       description:
-        "Stop serving a component in an environment. Its versions stay published; `genui publish <name>@<version>` serves one again.",
+        "Stop serving a component in an environment. Its versions stay published; `app-mcp publish <name>@<version>` serves one again.",
       inputSchema: z.object({ name: z.string(), environment: target }),
       _meta: appOnly(VIEWS.manager.uri),
     },
@@ -414,7 +414,10 @@ export async function createRegistryMcp(
     },
     async ({ email, role }) => {
       await store.invite(ws, email, role);
-      return ok(`Invited ${email} as ${role}. They join when they next connect genui and sign in with that email.`, await workspaceState());
+      return ok(
+        `Invited ${email} as ${role}. They join when they next connect app-mcp and sign in with that email.`,
+        await workspaceState(),
+      );
     },
   );
 
@@ -443,7 +446,7 @@ export async function createRegistryMcp(
     {
       title: "Create token",
       description:
-        "Create a token: server for @app-mcp/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
+        "Create a token: server for @app-mcp/sdk on the company's MCP server, publish for CI, admin for the app-mcp CLI. Shown once, in the view only.",
       inputSchema: z.object({ name: z.string().min(1).max(80), scope: z.enum(["server", "publish", "admin"]).default("server") }),
       _meta: appOnly(VIEWS.workspace.uri),
     },

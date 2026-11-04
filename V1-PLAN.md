@@ -1,14 +1,14 @@
-# GenUI v1 plan
+# AppMcp v1 plan
 
-Runtime component registry for MCP Apps: forms and charts with built-in loading patterns, served by genui's end-user MCP and forwarded from a company's MCP server through a thin SDK, managed from Claude/ChatGPT via a registry MCP.
+Runtime component registry for MCP Apps: forms and charts with built-in loading patterns, served by app-mcp's end-user MCP and forwarded from a company's MCP server through a thin SDK, managed from Claude/ChatGPT via a registry MCP.
 
 **Status (2026-10-22)**
 - Done:
   - **M1:** views (shadcn on Base UI), SDK, demo server, local playground host.
-  - **M2:** registry (SQLite, scoped tokens, beta/stable, rollback, theme), SDK registry client, `genui` CLI, example custom component.
+  - **M2:** registry (SQLite, scoped tokens, beta/stable, rollback, theme), SDK registry client, `app-mcp` CLI, example custom component.
   - **M3:** separate registry MCP at `/mcp` with better-auth OAuth (`@better-auth/mcp` + CIMD, GitHub/Google/OIDC/password), role-filtered tools, component manager + theme controller views, invites.
-  - **One runtime (2026-10-23):** the genui runtime lives only in the registry's end-user MCP (`/w/<workspace>/mcp`). `@app-mcp/sdk` and the Python `genui-sdk` are thin adapters: they mirror genui's tools onto the company's server and forward calls with a server token. This replaced the Python port of the runtime.
-  - **SDK refresh (2026-10-24):** the SDKs no longer re-list genui's tools every 30 s. Every change to what an environment serves (publish, theme, recipes; from the API, CLI or registry MCP) bumps its revision. The SDK checks it in the background at most once a minute while genui's tools are used, never delaying the host, and re-lists only when it changed. An environment can also have a refresh URL (`genui env set <env> --refresh-url`): the company's server mounts the SDK's refresh endpoint there and the registry calls it on every change. Only the registry calls out; the end-user MCP never does.
+  - **One runtime (2026-10-23):** the app-mcp runtime lives only in the registry's end-user MCP (`/w/<workspace>/mcp`). `@app-mcp/sdk` and the Python `app-mcp-sdk` are thin adapters: they mirror app-mcp's tools onto the company's server and forward calls with a server token. This replaced the Python port of the runtime.
+  - **SDK refresh (2026-10-24):** the SDKs no longer re-list app-mcp's tools every 30 s. Every change to what an environment serves (publish, theme, recipes; from the API, CLI or registry MCP) bumps its revision. The SDK checks it in the background at most once a minute while app-mcp's tools are used, never delaying the host, and re-lists only when it changed. An environment can also have a refresh URL (`app-mcp env set <env> --refresh-url`): the company's server mounts the SDK's refresh endpoint there and the registry calls it on every change. Only the registry calls out; the end-user MCP never does.
   - **Environments (2026-10-24):** beta/stable, promote and rollback are gone. Workspaces define environments (`prod` plus their own); each serves what was last published or saved to it, at its own end-user MCP URL, with suffixed tool names outside prod. See [ENVIRONMENTS-PLAN.md](ENVIRONMENTS-PLAN.md).
 - Next:
   - **M0 spike:** real-host test via a tunnel.
@@ -25,13 +25,13 @@ Runtime component registry for MCP Apps: forms and charts with built-in loading 
 | Area | Decision | Notes |
 |---|---|---|
 | MCP base | **`mcp-use` (TypeScript)** for *our* servers (registry MCP, demo server) | `use-mcp` is a different project: an archived React client hook (archived 2026-02-06). `mcp-use` is the MIT server framework with React views for MCP Apps, built on the official TS SDK. |
-| SDK dependency | SDK depends only on the **official TS SDK** (server + client) | The SDK runs inside *customers'* servers; depending on `mcp-use` would force them onto it. It holds no genui logic, only forwarding, so adapters for other languages and frameworks stay small. |
+| SDK dependency | SDK depends only on the **official TS SDK** (server + client) | The SDK runs inside *customers'* servers; depending on `mcp-use` would force them onto it. It holds no app-mcp logic, only forwarding, so adapters for other languages and frameworks stay small. |
 | Inputs | **shadcn/ui** (Base UI + Tailwind; React code running on Preact via `@preact/compat`) | Theme via CSS variables: host `styles.variables` → shadcn tokens → workspace overrides. |
 | Charts | **shadcn charts (Recharts, MIT)** | Same theming system as the inputs; chart palette = shadcn `--chart-1..N` vars. Chart types v1: line, bar (incl. horizontal/stacked), area, pie/donut. Highcharts dropped (commercial licence, see §7). |
 | Database | **SQLite** (WAL mode) via Drizzle | Single instance is fine for v1 and self-host. Keep queries portable for Postgres/libSQL when cloud needs multiple instances. Bundles stored as BLOBs. |
 | Bundles | One **single-file HTML** per view (Vite + singlefile plugin), JS/CSS inlined | Default host CSP allows inline scripts/styles but no eval and no undeclared external scripts. Inlining works in every host. |
 | Dashboards | **None.** `render_chart` only | |
-| Custom components | **CI flow only** (`genui publish`) | Git sync, PR previews later. |
+| Custom components | **CI flow only** (`app-mcp publish`) | Git sync, PR previews later. |
 
 ---
 
@@ -42,17 +42,17 @@ packages/
   format/     zod schemas: form spec, chart spec, component manifest, theme tokens
   ui/         views (shadcn + charts; React code on Preact) + loading patterns + view runtime (ext-apps useApp)
               → builds dist/form.html, dist/chart.html (single-file)
-  sdk/        connectGenUI + mountGenUI(server, { genui }): mirrors genui's tools, ui:// resources and prompts, forwards calls
+  sdk/        connectAppMcp + mountAppMcp(server, { appMcp }): mirrors app-mcp's tools, ui:// resources and prompts, forwards calls
   sdk-python/ the same adapter for Python MCP servers
-  cli/        genui publish / genui login
+  cli/        app-mcp publish / app-mcp login
 apps/
-  registry/   HTTP API + registry MCP (management tools + theme controller view) + end-user MCP (the genui runtime) + SQLite
+  registry/   HTTP API + registry MCP (management tools + theme controller view) + end-user MCP (the app-mcp runtime) + SQLite
   demo/       example "customer" MCP server (mcp-use) with mock tools, using the SDK
 ```
 
 ---
 
-## 3. Built-in tools (served by genui's end-user MCP, forwarded by the SDK from the customer's server)
+## 3. Built-in tools (served by app-mcp's end-user MCP, forwarded by the SDK from the customer's server)
 
 ### `render_form` (model-visible)
 
@@ -129,7 +129,7 @@ One tool, three ways to pass data. **The same mapping (`x`, `series`) applies to
 
 ### Tool access
 
-genui is a runtime UI registry, not a permissions layer or a release manager. Views may call any tool the server exposes to apps. Which calls run is left to the host (`visibility`, its approval settings) and to the server's own auth. Registry previews flag their results (`genui/preview`), so views render there without calling tools.
+app-mcp is a runtime UI registry, not a permissions layer or a release manager. Views may call any tool the server exposes to apps. Which calls run is left to the host (`visibility`, its approval settings) and to the server's own auth. Registry previews flag their results (`app-mcp/preview`), so views render there without calling tools.
 
 ### Loading patterns built into the views
 
@@ -146,9 +146,9 @@ genui is a runtime UI registry, not a permissions layer or a release manager. Vi
 
 | Question | Spec says | Implication |
 |---|---|---|
-| Can the SDK register `ui://` resources dynamically? | Content comes from `resources/read`. `_meta.ui` (CSP etc.) may be set per read. | **Yes.** genui's end-user MCP serves bundle HTML; the SDK caches it by URI. |
-| Do hosts cache? | "Host MAY prefetch and cache UI resource content." | **Never change content behind a URI.** Use content-hashed URIs: `ui://genui/form/<hash>`. |
-| How does a new version reach tools? | The tool's `_meta.ui.resourceUri` points at the resource. Tool changes are signalled via `notifications/tools/list_changed`. | On a publish to the environment, genui repoints `resourceUri`; the SDK re-lists and emits `list_changed`. Hosts that don't refresh mid-session pick it up in the next conversation. |
+| Can the SDK register `ui://` resources dynamically? | Content comes from `resources/read`. `_meta.ui` (CSP etc.) may be set per read. | **Yes.** app-mcp's end-user MCP serves bundle HTML; the SDK caches it by URI. |
+| Do hosts cache? | "Host MAY prefetch and cache UI resource content." | **Never change content behind a URI.** Use content-hashed URIs: `ui://app-mcp/form/<hash>`. |
+| How does a new version reach tools? | The tool's `_meta.ui.resourceUri` points at the resource. Tool changes are signalled via `notifications/tools/list_changed`. | On a publish to the environment, app-mcp repoints `resourceUri`; the SDK re-lists and emits `list_changed`. Hosts that don't refresh mid-session pick it up in the next conversation. |
 | Old messages? | The host re-renders old tool results from their stored URI. | **Keep previous versions resolvable.** Immutable retention, never delete recent hashes. |
 | View calling tools (options, submit)? | App→server `tools/call` works for tools whose `visibility` includes `"app"`, **on the same server connection only**. | This confirms the architecture: `resource_select` and `render_chart` with a source need the SDK inside the customer's server. A hosted trial MCP can do static forms and charts only. |
 | App-only tools | `visibility: ["app"]` hides the tool from the model; the host rejects app calls to tools without `"app"`. | Use it for internal view helpers and for admin actions (theme and recipe saves). The default `["model","app"]` covers customers' existing tools. |
@@ -173,9 +173,9 @@ genui is a runtime UI registry, not a permissions layer or a release manager. Vi
 - **Tokens v1:** primary + foreground, accent, radius, density, chart palette (6–8 colours), each in light and dark variants.
 - **Default inherits host variables.** Overrides stay within host guidelines. ChatGPT: brand colour on accents and primary buttons only, system fonts. Claude: host tokens for structure.
 - **Flow:** draft → live preview with sample form and chart → publish. Publish is an app-only button.
-- **Delivery:** genui's end-user MCP attaches current theme tokens to each `render_*` tool result (`_meta.genui.theme`).
+- **Delivery:** app-mcp's end-user MCP attaches current theme tokens to each `render_*` tool result (`_meta.appMcp.theme`).
   - Theme changes apply on the next render without changing bundle URIs.
-  - Verify in the spike that the view receives the result's `_meta`. Fallback: an app-only `genui_theme` tool called on view init.
+  - Verify in the spike that the view receives the result's `_meta`. Fallback: an app-only `app_mcp_theme` tool called on view init.
 
 ### Tools
 
@@ -188,16 +188,16 @@ genui is a runtime UI registry, not a permissions layer or a release manager. Vi
 ### Auth
 
 - Registry MCP uses OAuth with GitHub or Google as the identity provider, implemented with an off-the-shelf MCP auth server library (e.g. better-auth for self-host, WorkOS AuthKit for cloud). No web UI of ours beyond the identity provider's pages.
-- SDK → genui's end-user MCP: workspace server token (`genui token server <name>`), sent as a bearer token. The URL picks the environment.
+- SDK → app-mcp's end-user MCP: workspace server token (`app-mcp token server <name>`), sent as a bearer token. The URL picks the environment.
 
 ---
 
 ## 6. Custom components (CI)
 
 ```yaml
-# .github/workflows/genui.yml
-- run: npx genui publish --env staging
-  env: { GENUI_TOKEN: ${{ secrets.GENUI_TOKEN }} }   # publish token limited to staging
+# .github/workflows/app-mcp.yml
+- run: npx app-mcp publish --env staging
+  env: { APP_MCP_TOKEN: ${{ secrets.APP_MCP_TOKEN }} }   # publish token limited to staging
 ```
 
 - **Manifest:** name, version, props schema, sources used, supported hosts, CSP domains.
@@ -207,8 +207,8 @@ genui is a runtime UI registry, not a permissions layer or a release manager. Vi
   - versions are immutable (a breaking props change is a warning);
   - size limit;
   - declared CSP domains.
-- **Registration:** genui's end-user MCP serves each custom component as a model-visible `render_<name>` tool plus its `ui://` resource; the SDK mirrors both onto the customer's server.
-- **Environments:** CI publishes to an environment (`--env`); `genui publish <name>@<version> --env prod` serves an existing version elsewhere without rebuilding. No promotion step.
+- **Registration:** app-mcp's end-user MCP serves each custom component as a model-visible `render_<name>` tool plus its `ui://` resource; the SDK mirrors both onto the customer's server.
+- **Environments:** CI publishes to an environment (`--env`); `app-mcp publish <name>@<version> --env prod` serves an existing version elsewhere without rebuilding. No promotion step.
 
 ---
 
@@ -228,7 +228,7 @@ genui is a runtime UI registry, not a permissions layer or a release manager. Vi
 | **M0 Spike** | Hello-world in Claude + ChatGPT. Hashed `ui://` URIs, `list_changed` behaviour, result `_meta` reaching the view, app→server calls, fullscreen, host vars. | 1 wk |
 | **M1 Views** | Format schemas; `render_form` (all field types, resource selects, submit validation); `render_chart` (static + source); loading patterns; host theming. | 2 wks |
 | **M2 SDK + registry** | SQLite registry, bundles, channels, SDK mount/cache/fallback, demo server. | 2 wks |
-| **M3 Management + CI** | Registry MCP with OAuth and roles; theme controller; component list/promote/rollback; `genui publish`. | 1–2 wks |
+| **M3 Management + CI** | Registry MCP with OAuth and roles; theme controller; component list/promote/rollback; `app-mcp publish`. | 1–2 wks |
 | **M4 Packaging** | Docker image (container + SQLite volume), self-host docs incl. MCP tunnels for Claude/ChatGPT, licences (MIT SDK/UI/format, FSL registry), examples. | 1 wk |
 
 ---

@@ -4,7 +4,7 @@ dist
 .DS_Store
 *.sqlite
 *.sqlite-*
-.genui-cache.json
+.app-mcp-cache.json
 .data
 .env.local
 .env.worktree

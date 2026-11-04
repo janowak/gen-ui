@@ -35,7 +35,7 @@ export function useView(name: string): ViewState {
   const [hostContext, setHostContext] = useState<McpUiHostContext>();
 
   const { app, error } = useApp({
-    appInfo: { name: `genui-${name}`, version: "0.1.0" },
+    appInfo: { name: `app-mcp-${name}`, version: "0.1.0" },
     capabilities: {},
     onAppCreated: (created) => {
       // Before connecting: the render id comes with the tool result, which the host sends once.

@@ -1,5 +1,5 @@
 import { DEFAULT_ENVIRONMENT, serverInstructions } from "@app-mcp/format";
-import { mountGenUI, type CatalogSource } from "@app-mcp/runtime";
+import { mountAppMcp, type CatalogSource } from "@app-mcp/runtime";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -10,7 +10,7 @@ import { builtInViews } from "./views.js";
 
 /**
  * Who the end-user MCP serves. Public: anyone with the URL of a workspace that didn't make it private,
- * with no data tools. Upstream: a company's own MCP server, forwarding genui's tools through
+ * with no data tools. Upstream: a company's own MCP server, forwarding app-mcp's tools through
  * @app-mcp/sdk with a server token; views call the company's data tools on that server.
  */
 type Hosted = { workspace: { id: string; name: string }; environment: string; dataTools: boolean; origin: string };
@@ -65,7 +65,7 @@ export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLo
 export const iconPath = (workspaceId: string) => `/w/${workspaceId}/icon`;
 
 /**
- * One environment's end-user MCP: genui's forms, charts and components, presented with the workspace's
+ * One environment's end-user MCP: app-mcp's forms, charts and components, presented with the workspace's
  * branding. Its instructions carry the workflows without params; those with params are slash commands.
  */
 export async function createHostedMcp(
@@ -102,7 +102,7 @@ export async function createHostedMcp(
     },
     instructions ? { instructions } : {},
   );
-  await mountGenUI(server, {
+  await mountAppMcp(server, {
     views: builtInViews(options.assets),
     registry: { snapshot: async () => snapshot, bundle: lookup },
     environment,
@@ -148,11 +148,11 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
       if (!caller) return c.json({ error: "Invalid token" }, 401);
       const workspace = caller.workspaceId === workspaceId ? await store.workspace(workspaceId) : undefined;
       if (!workspace || !ALLOWED.server.includes(caller.scope))
-        return c.json({ error: "This token can't use this workspace's genui MCP." }, 403);
+        return c.json({ error: "This token can't use this workspace's app-mcp MCP." }, 403);
       hosted = { workspace, environment, dataTools: true, origin: origin(c) };
     } else {
       const workspace = await store.hostedWorkspace(workspaceId);
-      if (!workspace) return c.json({ error: "No hosted genui MCP at this address." }, 404);
+      if (!workspace) return c.json({ error: "No hosted app-mcp MCP at this address." }, 404);
       hosted = { workspace, environment, dataTools: false, origin: origin(c) };
     }
     if (!(await store.hasEnvironment(workspaceId, environment)))
@@ -180,7 +180,7 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
     return c.body(icon.bytes as Uint8Array<ArrayBuffer>);
   });
 
-  // The environment's revision, next to its MCP: the SDK re-lists genui's tools only when it changed.
+  // The environment's revision, next to its MCP: the SDK re-lists app-mcp's tools only when it changed.
   const revision = async (c: Context) => {
     const environment = c.req.param("environment") ?? DEFAULT_ENVIRONMENT;
     const hosted = await resolve(c, String(c.req.param("workspace")), environment);

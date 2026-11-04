@@ -1,6 +1,6 @@
 # Host adapter plan
 
-Every interaction between a genui view and its host goes through one contract, `GenUIHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. A company's own chat is the second implementation: `createHost` in `@app-mcp/element`, rendering views in a shadow root (CUSTOM-CHAT-PLAN.md).
+Every interaction between an app-mcp view and its host goes through one contract, `AppMcpHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. A company's own chat is the second implementation: `createHost` in `@app-mcp/element`, rendering views in a shadow root (CUSTOM-CHAT-PLAN.md).
 
 **Status (2026-10-26)**
 - Proposed. This plan keeps views in MCP Apps iframes. CUSTOM-CHAT-PLAN.md builds on it, and replaces §4's `mount(…, { host })` with `view(component, setup)`.
@@ -34,7 +34,7 @@ Three code paths reach the host, and none of them checks what it supports first.
 ```ts
 export const HOST_CONTRACT = 1;
 
-export interface GenUIHost {
+export interface AppMcpHost {
   readonly contract: number;                                   // HOST_CONTRACT the host implements
   readonly capabilities: HostCapabilities;
   context(): HostContext;
@@ -78,7 +78,7 @@ export interface HostContext {
 **The model bridge**, built on the contract and used by kit components and built-in views alike:
 
 ```ts
-export function modelBridge(host: GenUIHost): {
+export function modelBridge(host: AppMcpHost): {
   can(action: "update" | "send"): boolean;
   update(text: string): Promise<boolean>;                      // false when refused or unsupported
   send(text: string): Promise<boolean>;
@@ -106,7 +106,7 @@ export function modelBridge(host: GenUIHost): {
 - **Mapping.** The contract maps onto the `App`:
   - `callServerTool`, `updateModelContext`, `sendMessage`, `requestDisplayMode`, `openLink`;
   - the `toolinputpartial` / `toolinput` / `toolresult` / `toolcancelled` / `hostcontextchanged` events and `onteardown`.
-- **Capabilities.** Read from `app.getHostCapabilities()` (`serverTools`, `updateModelContext`, `message`, `openLinks`) and the host context's `availableDisplayModes`. `tools` is also false once a result is flagged `genui/preview` or failed, as `blocked` is today.
+- **Capabilities.** Read from `app.getHostCapabilities()` (`serverTools`, `updateModelContext`, `message`, `openLinks`) and the host context's `availableDisplayModes`. `tools` is also false once a result is flagged `app-mcp/preview` or failed, as `blocked` is today.
 - **State,** picked as VIEW-STATE-PLAN §4 describes:
   - ChatGPT's widget state (`privateContent`);
   - else `localStorage`;
@@ -115,7 +115,7 @@ export function modelBridge(host: GenUIHost): {
 - **Size and teardown** stay inside: `App`'s `autoResize`, and flushing state on teardown.
 - **Created before `connect()`.** The host sends the tool result once, so the adapter must listen before connecting.
 
-**Tests** use a plain object that implements `GenUIHost` (events pushed by hand, calls recorded). Only the adapter's own tests need an `AppBridge`.
+**Tests** use a plain object that implements `AppMcpHost` (events pushed by hand, calls recorded). Only the adapter's own tests need an `AppBridge`.
 
 ---
 
@@ -167,5 +167,5 @@ export function modelBridge(host: GenUIHost): {
    - The form submits and delivers through the contract.
    - The import rule from §4, as a test.
 5. **Harness and docs.**
-   - `genui dev` keeps working unchanged (it is an MCP Apps host).
+   - `app-mcp dev` keeps working unchanged (it is an MCP Apps host).
    - README: the `ctx` table gets `host`, `model.can/deliver` and `links`, and drops `app`.

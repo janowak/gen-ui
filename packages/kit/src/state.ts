@@ -35,7 +35,7 @@ export interface AppEvents {
   removeEventListener(event: "toolcancelled", handler: (params: unknown) => void): void;
 }
 
-const PREFIX = "genui:";
+const PREFIX = "app-mcp:";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Larger entries aren't saved: every replay would load them, and ChatGPT documents no limit for widget state. */
 export const MAX_SAVED_BYTES = 64 * 1024;
@@ -47,7 +47,7 @@ function isSaved(value: unknown): value is Saved {
   );
 }
 
-/** `localStorage` (or any `Storage`): one entry per render, `genui:<scope>:<render id>`. */
+/** `localStorage` (or any `Storage`): one entry per render, `app-mcp:<scope>:<render id>`. */
 export function storageBackend(storage: StateStorage): StateBackend {
   return {
     persistence: "browser",
@@ -67,7 +67,7 @@ export function storageBackend(storage: StateStorage): StateBackend {
   };
 }
 
-/** Deletes genui entries not written for 30 days, and unreadable ones. Best effort: runs when a view opens. */
+/** Deletes app-mcp entries not written for 30 days, and unreadable ones. Best effort: runs when a view opens. */
 export function sweep(storage: StateStorage, now = Date.now()): void {
   const stale: string[] = [];
   for (let i = 0; i < storage.length; i++) {
@@ -104,11 +104,11 @@ export function widgetStateBackend(host: WidgetStateHost): StateBackend {
     persistence: "host",
     keyed: false,
     load() {
-      const saved = privateContent().genui;
+      const saved = privateContent().appMcp;
       return isSaved(saved) ? saved : undefined;
     },
     save(_key, saved) {
-      return host.setWidgetState({ ...current(), privateContent: { ...privateContent(), genui: saved } });
+      return host.setWidgetState({ ...current(), privateContent: { ...privateContent(), appMcp: saved } });
     },
   };
 }
@@ -207,14 +207,14 @@ export function createViewStore({ backend = defaultBackend(), debounceMs = 300 }
     dirty = false;
     const saved: Saved = { values: Object.fromEntries(values), at: Date.now() };
     if (JSON.stringify(saved).length > MAX_SAVED_BYTES) {
-      if (!warned) console.warn(`[genui] view state is over ${MAX_SAVED_BYTES} bytes, so it isn't saved. Keep drafts small.`);
+      if (!warned) console.warn(`[app-mcp] view state is over ${MAX_SAVED_BYTES} bytes, so it isn't saved. Keep drafts small.`);
       warned = true;
       return writing;
     }
     writing = writing
       .then(() => backend.save(key, saved))
       .catch((error: unknown) =>
-        console.warn(`[genui] could not save view state: ${error instanceof Error ? error.message : String(error)}`),
+        console.warn(`[app-mcp] could not save view state: ${error instanceof Error ? error.message : String(error)}`),
       );
     return writing;
   }

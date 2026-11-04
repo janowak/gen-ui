@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-/** Mock "company" tools: what a real server would already expose before adding genui. */
+/** Mock "company" tools: what a real server would already expose before adding app-mcp. */
 
 const CUSTOMERS = [
   { id: "c-1", name: "Acme Corp", country: "DE" },

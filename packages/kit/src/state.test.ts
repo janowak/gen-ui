@@ -39,7 +39,7 @@ function fakeApp() {
   return { app: app as AppEvents, emit };
 }
 
-const rendered = (id: string) => ({ content: [], structuredContent: { genui: { id } } });
+const rendered = (id: string) => ({ content: [], structuredContent: { appMcp: { id } } });
 const saved = (values: Record<string, unknown>, at = Date.now()) => JSON.stringify({ values, at });
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -48,7 +48,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("view store", () => {
   it("restores host state at once, and saves it privately without dropping the component's own state", async () => {
     const host: WidgetStateHost = {
-      widgetState: { modelContent: "Rated 3/5", privateContent: { mine: true, genui: { values: { state: 3 }, at: 1 } } },
+      widgetState: { modelContent: "Rated 3/5", privateContent: { mine: true, appMcp: { values: { state: 3 }, at: 1 } } },
       setWidgetState: vi.fn((state) => void (host.widgetState = state)),
     };
     const store = createViewStore({ backend: widgetStateBackend(host) });
@@ -60,12 +60,12 @@ describe("view store", () => {
     await store.info.flush();
     expect(host.widgetState).toEqual({
       modelContent: "Rated 3/5",
-      privateContent: { mine: true, genui: { values: { state: 5 }, at: expect.any(Number) } },
+      privateContent: { mine: true, appMcp: { values: { state: 5 }, at: expect.any(Number) } },
     });
   });
 
   it("waits for the render id in the browser, and a value set before the restore wins and is saved with it", async () => {
-    const storage = memoryStorage({ "genui:form:v1": saved({ a: 1, b: 2 }) });
+    const storage = memoryStorage({ "app-mcp:form:v1": saved({ a: 1, b: 2 }) });
     const store = createViewStore({ backend: storageBackend(storage), debounceMs: 0 });
     const { app, emit } = fakeApp();
     store.attach(app, "form");
@@ -76,7 +76,7 @@ describe("view store", () => {
     await vi.waitFor(() => expect(store.info.restored).toBe(true));
     expect(store.viewId).toBe("v1");
     expect([store.get("a"), store.get("b")]).toEqual([9, 2]);
-    expect(JSON.parse(storage.getItem("genui:form:v1")!).values).toEqual({ a: 9, b: 2 });
+    expect(JSON.parse(storage.getItem("app-mcp:form:v1")!).values).toEqual({ a: 9, b: 2 });
   });
 
   it("debounces writes, and flush writes at once", async () => {
@@ -88,9 +88,9 @@ describe("view store", () => {
     await vi.waitFor(() => expect(store.info.restored).toBe(true));
 
     store.set("state", "draft");
-    expect(storage.getItem("genui:form:v1")).toBeNull();
+    expect(storage.getItem("app-mcp:form:v1")).toBeNull();
     await store.info.flush();
-    expect(JSON.parse(storage.getItem("genui:form:v1")!).values).toEqual({ state: "draft" });
+    expect(JSON.parse(storage.getItem("app-mcp:form:v1")!).values).toEqual({ state: "draft" });
   });
 
   it("keeps state in memory when the render has no id or is cancelled", async () => {
@@ -122,7 +122,7 @@ describe("view store", () => {
 
     store.set("state", "x".repeat(MAX_SAVED_BYTES));
     await store.info.flush();
-    expect(storage.getItem("genui:form:v1")).toBeNull();
+    expect(storage.getItem("app-mcp:form:v1")).toBeNull();
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
   });
@@ -154,15 +154,15 @@ describe("backends", () => {
     expect(defaultBackend().persistence).toBe("memory");
   });
 
-  it("sweeps genui entries not written for 30 days, and unreadable ones", () => {
+  it("sweeps app-mcp entries not written for 30 days, and unreadable ones", () => {
     const now = Date.now();
     const storage = memoryStorage({
-      "genui:form:old": saved({}, now - 31 * DAY),
-      "genui:form:new": saved({}, now - 2 * DAY),
-      "genui:form:broken": "{",
+      "app-mcp:form:old": saved({}, now - 31 * DAY),
+      "app-mcp:form:new": saved({}, now - 2 * DAY),
+      "app-mcp:form:broken": "{",
       "other:key": "kept",
     });
     sweep(storage, now);
-    expect([...Array(storage.length).keys()].map((i) => storage.key(i))).toEqual(["genui:form:new", "other:key"]);
+    expect([...Array(storage.length).keys()].map((i) => storage.key(i))).toEqual(["app-mcp:form:new", "other:key"]);
   });
 });

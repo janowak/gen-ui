@@ -117,7 +117,7 @@ export function ManagerView() {
             </label>
             {state.components.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No components yet. Publish one with `genui publish --env {state.environment}`.
+                No components yet. Publish one with `app-mcp publish --env {state.environment}`.
               </p>
             ) : (
               <Table>

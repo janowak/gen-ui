@@ -7,8 +7,8 @@ import { openDatabase } from "./db-node.js";
 
 export { loadAssets } from "./assets-node.js";
 
-/** Tests run on node:sqlite, or on a local D1 (Miniflare) with GENUI_TEST_DB=d1. `pnpm test` runs both. */
-export const onD1 = process.env.GENUI_TEST_DB === "d1";
+/** Tests run on node:sqlite, or on a local D1 (Miniflare) with APP_MCP_TEST_DB=d1. `pnpm test` runs both. */
+export const onD1 = process.env.APP_MCP_TEST_DB === "d1";
 
 const MIGRATIONS = new URL("../migrations/", import.meta.url);
 

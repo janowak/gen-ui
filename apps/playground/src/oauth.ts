@@ -14,7 +14,7 @@ export class PlaygroundOAuth implements OAuthClientProvider {
   constructor(private readonly server: string) {}
 
   private key(name: string) {
-    return `genui-playground:${this.server}:${name}`;
+    return `app-mcp-playground:${this.server}:${name}`;
   }
   private read<T>(name: string): T | undefined {
     try {
@@ -38,7 +38,7 @@ export class PlaygroundOAuth implements OAuthClientProvider {
 
   get clientMetadata() {
     return {
-      client_name: "genui playground",
+      client_name: "app-mcp playground",
       redirect_uris: [this.redirectUrl],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -66,7 +66,7 @@ export class PlaygroundOAuth implements OAuthClientProvider {
   }
   redirectToAuthorization(url: URL) {
     // Remember which server the redirect belongs to.
-    sessionStorage.setItem("genui-playground:return", location.search);
+    sessionStorage.setItem("app-mcp-playground:return", location.search);
     location.href = url.toString();
   }
 
@@ -79,7 +79,7 @@ export class PlaygroundOAuth implements OAuthClientProvider {
 export function takeCallback(): URLSearchParams | undefined {
   const params = new URLSearchParams(location.search);
   if (!params.has(CALLBACK)) return undefined;
-  const original = sessionStorage.getItem("genui-playground:return") ?? "";
+  const original = sessionStorage.getItem("app-mcp-playground:return") ?? "";
   history.replaceState(null, "", `/${original}`);
   return params;
 }

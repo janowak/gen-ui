@@ -1,10 +1,10 @@
 # CDN bundles plan
 
-Serve each view as a small `ui://` page that loads genui's content-hashed JS and CSS from a static asset domain, instead of one single-file HTML with everything inlined. The server keeps serving the page; the code comes from the bucket.
+Serve each view as a small `ui://` page that loads app-mcp's content-hashed JS and CSS from a static asset domain, instead of one single-file HTML with everything inlined. The server keeps serving the page; the code comes from the bucket.
 
 **Status (2026-10-23)**
 - Proposed. Starts after the M0 spike confirms the host checks in §6.
-- A browser-side optimization, not a server-load one: genui sends each bundle to a company's server about once per version.
+- A browser-side optimization, not a server-load one: app-mcp sends each bundle to a company's server about once per version.
 
 ---
 
@@ -29,22 +29,22 @@ A test build with code splitting shows most of that is shared:
 
 View-specific entry files are 1–13 KB.
 
-**Where the bytes go today:** genui → SDK once per process per version (negligible for the VPS), then company server → host → browser on every host fetch. The browser parses the full bundle on every render and can't reuse compiled code across renders, because the scripts are inline.
+**Where the bytes go today:** app-mcp → SDK once per process per version (negligible for the VPS), then company server → host → browser on every host fetch. The browser parses the full bundle on every render and can't reuse compiled code across renders, because the scripts are inline.
 
 ---
 
 ## 2. Design
 
-- **The page.** The `ui://genui/<view>/<hash>` resource becomes ~1 KB of `<script type="module">` and `<link rel="modulepreload">` / `<link rel="stylesheet">` tags with absolute URLs and `integrity` hashes. The URI hash covers the page, so it pins exact asset hashes. Old messages keep rendering the code they were made with.
+- **The page.** The `ui://app-mcp/<view>/<hash>` resource becomes ~1 KB of `<script type="module">` and `<link rel="modulepreload">` / `<link rel="stylesheet">` tags with absolute URLs and `integrity` hashes. The URI hash covers the page, so it pins exact asset hashes. Old messages keep rendering the code they were made with.
 - **Asset domain.** `assets.<domain>`: an R2 bucket on a Cloudflare custom domain.
   - Paths are content-hashed (`/<name>-<hash>.js`).
   - Headers: `Cache-Control: public, max-age=31536000, immutable` and `Access-Control-Allow-Origin: *`.
   - Assets are never deleted (same rule as bundles today).
 - **CSP.** `_meta.ui.csp.resourceDomains: ["https://assets.<domain>"]`, set on the resource `contents[]` (not on `registerAppResource`'s config). It maps to `script-src`, `style-src`, `img-src` and `font-src`.
-- **Only genui's code on the asset domain:** the runtime and the built-in views (form, chart, manager, theme, recipes).
+- **Only app-mcp's code on the asset domain:** the runtime and the built-in views (form, chart, manager, theme, recipes).
   - Custom components keep their own code inline in their page and import the shared runtime from the asset domain.
   - Tenant code never shares an allowlisted origin with another tenant's views.
-- **Switch.** `GENUI_ASSETS_URL`. Unset means today's single-file bundles.
+- **Switch.** `APP_MCP_ASSETS_URL`. Unset means today's single-file bundles.
   - Self-host defaults to inline, so browsers never need to reach a company's registry.
   - Cloud turns it on once §6 passes for Claude and ChatGPT.
 - **Component contract.** The runtime is pinned by hash in each component's page. A component built against an older `@app-mcp/kit` keeps loading the runtime it was built with.
@@ -71,7 +71,7 @@ Also:
 - **SRI on every script and preload.** Without it, whoever controls the CDN could change the code behind an old message. Avoid dynamic `import()` in views, or cover those chunks with import-map `integrity`.
 - **CORS on the asset domain.** Module scripts are always fetched with CORS. The view's sandbox origin may be opaque (`null`), so allow `*`.
 - **Absolute URLs.** The page has no base URL; no `baseUriDomains` needed.
-- **Dev.** `genui dev` and the playground serve assets from localhost and declare it in `resourceDomains`.
+- **Dev.** `app-mcp dev` and the playground serve assets from localhost and declare it in `resourceDomains`.
 
 ---
 
@@ -79,7 +79,7 @@ Also:
 
 | Risk | Mitigation |
 |---|---|
-| Browsers start talking to genui (today only the company's server does). Corporate firewalls can block an unknown CDN, and the view renders blank. | Inline fallback via `GENUI_ASSETS_URL`. A per-workspace setting if a customer needs it. |
+| Browsers start talking to app-mcp (today only the company's server does). Corporate firewalls can block an unknown CDN, and the view renders blank. | Inline fallback via `APP_MCP_ASSETS_URL`. A per-workspace setting if a customer needs it. |
 | We and Cloudflare see end users' IPs on first load per version. Weakens the "no data proxy" story slightly. | Immutable caching keeps it to the first load. Add it to the DPA and the subprocessor list. |
 | A host approves fewer domains than declared, or doesn't support `resourceDomains`. | Check `hostCapabilities.sandbox.csp` in the M0 spike. Keep the single-file build. |
 | The first load takes one more round trip. | Roughly a wash with sending ~700 KB through the host. Faster on every load after. |
@@ -100,7 +100,7 @@ Also:
 
 1. **Build.** A second output mode in `@app-mcp/ui`: the small page plus hashed assets plus SRI, next to today's single-file build.
 2. **Release.** CI uploads assets to R2 before the registry points any `ui://` URI at them.
-3. **Registry.** With `GENUI_ASSETS_URL` set, serve the small page and its CSP; otherwise inline. Same switch in the registry MCP's management views.
+3. **Registry.** With `APP_MCP_ASSETS_URL` set, serve the small page and its CSP; otherwise inline. Same switch in the registry MCP's management views.
 4. **Kit.** `@app-mcp/kit`'s Vite plugin treats the runtime as external, imports it from the asset domain, and records the runtime hash in the manifest. Publish checks validate it.
 5. **Lazy chunks.** Date picker (and later other heavy field types) load only when used.
 6. **Docs.** Self-host stays inline. Cloud DPA and security notes cover the asset domain.
