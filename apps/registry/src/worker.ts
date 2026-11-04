@@ -5,6 +5,9 @@ import workflows from "@app-mcp/ui/views/workflows.html";
 import theme from "@app-mcp/ui/views/theme.html";
 import instructions from "@app-mcp/ui/views/instructions.html";
 import workspace from "@app-mcp/ui/views/workspace.html";
+import members from "@app-mcp/ui/views/members.html";
+import tokens from "@app-mcp/ui/views/tokens.html";
+import connector from "@app-mcp/ui/views/connector.html";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
 import { createRegistryApp, type Refresher } from "./app.js";
@@ -21,7 +24,7 @@ interface Env {
 }
 
 const assets: Assets = {
-  views: { form, chart, manager, theme, workflows, workspace, instructions },
+  views: { form, chart, manager, theme, workflows, workspace, members, tokens, connector, instructions },
   pages: { "sign-in": signIn, consent },
 };
 

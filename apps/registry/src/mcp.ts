@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   Branding,
+  EnvironmentName,
   isCommand,
   MAX_ENVIRONMENT_INSTRUCTIONS,
   MAX_INSTRUCTIONS,
@@ -20,7 +21,7 @@ import { z } from "zod";
 import { endUserPath } from "./api.js";
 import { iconPath } from "./hosted.js";
 import { RegistryError, type Membership, type Store } from "./store.js";
-import { builtInViews, type Assets, type ManagementViewName } from "./views.js";
+import { builtInViews, MANAGEMENT_VIEWS, type Assets, type ManagementViewName } from "./views.js";
 
 type ManagementViews = Record<ManagementViewName, { html: string; uri: string }>;
 const hashed = new WeakMap<Assets, ManagementViews>();
@@ -33,16 +34,7 @@ function managementViews(assets: Assets): ManagementViews {
       html: assets.views[name],
       uri: `ui://app-mcp-registry/${name}/${contentHash(assets.views[name])}`,
     });
-    hashed.set(
-      assets,
-      (views = {
-        manager: load("manager"),
-        theme: load("theme"),
-        workflows: load("workflows"),
-        workspace: load("workspace"),
-        instructions: load("instructions"),
-      }),
-    );
+    hashed.set(assets, (views = Object.fromEntries(MANAGEMENT_VIEWS.map((name) => [name, load(name)])) as ManagementViews));
   }
   return views;
 }
@@ -60,10 +52,11 @@ function failed(error: unknown) {
 
 /**
  * The registry's own MCP server, built per request for the signed-in person.
- * Members can browse, preview and pick the environment they look at; admins also get the
- * app-only tools that change what users see (save theme, instructions or workflows). Those are
- * never callable by the model: they run only when a person clicks a button in the management views.
- * `baseURL` is the registry's public URL, for the end-user MCP addresses the workspace view shows.
+ * Members can browse, preview and pick the environment they look at. Admins also change workspace
+ * settings (people, environments, the public MCP, the connector, tokens) with tools the model calls
+ * directly, and save what end users get (theme, instructions, workflows) with app-only tools that run
+ * only when a person clicks in the views. Token secrets are only ever returned to the tokens view.
+ * `baseURL` is the registry's public URL, for the end-user MCP addresses the views show.
  * `toolsChanged` tells open clients to re-list, after a switch changes the preview tools.
  */
 export async function createRegistryMcp(
@@ -85,9 +78,12 @@ export async function createRegistryMcp(
   const theme = catalog.theme;
   await mountAppMcp(server, { views: builtInViews(assets), preview: true, theme: theme ?? undefined });
 
-  for (const view of Object.values(VIEWS)) {
+  // The summary and tokens views copy addresses and secrets to the clipboard, which the host must allow.
+  const copies = new Set<ManagementViewName>(["workspace", "tokens"]);
+  for (const [name, view] of Object.entries(VIEWS) as [ManagementViewName, ManagementViews[ManagementViewName]][]) {
+    const _meta = copies.has(name) ? { ui: { permissions: { clipboardWrite: {} } } } : undefined;
     registerAppResource(server, view.uri, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
-      contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html }],
+      contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html, ...(_meta ? { _meta } : {}) }],
     }));
   }
 
@@ -219,47 +215,88 @@ export async function createRegistryMcp(
     const { icon, ...branding } = await store.branding(ws);
     return { ...branding, iconUrl: icon ? `${baseURL}${iconPath(ws)}?v=${icon.hash}` : null };
   };
+  // Each environment's end-user MCP address: what hosts add as a connector, and APP_MCP_MCP_URL for @app-mcp/sdk.
+  const addresses = async () =>
+    (await store.listEnvironments(ws)).map((environment) => ({ environment, url: `${baseURL}${endUserPath(ws, environment)}` }));
+  const access = (isPublic: boolean) =>
+    isPublic
+      ? "The end-user MCP is public: anyone with its address can add it as a connector, and servers use it with a server token."
+      : "The end-user MCP is private: only servers with a server token can use it.";
+  const listAddresses = (connectors: { environment: string; url: string }[]) =>
+    connectors.map((c) => `- ${c.environment}: ${c.url}`).join("\n");
 
-  // Who manages the workspace, how servers connect, and whether its end-user MCP is public.
-  // Admins change these only by clicking in the view (app-only tools below); server tokens never reach the model.
-  const workspaceState = async (extra: Record<string, unknown> = {}) => ({
-    role: member.role,
-    workspace: await store.workspace(ws),
-    branding: await brandingState(),
-    ...(await store.listMembers(ws)),
-    public: await store.isHosted(ws),
-    connectors: (await store.listEnvironments(ws)).map((environment) => ({
-      environment,
-      url: `${baseURL}${endUserPath(ws, environment)}`,
-    })),
-    ...(isAdmin ? { tokens: await store.listTokens(ws) } : {}),
-    ...extra,
-  });
-
-  const Invite = z.object({ email: z.email(), role: z.enum(["member", "admin"]).default("member") });
+  // The workspace at a glance. People, tokens and the connector each have their own view and tools,
+  // and admins change settings with plain tools the model calls (below).
+  const workspaceState = async () => {
+    const [workspace, branding, people, isPublic, connectors, components] = await Promise.all([
+      store.workspace(ws),
+      brandingState(),
+      store.listMembers(ws),
+      store.isHosted(ws),
+      addresses(),
+      store.listComponents(ws),
+    ]);
+    return {
+      role: member.role,
+      workspace: workspace!,
+      title: branding.title ?? workspace!.name,
+      iconUrl: branding.iconUrl,
+      public: isPublic,
+      connectors,
+      counts: {
+        members: people.members.length,
+        invites: people.invites.length,
+        components: components.length,
+        ...(isAdmin ? { tokens: (await store.listTokens(ws)).length } : {}),
+      },
+    };
+  };
+  const describeWorkspace = (state: Awaited<ReturnType<typeof workspaceState>>) => {
+    const { members, invites, components, tokens } = state.counts;
+    const counts = [`${members} member${members === 1 ? "" : "s"}`, `${invites} pending invite${invites === 1 ? "" : "s"}`];
+    counts.push(`${components} component${components === 1 ? "" : "s"}`);
+    if (tokens !== undefined) counts.push(`${tokens} token${tokens === 1 ? "" : "s"}`);
+    return `${state.workspace.name} (shown in hosts as "${state.title}"): ${counts.join(", ")}. ${access(state.public)}\nEnd-user MCP addresses:\n${listAddresses(state.connectors)}`;
+  };
 
   registerAppTool(
     server,
-    "manage_workspace",
+    "show_workspace",
     {
       title: "Workspace",
       description:
-        "Show the workspace's members and pending invites, the end-user MCP address of each environment, and whether it's public. " +
-        "Admins invite people, create server tokens for @app-mcp/sdk, turn the public MCP on or off and set its title, description, website and icon from the view. " +
-        "Pass `invite` to prefill an invite the admin then sends with a click.",
-      inputSchema: z.object({ invite: Invite.optional().describe("Someone to invite, prefilled in the view.") }),
+        "Show the workspace at a glance: its name, whether its end-user MCP is public, each environment's end-user MCP address, and how many people, invites, components and tokens it has. " +
+        "list_members, list_tokens and edit_connector show the details.",
+      inputSchema: z.object({}),
       _meta: { ui: { resourceUri: VIEWS.workspace.uri } },
     },
-    async ({ invite }) => {
-      const state = await workspaceState(invite ? { draftInvite: invite } : {});
-      const people = state.members.map((m) => `- ${m.name ?? m.email ?? m.userId} (${m.role})`);
-      const pending = state.invites.map((i) => `- ${i.email} (${i.role}, invited)`);
-      const access = state.public
-        ? "The end-user MCP is public: anyone with its address can use it, and servers with a server token too."
-        : "The end-user MCP is private: only servers with a server token can use it.";
-      const next = invite ? (isAdmin ? ` Click Invite to send the invite to ${invite.email}.` : " Only admins can invite.") : "";
-      const shown = `Hosts show it as "${state.branding.title ?? state.workspace?.name}"${state.branding.iconUrl ? " with its icon" : ""}.`;
-      return ok(`Members:\n${[...people, ...pending].join("\n")}\n${access} ${shown}${next}`, state);
+    async () => {
+      const state = await workspaceState();
+      return ok(describeWorkspace(state), state);
+    },
+  );
+
+  // People who manage the workspace, and invites waiting for a first sign-in.
+  const membersState = async () => ({ role: member.role, me: member.userId, ...(await store.listMembers(ws)) });
+  const describeMembers = ({ members, invites }: Awaited<ReturnType<typeof membersState>>) =>
+    [
+      ...members.map((m) => `- ${m.name ?? m.email ?? m.userId}${m.name && m.email ? ` <${m.email}>` : ""} (${m.role})`),
+      ...invites.map((i) => `- ${i.email} (${i.role}, invited)`),
+    ].join("\n");
+
+  registerAppTool(
+    server,
+    "list_members",
+    {
+      title: "People",
+      description:
+        "List the people who manage the workspace and the pending invites. Admins change them with member_invite, invite_cancel, member_set_role and member_remove, or from the view.",
+      inputSchema: z.object({}),
+      _meta: { ui: { resourceUri: VIEWS.members.uri } },
+    },
+    async () => {
+      const state = await membersState();
+      return ok(`People:\n${describeMembers(state)}`, state);
     },
   );
 
@@ -402,41 +439,216 @@ export async function createRegistryMcp(
     },
   );
 
-  registerAppTool(
-    server,
+  // Workspace settings: plain tools the model calls directly, which the views call too. Token secrets are the
+  // exception: the model can create a token, but its secret is made and shown only in the tokens view.
+  const guarded =
+    <Args>(run: (args: Args) => Promise<ReturnType<typeof ok>>) =>
+    async (args: Args) => {
+      try {
+        return await run(args);
+      } catch (error) {
+        return failed(error);
+      }
+    };
+  const Role = z.enum(["member", "admin"]);
+
+  server.registerTool(
+    "workspace_rename",
+    {
+      title: "Rename workspace",
+      description: "Rename the workspace. Hosts show the connector title instead when one is set (connector_set).",
+      inputSchema: z.object({ name: z.string().trim().min(1).max(80) }),
+    },
+    guarded(async ({ name }) => {
+      await store.renameWorkspace(ws, name);
+      return ok(`Renamed the workspace to "${name}".`, await workspaceState());
+    }),
+  );
+
+  server.registerTool(
+    "public_set",
+    {
+      title: "Public MCP",
+      description: "Turn the public end-user MCP on or off. Off: only servers with a server token can use it.",
+      inputSchema: z.object({ enabled: z.boolean() }),
+    },
+    guarded(async ({ enabled }) => {
+      await store.setHosted(ws, enabled);
+      return ok(access(enabled), await workspaceState());
+    }),
+  );
+
+  server.registerTool(
+    "environment_create",
+    {
+      title: "Create environment",
+      description:
+        "Add an environment next to prod, e.g. staging. It gets its own end-user MCP address; CI publishes components and workflows to it.",
+      inputSchema: z.object({ name: EnvironmentName }),
+    },
+    guarded(async ({ name }) => {
+      await store.createEnvironment(ws, name);
+      return ok(`Created ${name}. Its end-user MCP: ${baseURL}${endUserPath(ws, name)}`, await workspaceState());
+    }),
+  );
+
+  server.registerTool(
     "member_invite",
     {
       title: "Invite",
       description:
         "Invite someone by email. They join at their next sign-in with that verified email, even if they already have a workspace.",
-      inputSchema: Invite,
-      _meta: appOnly(VIEWS.workspace.uri),
+      inputSchema: z.object({ email: z.email(), role: Role.default("member") }),
     },
-    async ({ email, role }) => {
+    guarded(async ({ email, role }) => {
       await store.invite(ws, email, role);
+      return ok(`Invited ${email} as ${role}. They join when they next connect app-mcp and sign in with that email.`, await membersState());
+    }),
+  );
+
+  server.registerTool(
+    "invite_cancel",
+    { title: "Cancel invite", description: "Cancel a pending invite.", inputSchema: z.object({ email: z.string() }) },
+    guarded(async ({ email }) => {
+      await store.cancelInvite(ws, email);
+      return ok(`Cancelled the invite for ${email}.`, await membersState());
+    }),
+  );
+
+  server.registerTool(
+    "member_set_role",
+    {
+      title: "Change role",
+      description: "Make a member an admin or a member, by the email they signed in with. The workspace always keeps an admin.",
+      inputSchema: z.object({ email: z.string(), role: Role }),
+    },
+    guarded(async ({ email, role }) => {
+      await store.setRole(ws, (await store.memberByEmail(ws, email)).userId, role);
+      return ok(`${email} is now ${role === "admin" ? "an admin" : "a member"}.`, await membersState());
+    }),
+  );
+
+  server.registerTool(
+    "member_remove",
+    {
+      title: "Remove member",
+      description:
+        "Remove someone from the workspace, by the email they signed in with. Their connector stops working from its next request. The workspace always keeps an admin.",
+      inputSchema: z.object({ email: z.string() }),
+    },
+    guarded(async ({ email }) => {
+      await store.removeMember(ws, (await store.memberByEmail(ws, email)).userId);
+      return ok(`Removed ${email} from the workspace.`, await membersState());
+    }),
+  );
+
+  // How hosts list the end-user MCP. Unlike the other settings, the icon is a file: it's uploaded in the view.
+  const connectorState = async (draft?: Record<string, unknown>) => ({
+    workspace: (await store.workspace(ws))!,
+    branding: await brandingState(),
+    ...(draft ? { draft } : {}),
+  });
+  const ConnectorFields = z.object({
+    title: Branding.shape.title.unwrap().nullable().optional().describe('Display name, e.g. "Acme Support"; null clears it.'),
+    description: Branding.shape.description.unwrap().nullable().optional().describe("What the connector does; null clears it."),
+    websiteUrl: Branding.shape.websiteUrl.unwrap().nullable().optional().describe("null clears it."),
+  });
+
+  registerAppTool(
+    server,
+    "edit_connector",
+    {
+      title: "Connector",
+      description:
+        "Show how hosts like Claude and ChatGPT list the end-user MCP: its icon, title, description and website, in a form. " +
+        "Pass fields to prefill the form for the admin to review; connector_set saves them without it.",
+      inputSchema: ConnectorFields,
+      _meta: { ui: { resourceUri: VIEWS.connector.uri } },
+    },
+    async (draft) => {
+      const state = await connectorState(Object.keys(draft).length ? draft : undefined);
+      const { title, description, websiteUrl, iconUrl } = state.branding;
+      const shown = [
+        `Title: ${title ?? `${state.workspace.name} (the workspace name)`}`,
+        `Description: ${description ?? "none"}`,
+        `Website: ${websiteUrl ?? "none"}`,
+        `Icon: ${iconUrl ? "set" : "none"}`,
+      ];
       return ok(
-        `Invited ${email} as ${role}. They join when they next connect app-mcp and sign in with that email.`,
-        await workspaceState(),
+        `${state.draft ? "Prefilled the connector form; the admin saves it. " : ""}Hosts list the end-user MCP as:\n${shown.join("\n")}`,
+        state,
       );
     },
   );
 
+  server.registerTool(
+    "connector_set",
+    {
+      title: "Set connector",
+      description:
+        "Change how hosts list the end-user MCP. Only the fields you pass change; null clears one. Hosts show it the next time they connect. The icon is uploaded in edit_connector.",
+      inputSchema: ConnectorFields,
+    },
+    guarded(async (fields) => {
+      const { icon: _, ...current } = await store.branding(ws);
+      const next: Record<string, unknown> = { ...current };
+      for (const [key, value] of Object.entries(fields)) if (value !== undefined) next[key] = value ?? undefined;
+      await store.setBranding(ws, Branding.parse(next));
+      return ok("Saved the connector. Hosts show it the next time they connect.", await connectorState());
+    }),
+  );
+
   registerAppTool(
     server,
-    "invite_cancel",
+    "connector_icon_set",
     {
-      title: "Cancel invite",
-      description: "Cancel a pending invite.",
-      inputSchema: z.object({ email: z.string() }),
-      _meta: appOnly(VIEWS.workspace.uri),
+      title: "Set connector icon",
+      description: "Replace the connector icon (base64 PNG, JPEG, WebP or SVG), or remove it with null.",
+      inputSchema: z.object({
+        icon: z
+          .string()
+          .max(Math.ceil(MAX_ICON_BYTES / 3) * 4)
+          .nullable(),
+      }),
+      _meta: appOnly(VIEWS.connector.uri),
     },
-    async ({ email }) => {
-      try {
-        await store.cancelInvite(ws, email);
-        return ok(`Cancelled the invite for ${email}.`, await workspaceState());
-      } catch (error) {
-        return failed(error);
-      }
+    guarded(async ({ icon }) => {
+      await store.setIcon(ws, icon === null ? null : new Uint8Array(Buffer.from(icon, "base64")));
+      return ok(icon === null ? "Removed the connector icon." : "Saved the connector icon.", await connectorState());
+    }),
+  );
+
+  // Tokens. A token made here has no secret until an admin clicks Reveal in the tokens view: the secret is
+  // made then and returned once, to the view only, so it never reaches the model or the chat history.
+  const tokensState = async (highlight?: string) => ({
+    tokens: await store.listTokens(ws),
+    connectors: await addresses(),
+    ...(highlight ? { highlight } : {}),
+  });
+  const describeTokens = ({ tokens }: Awaited<ReturnType<typeof tokensState>>) =>
+    tokens.length
+      ? tokens
+          .map(
+            (t) =>
+              `- ${t.name} (${t.scope}${t.environments ? `, ${t.environments.join(", ")}` : ""}, id ${t.id})${t.revealed ? "" : ": not revealed yet"}`,
+          )
+          .join("\n")
+      : "No tokens yet.";
+
+  registerAppTool(
+    server,
+    "list_tokens",
+    {
+      title: "Tokens",
+      description:
+        "List the workspace's tokens: server (your MCP server forwards app-mcp's tools with @app-mcp/sdk), publish (CI runs app-mcp publish) and admin (the app-mcp CLI). " +
+        "Secrets are never shown here; an admin reveals a new token's secret once, in the view.",
+      inputSchema: z.object({}),
+      _meta: { ui: { resourceUri: VIEWS.tokens.uri } },
+    },
+    async () => {
+      const state = await tokensState();
+      return ok(describeTokens(state), state);
     },
   );
 
@@ -446,86 +658,60 @@ export async function createRegistryMcp(
     {
       title: "Create token",
       description:
-        "Create a token: server for @app-mcp/sdk on the company's MCP server, publish for CI, admin for the app-mcp CLI. Shown once, in the view only.",
-      inputSchema: z.object({ name: z.string().min(1).max(80), scope: z.enum(["server", "publish", "admin"]).default("server") }),
-      _meta: appOnly(VIEWS.workspace.uri),
+        "Create a token: server for @app-mcp/sdk on the company's MCP server, publish for CI, admin for the app-mcp CLI. " +
+        "It has no secret yet: the admin clicks Reveal in the view to see and copy it once. The secret never comes back to you.",
+      inputSchema: z.object({
+        name: z.string().trim().min(1).max(80).describe('What uses it, e.g. "prod server".'),
+        scope: z.enum(["server", "publish", "admin"]).default("server"),
+        environments: z.array(EnvironmentName).min(1).optional().describe("Publish tokens only: the environments it may publish to."),
+      }),
+      _meta: { ui: { resourceUri: VIEWS.tokens.uri } },
     },
-    async ({ name, scope }) => {
-      const token = await store.createToken(ws, scope, name);
-      // The text stays token-free: only the view shows the token.
+    guarded(async ({ name, scope, environments }) => {
+      if (environments && scope !== "publish") throw new RegistryError(400, "Only publish tokens can be limited to environments");
+      const id = await store.addToken(ws, scope, name, environments);
       return ok(
-        `Created the ${scope} token "${name}". Copy it now: it isn't shown again.`,
-        await workspaceState({ created: { name, scope, token } }),
+        `Created the ${scope} token "${name}". It has no secret yet: click Reveal in the view to see it once and copy it.`,
+        await tokensState(id),
       );
-    },
+    }),
   );
 
-  registerAppTool(
-    server,
+  server.registerTool(
     "token_revoke",
     {
       title: "Revoke token",
-      description: "Revoke a token. Servers or CI using it get 401 from their next request.",
+      description: "Revoke a token by id (from list_tokens). Servers or CI using it get 401 from their next request.",
       inputSchema: z.object({ id: z.string() }),
-      _meta: appOnly(VIEWS.workspace.uri),
     },
-    async ({ id }) => {
-      try {
-        await store.revokeToken(ws, id);
-        return ok("Revoked the token.", await workspaceState());
-      } catch (error) {
-        return failed(error);
-      }
-    },
+    guarded(async ({ id }) => {
+      await store.revokeToken(ws, id);
+      return ok("Revoked the token.", await tokensState());
+    }),
   );
 
-  registerAppTool(
-    server,
-    "public_set",
-    {
-      title: "Public MCP",
-      description: "Turn the public end-user MCP on or off. Off: only servers with a server token can use it.",
-      inputSchema: z.object({ enabled: z.boolean() }),
-      _meta: appOnly(VIEWS.workspace.uri),
-    },
-    async ({ enabled }) => {
-      await store.setHosted(ws, enabled);
-      return ok(
-        enabled
-          ? "The end-user MCP is public: anyone with its address can use it."
-          : "The end-user MCP is private: only servers with a server token can use it.",
-        await workspaceState(),
-      );
-    },
-  );
-
-  registerAppTool(
-    server,
-    "branding_save",
-    {
-      title: "Save branding",
-      description:
-        "Set how the end-user MCP shows in hosts: title, description and website (unset ones are cleared). `icon`: base64 image to replace the icon, null to remove it; leave out to keep it.",
-      inputSchema: z.object({
-        branding: Branding,
-        icon: z
-          .string()
-          .max(Math.ceil(MAX_ICON_BYTES / 3) * 4)
-          .nullable()
-          .optional(),
+  // The only tools that return a secret: app-only, so just a click in the view runs them. The text stays secret-free.
+  for (const rotate of [false, true]) {
+    registerAppTool(
+      server,
+      rotate ? "token_rotate" : "token_reveal",
+      {
+        title: rotate ? "Rotate token" : "Reveal token",
+        description: rotate
+          ? "Give a token a new secret, shown once; the old one stops working."
+          : "Make a new token's secret and show it once.",
+        inputSchema: z.object({ id: z.string() }),
+        _meta: appOnly(VIEWS.tokens.uri),
+      },
+      guarded(async ({ id }) => {
+        const secret = await store.revealToken(ws, id, { rotate });
+        return ok(rotate ? "Rotated the token: the old secret no longer works." : "Revealed the token.", {
+          ...(await tokensState(id)),
+          secret: { id, token: secret },
+        });
       }),
-      _meta: appOnly(VIEWS.workspace.uri),
-    },
-    async ({ branding, icon }) => {
-      try {
-        if (icon !== undefined) await store.setIcon(ws, icon === null ? null : new Uint8Array(Buffer.from(icon, "base64")));
-        await store.setBranding(ws, branding);
-        return ok("Saved the branding. Hosts show it the next time they connect.", await workspaceState());
-      } catch (error) {
-        return failed(error);
-      }
-    },
-  );
+    );
+  }
 
   registerAppTool(
     server,

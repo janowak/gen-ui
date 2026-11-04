@@ -1,7 +1,8 @@
 import { viewBundles, type ViewBundle, type ViewName } from "@app-mcp/runtime";
 
 export type { ViewName };
-export type ManagementViewName = "manager" | "theme" | "workflows" | "workspace" | "instructions";
+export const MANAGEMENT_VIEWS = ["manager", "theme", "workflows", "workspace", "members", "tokens", "connector", "instructions"] as const;
+export type ManagementViewName = (typeof MANAGEMENT_VIEWS)[number];
 
 /**
  * The HTML the registry serves. Each runtime loads it its own way: Node reads it from disk

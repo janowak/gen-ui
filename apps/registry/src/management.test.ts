@@ -308,61 +308,141 @@ describe("management MCP", () => {
     expect((await carol.listTools()).tools.map((t) => t.name)).toContain("theme_save");
   });
 
-  it("lets admins invite people, create and revoke tokens, and make the end-user MCP private, by clicking in the view", async () => {
+  it("lets admins change people, environments and the public MCP with tools the model calls", async () => {
     await store.invite(workspaceId, "frank@acme.test", "admin");
     const cookie = await signUp("frank@acme.test");
     await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "frank@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
 
-    const tools = (await admin.listTools()).tools;
-    for (const name of ["member_invite", "invite_cancel", "token_create", "token_revoke", "public_set"]) {
-      expect((tools.find((t) => t.name === name)!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
+    // Settings are plain tools; only secrets and the icon file stay with clicks in the views.
+    const tools = Object.fromEntries((await admin.listTools()).tools.map((t) => [t.name, t]));
+    const direct = ["workspace_rename", "public_set", "environment_create", "member_invite", "invite_cancel", "member_set_role"];
+    for (const name of [...direct, "member_remove", "connector_set", "token_revoke"]) {
+      expect(tools[name], name).toBeDefined();
+      expect((tools[name]!._meta as { ui?: unknown } | undefined)?.ui).toBeUndefined();
+    }
+    for (const name of ["show_workspace", "list_members", "list_tokens", "edit_connector", "token_create"]) {
+      expect((tools[name]!._meta as { ui: { visibility?: string[] } }).ui.visibility).toBeUndefined();
+    }
+    for (const name of ["token_reveal", "token_rotate", "connector_icon_set"]) {
+      expect((tools[name]!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
 
-    // The model can prefill an invite; only the click sends it.
-    const shown = await admin.callTool({ name: "manage_workspace", arguments: { invite: { email: "gina@acme.test", role: "admin" } } });
-    expect(shown.structuredContent).toMatchObject({ role: "admin", public: true, draftInvite: { email: "gina@acme.test", role: "admin" } });
+    const shown = await admin.callTool({ name: "show_workspace", arguments: {} });
+    expect(shown.structuredContent).toMatchObject({ role: "admin", public: true, workspace: { name: "acme" } });
     expect((shown.structuredContent as { connectors: { url: string }[] }).connectors[0]?.url).toBe(`${base}/w/${workspaceId}/mcp`);
-    expect((await store.listMembers(workspaceId)).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+    expect(JSON.stringify(shown.content)).toContain(`prod: ${base}/w/${workspaceId}/mcp`);
+
+    await admin.callTool({ name: "workspace_rename", arguments: { name: "Acme Inc" } });
+    expect((await store.workspace(workspaceId))?.name).toBe("Acme Inc");
+    await admin.callTool({ name: "workspace_rename", arguments: { name: "acme" } });
+
     await admin.callTool({ name: "member_invite", arguments: { email: "gina@acme.test", role: "admin" } });
     expect((await store.listMembers(workspaceId)).invites).toContainEqual({ email: "gina@acme.test", role: "admin" });
-    await admin.callTool({ name: "invite_cancel", arguments: { email: "gina@acme.test" } });
-    expect((await store.listMembers(workspaceId)).invites.map((i) => i.email)).not.toContain("gina@acme.test");
+    const cancelled = await admin.callTool({ name: "invite_cancel", arguments: { email: "gina@acme.test" } });
+    expect((cancelled.structuredContent as { invites: { email: string }[] }).invites.map((i) => i.email)).not.toContain("gina@acme.test");
 
-    // The token goes to the view only, never into the text the model reads.
-    const created = await admin.callTool({ name: "token_create", arguments: { name: "prod server" } });
-    const { token } = (created.structuredContent as { created: { token: string } }).created;
-    expect(token).toMatch(/^gnu_server_/);
-    expect(JSON.stringify(created.content)).not.toContain(token);
-    expect(await store.resolveToken(token)).toMatchObject({ workspaceId, scope: "server" });
+    // Roles and removal go by the email people signed in with; a removed person's connector stops working.
+    const hank = await mcpClient(await accessToken(await signUp("hank@acme.test")));
+    expect((await hank.listTools()).tools.map((t) => t.name)).not.toContain("list_tokens");
+    await admin.callTool({ name: "member_set_role", arguments: { email: "hank@acme.test", role: "admin" } });
+    const promoted = (await store.listMembers(workspaceId)).members.find((m) => m.email === "hank@acme.test");
+    expect(promoted?.role).toBe("admin");
+    expect((await admin.callTool({ name: "member_remove", arguments: { email: "nobody@acme.test" } })).isError).toBe(true);
+    const removed = await admin.callTool({ name: "member_remove", arguments: { email: "hank@acme.test" } });
+    expect(JSON.stringify(removed.structuredContent)).not.toContain("hank@acme.test");
+    await expect(hank.listTools()).rejects.toThrow();
 
-    // Private: no token, no MCP; the server token still works until it's revoked.
+    expect((await admin.callTool({ name: "environment_create", arguments: { name: "QA" } })).isError).toBe(true);
+    const created = await admin.callTool({ name: "environment_create", arguments: { name: "preview" } });
+    expect(JSON.stringify(created.content)).toContain(`${base}/w/${workspaceId}/preview/mcp`);
+    expect(await store.listEnvironments(workspaceId)).toContain("preview");
+    expect((await admin.callTool({ name: "environment_create", arguments: { name: "preview" } })).isError).toBe(true);
+    await store.deleteEnvironment(workspaceId, "preview");
+
     await admin.callTool({ name: "public_set", arguments: { enabled: false } });
-    const post = (headers: Record<string, string> = {}) => fetch(`${base}/w/${workspaceId}/revision`, { headers });
-    expect((await post()).status).toBe(404);
-    expect((await post({ authorization: `Bearer ${token}` })).status).toBe(200);
-    const listed = (await admin.callTool({ name: "manage_workspace", arguments: {} })).structuredContent as {
-      tokens: { id: string; name: string }[];
-    };
-    await admin.callTool({ name: "token_revoke", arguments: { id: listed.tokens.find((t) => t.name === "prod server")!.id } });
-    expect((await post({ authorization: `Bearer ${token}` })).status).toBe(401);
+    expect((await fetch(`${base}/w/${workspaceId}/revision`)).status).toBe(404);
     await admin.callTool({ name: "public_set", arguments: { enabled: true } });
-    expect((await post()).status).toBe(200);
+    expect((await fetch(`${base}/w/${workspaceId}/revision`)).status).toBe(200);
 
-    // Members see people and addresses, not tokens.
-    const member = await mcpClient(await accessToken(await signUp("hank@acme.test")));
-    const view = (await member.callTool({ name: "manage_workspace", arguments: {} })).structuredContent;
-    expect(view).toMatchObject({ role: "member", public: true });
-    expect(view).not.toHaveProperty("tokens");
+    // Members see the summary and the people, not tokens.
+    const member = await mcpClient(await accessToken(await signUp("ida@acme.test")));
+    const names = (await member.listTools()).tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["show_workspace", "list_members"]));
+    for (const name of ["list_tokens", "member_invite", "public_set", "edit_connector"]) expect(names).not.toContain(name);
+    const summary = (await member.callTool({ name: "show_workspace", arguments: {} })).structuredContent as { counts: object };
+    expect(summary).toMatchObject({ role: "member", public: true });
+    expect(summary.counts).not.toHaveProperty("tokens");
   });
 
-  it("drafts instructions for review; branding and saves are clicks in the views", async () => {
+  it("keeps the workspace with an admin", async () => {
+    const ws = await store.createWorkspace("solo");
+    await store.addMember(ws, "u-admin", "admin");
+    await store.addMember(ws, "u-member", "member");
+    await expect(store.setRole(ws, "u-admin", "member")).rejects.toMatchObject({ status: 409 });
+    await expect(store.removeMember(ws, "u-admin")).rejects.toMatchObject({ status: 409 });
+    await store.setRole(ws, "u-member", "admin");
+    await store.setRole(ws, "u-admin", "member");
+    await store.removeMember(ws, "u-admin");
+    await expect(store.removeMember(ws, "u-admin")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("creates tokens from chat, but shows a secret only once, in the view", async () => {
+    await store.invite(workspaceId, "jules@acme.test", "admin");
+    const cookie = await signUp("jules@acme.test");
+    await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "jules@acme.test");
+    const admin = await mcpClient(await accessToken(cookie));
+
+    // The model creates the token; it has no secret yet, so nothing secret reaches the chat.
+    const created = await admin.callTool({ name: "token_create", arguments: { name: "prod server" } });
+    const { highlight, tokens } = created.structuredContent as { highlight: string; tokens: { id: string; revealed: boolean }[] };
+    expect(tokens.find((t) => t.id === highlight)).toMatchObject({ revealed: false });
+    expect(JSON.stringify(created)).not.toContain("gnu_");
+
+    // Reveal (a click in the view) makes the secret and returns it once, outside the text.
+    const revealed = await admin.callTool({ name: "token_reveal", arguments: { id: highlight } });
+    const secret = (revealed.structuredContent as { secret: { id: string; token: string } }).secret.token;
+    expect(secret).toMatch(/^gnu_server_/);
+    expect(JSON.stringify(revealed.content)).not.toContain(secret);
+    expect(await store.resolveToken(secret)).toMatchObject({ workspaceId, scope: "server" });
+    expect((await admin.callTool({ name: "token_reveal", arguments: { id: highlight } })).isError).toBe(true);
+    const listed = await admin.callTool({ name: "list_tokens", arguments: {} });
+    expect(JSON.stringify(listed)).not.toContain("gnu_");
+    expect((listed.structuredContent as { tokens: { id: string; revealed: boolean }[] }).tokens).toContainEqual(
+      expect.objectContaining({ id: highlight, revealed: true }),
+    );
+
+    // Rotating replaces the secret; the old one stops working.
+    const rotated = await admin.callTool({ name: "token_rotate", arguments: { id: highlight } });
+    const next = (rotated.structuredContent as { secret: { token: string } }).secret.token;
+    expect(await store.resolveToken(secret)).toBeUndefined();
+    expect(await store.resolveToken(next)).toMatchObject({ workspaceId });
+
+    // A private MCP still serves the token until it's revoked.
+    await admin.callTool({ name: "public_set", arguments: { enabled: false } });
+    const revision = (token: string) => fetch(`${base}/w/${workspaceId}/revision`, { headers: { authorization: `Bearer ${token}` } });
+    expect((await revision(next)).status).toBe(200);
+    await admin.callTool({ name: "token_revoke", arguments: { id: highlight } });
+    expect((await revision(next)).status).toBe(401);
+    await admin.callTool({ name: "public_set", arguments: { enabled: true } });
+
+    // Publish tokens can be limited to environments; other scopes can't.
+    const limited = await admin.callTool({ name: "token_create", arguments: { name: "ci", scope: "publish", environments: ["staging"] } });
+    expect((limited.structuredContent as { tokens: { name: string; environments: string[] | null }[] }).tokens).toContainEqual(
+      expect.objectContaining({ name: "ci", environments: ["staging"] }),
+    );
+    expect(
+      (await admin.callTool({ name: "token_create", arguments: { name: "x", scope: "server", environments: ["staging"] } })).isError,
+    ).toBe(true);
+  });
+
+  it("drafts instructions for review, and sets the connector from chat or the form", async () => {
     await store.invite(workspaceId, "ivy@acme.test", "admin");
     const cookie = await signUp("ivy@acme.test");
     await db.run("UPDATE user SET emailVerified = 1 WHERE email = ?", "ivy@acme.test");
     const admin = await mcpClient(await accessToken(cookie));
     const tools = (await admin.listTools()).tools;
-    for (const name of ["branding_save", "instructions_save"]) {
+    for (const name of ["instructions_save"]) {
       expect((tools.find((t) => t.name === name)!._meta as { ui: { visibility: string[] } }).ui.visibility).toEqual(["app"]);
     }
 
@@ -387,23 +467,34 @@ describe("management MCP", () => {
     });
     await store.deleteWorkflow(workspaceId, "prod", "returns");
 
-    // The icon arrives base64 from the view and is served next to the end-user MCP.
+    // The model can prefill the connector form for review, or set fields directly; only the passed ones change.
+    const draft = await admin.callTool({ name: "edit_connector", arguments: { title: "Acme Support" } });
+    expect(draft.structuredContent).toMatchObject({ draft: { title: "Acme Support" }, branding: { iconUrl: null } });
+    expect((await store.branding(workspaceId)).title).toBeUndefined();
+    await admin.callTool({ name: "connector_set", arguments: { title: "Acme Support" } });
+    const described = await admin.callTool({ name: "connector_set", arguments: { description: "Returns and orders." } });
+    expect((described.structuredContent as { branding: object }).branding).toEqual({
+      title: "Acme Support",
+      description: "Returns and orders.",
+      iconUrl: null,
+    });
+    expect((await admin.callTool({ name: "connector_set", arguments: { websiteUrl: "javascript:alert(1)" } })).isError).toBe(true);
+    await admin.callTool({ name: "connector_set", arguments: { description: null } });
+    expect(await store.branding(workspaceId)).toEqual({ title: "Acme Support", icon: null });
+
+    // The icon arrives base64 from the form (app-only) and is served next to the end-user MCP.
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
-    const bad = await admin.callTool({
-      name: "branding_save",
-      arguments: { branding: {}, icon: Buffer.from("<script>").toString("base64") },
-    });
+    const bad = await admin.callTool({ name: "connector_icon_set", arguments: { icon: Buffer.from("<script>").toString("base64") } });
     expect(bad.isError).toBe(true);
-    const branded = await admin.callTool({ name: "branding_save", arguments: { branding: { title: "Acme Support" }, icon: png } });
-    const { branding } = branded.structuredContent as { branding: { title: string; iconUrl: string } };
-    expect(branding.title).toBe("Acme Support");
-    expect(branding.iconUrl).toMatch(new RegExp(`^${base}/w/${workspaceId}/icon\\?v=`));
-    expect((await fetch(branding.iconUrl)).headers.get("content-type")).toBe("image/png");
-    // Leaving the icon out keeps it.
-    const kept = await admin.callTool({ name: "branding_save", arguments: { branding: {} } });
-    expect((kept.structuredContent as { branding: { iconUrl: string | null; title?: string } }).branding).toEqual({
-      iconUrl: branding.iconUrl,
-    });
+    const iconed = await admin.callTool({ name: "connector_icon_set", arguments: { icon: png } });
+    const { iconUrl } = (iconed.structuredContent as { branding: { iconUrl: string } }).branding;
+    expect(iconUrl).toMatch(new RegExp(`^${base}/w/${workspaceId}/icon\\?v=`));
+    expect((await fetch(iconUrl)).headers.get("content-type")).toBe("image/png");
+    // Setting fields keeps the icon.
+    const kept = await admin.callTool({ name: "connector_set", arguments: { title: null } });
+    expect((kept.structuredContent as { branding: object }).branding).toEqual({ iconUrl });
+    await admin.callTool({ name: "connector_icon_set", arguments: { icon: null } });
+    expect((await store.branding(workspaceId)).icon).toBeNull();
   });
 
   it("rejects a token for another resource", async () => {

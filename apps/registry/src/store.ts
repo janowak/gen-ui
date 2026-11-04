@@ -32,6 +32,8 @@ export interface TokenSummary {
   scope: Scope;
   environments: string[] | null;
   createdAt: string;
+  /** False for a token made in chat whose secret no one has revealed yet: it authenticates nothing. */
+  revealed: boolean;
 }
 
 export interface MemberSummary {
@@ -80,6 +82,7 @@ export function sniffIcon(bytes: Uint8Array): IconType | undefined {
 
 const now = () => new Date().toISOString();
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+const newSecret = (scope: Scope) => `gnu_${scope}_${randomBytes(24).toString("base64url")}`;
 
 type EnvironmentRow = { name: string; revision: number; refresh_url: string | null; last_refresh: string | null; built_ins: number };
 const ENVIRONMENT_COLUMNS = "name, revision, refresh_url, last_refresh, built_ins";
@@ -144,6 +147,9 @@ const WORKSPACE_USED = `((SELECT COUNT(*) FROM members WHERE workspace_id = ?1) 
   OR EXISTS (SELECT 1 FROM workflows WHERE workspace_id = ?1)
   OR EXISTS (SELECT 1 FROM tokens WHERE workspace_id = ?1)
   OR EXISTS (SELECT 1 FROM invites WHERE workspace_id = ?1))`;
+
+/** Whether the workspace (`?1`) has an admin besides the member `?2`. */
+const OTHER_ADMINS = "EXISTS (SELECT 1 FROM members WHERE workspace_id = ?1 AND role = 'admin' AND user_id != ?2)";
 
 /**
  * Hosts send the server instructions on every turn: the environment's instructions plus the workflows
@@ -238,6 +244,10 @@ export class Store {
     return Boolean(await this.hostedWorkspace(workspaceId));
   }
 
+  async renameWorkspace(workspaceId: string, name: string): Promise<void> {
+    await this.db.run("UPDATE workspaces SET name = ? WHERE id = ?", name, workspaceId);
+  }
+
   async setHosted(workspaceId: string, hosted: boolean): Promise<void> {
     await this.db.run("UPDATE workspaces SET hosted = ? WHERE id = ?", hosted ? 1 : 0, workspaceId);
   }
@@ -301,26 +311,64 @@ export class Store {
     return { type: row.icon_type, hash: row.icon_hash, bytes: new Uint8Array(Buffer.from(row.icon, "base64")) };
   }
 
-  /** Returns the plaintext token once; only its hash is stored. `environments` limits a publish token. */
-  async createToken(workspaceId: string, scope: Scope, name: string, environments?: string[]): Promise<string> {
+  /** A token row; without `token` it has no secret yet (see revealToken). */
+  private async insertToken(workspaceId: string, scope: Scope, name: string, environments?: string[], token?: string): Promise<string> {
     for (const environment of environments ?? []) await this.requireEnvironment(workspaceId, environment);
-    const token = `gnu_${scope}_${randomBytes(24).toString("base64url")}`;
+    const id = randomUUID();
     await this.db.run(
       "INSERT INTO tokens (id, workspace_id, name, scope, environments, hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      randomUUID(),
+      id,
       workspaceId,
       name,
       scope,
       environments ? JSON.stringify(environments) : null,
-      sha256(token),
+      token ? sha256(token) : null,
       now(),
     );
+    return id;
+  }
+
+  /** Returns the plaintext token once; only its hash is stored. `environments` limits a publish token. */
+  async createToken(workspaceId: string, scope: Scope, name: string, environments?: string[]): Promise<string> {
+    const token = newSecret(scope);
+    await this.insertToken(workspaceId, scope, name, environments, token);
+    return token;
+  }
+
+  /** A token with no secret yet, for chat: the secret is made only when an admin reveals it in the view. Returns its id. */
+  addToken(workspaceId: string, scope: Scope, name: string, environments?: string[]): Promise<string> {
+    return this.insertToken(workspaceId, scope, name, environments);
+  }
+
+  /**
+   * Makes a token's secret and returns it, once; only its hash is stored. A token is revealed once: after
+   * that only `rotate` makes a new secret, and the old one stops working.
+   */
+  async revealToken(workspaceId: string, id: string, { rotate = false } = {}): Promise<string> {
+    const scope = await this.db.get<{ scope: Scope }>("SELECT scope FROM tokens WHERE workspace_id = ? AND id = ?", workspaceId, id);
+    if (!scope) throw new RegistryError(404, "No such token");
+    const token = newSecret(scope.scope);
+    // One conditional update, so two reveals of the same token can't both get a secret.
+    const { changes } = await this.db.run(
+      `UPDATE tokens SET hash = ? WHERE workspace_id = ? AND id = ?${rotate ? "" : " AND hash IS NULL"}`,
+      sha256(token),
+      workspaceId,
+      id,
+    );
+    if (!changes) throw new RegistryError(409, "This token was already revealed. Rotate it to get a new secret.");
     return token;
   }
 
   async listTokens(workspaceId: string): Promise<TokenSummary[]> {
-    const rows = await this.db.all<{ id: string; name: string; scope: Scope; environments: string | null; created_at: string }>(
-      "SELECT id, name, scope, environments, created_at FROM tokens WHERE workspace_id = ? ORDER BY created_at",
+    const rows = await this.db.all<{
+      id: string;
+      name: string;
+      scope: Scope;
+      environments: string | null;
+      created_at: string;
+      revealed: number;
+    }>(
+      "SELECT id, name, scope, environments, created_at, hash IS NOT NULL AS revealed FROM tokens WHERE workspace_id = ? ORDER BY created_at",
       workspaceId,
     );
     return rows.map((r) => ({
@@ -329,6 +377,7 @@ export class Store {
       scope: r.scope,
       environments: r.environments ? (JSON.parse(r.environments) as string[]) : null,
       createdAt: r.created_at,
+      revealed: Boolean(r.revealed),
     }));
   }
 
@@ -489,6 +538,43 @@ export class Store {
       this.db.all<InviteSummary>("SELECT email, role FROM invites WHERE workspace_id = ? ORDER BY created_at", workspaceId),
     ]);
     return { members: members.map((m) => ({ userId: m.user_id, name: m.name, email: m.email, role: m.role })), invites };
+  }
+
+  /** The member who signed in with this email. */
+  async memberByEmail(workspaceId: string, email: string): Promise<MemberSummary> {
+    const { members } = await this.listMembers(workspaceId);
+    const member = members.find((m) => m.email?.toLowerCase() === email.toLowerCase());
+    if (!member) throw new RegistryError(404, `${email} isn't a member. Pending invites are cancelled instead.`);
+    return member;
+  }
+
+  /** Changes a member's role. The workspace always keeps an admin. */
+  async setRole(workspaceId: string, userId: string, role: Role): Promise<void> {
+    const { changes } = await this.db.run(
+      `UPDATE members SET role = ?3 WHERE workspace_id = ?1 AND user_id = ?2 AND (?3 = 'admin' OR ${OTHER_ADMINS})`,
+      workspaceId,
+      userId,
+      role,
+    );
+    if (!changes) await this.lastAdminOrMissing(workspaceId, userId);
+  }
+
+  /** Removes a member: their connector gets 403 from its next request. The workspace always keeps an admin. */
+  async removeMember(workspaceId: string, userId: string): Promise<void> {
+    const { changes } = await this.db.run(
+      `DELETE FROM members WHERE workspace_id = ?1 AND user_id = ?2 AND (role != 'admin' OR ${OTHER_ADMINS})`,
+      workspaceId,
+      userId,
+    );
+    if (!changes) await this.lastAdminOrMissing(workspaceId, userId);
+  }
+
+  /** Why a guarded member change changed nothing. */
+  private async lastAdminOrMissing(workspaceId: string, userId: string): Promise<never> {
+    const exists = await this.db.get("SELECT 1 FROM members WHERE workspace_id = ? AND user_id = ?", workspaceId, userId);
+    throw exists
+      ? new RegistryError(409, "That's the workspace's only admin. Make someone else admin first.")
+      : new RegistryError(404, "No such member");
   }
 
   async cancelInvite(workspaceId: string, email: string): Promise<void> {

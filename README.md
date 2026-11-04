@@ -245,9 +245,11 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 | `use_environment` | members, admins | Switches what your previews, theme, instructions and workflows show (default prod). Saved per person; end users are unaffected |
 | `open_theme_controller`, `manage_instructions`, `draft_instructions`, `manage_workflows`, `draft_workflow` | members (read-only), admins | The active environment's theme, instructions and workflows |
 | `preview_<name>` | members, admins | Renders the version the active environment serves, with sample props |
-| `manage_workspace` | members (read-only), admins | People and invites, each environment's end-user MCP address, whether it's public, and tokens (admins). The model can prefill an invite |
-| `theme_save`, `instructions_save`, `workflow_save`, `workflow_delete`, `component_remove`, `built_ins_set` | admins | App-only: run only when a person clicks in the views, never by the model |
-| `member_invite`, `invite_cancel`, `token_create`, `token_revoke`, `public_set` | admins | App-only, in the workspace view. A new token is shown once, in the view only: it never reaches the model |
+| `show_workspace`, `list_members` | members, admins | The workspace at a glance (public or private, each environment's end-user MCP address, counts), and the people and pending invites |
+| `list_tokens`, `edit_connector` | admins | Tokens (never their secrets), and the form for how hosts list the end-user MCP (the model can prefill it) |
+| `workspace_rename`, `public_set`, `environment_create`, `member_invite`, `invite_cancel`, `member_set_role`, `member_remove`, `connector_set`, `token_create`, `token_revoke` | admins | Plain tools the model calls directly; the views use them too. The workspace always keeps an admin |
+| `theme_save`, `instructions_save`, `workflow_save`, `workflow_delete`, `component_remove`, `built_ins_set`, `connector_icon_set` | admins | App-only: run only when a person clicks in the views, never by the model |
+| `token_reveal`, `token_rotate` | admins | App-only, in the tokens view. `token_create` makes a token with no secret; Reveal makes the secret and shows it once, in the view only, and Rotate replaces it. Secrets never reach the model or the chat history |
 
 **Sign-in options (env):**
 - Social login: `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
@@ -260,7 +262,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 - `APP_MCP_MODE`:
   - `self-hosted` (default): everyone who can sign in joins the workspace. The first person is admin, plus anyone listed in `APP_MCP_ADMIN_EMAILS`.
   - `hosted`: each new person gets a personal workspace.
-- Invites: from the workspace view (`manage_workspace`). Claimed at the person's next sign-in with that verified email, even if they already have a workspace (an unused one is deleted).
+- Invites: `member_invite`, from chat or the people view (`list_members`). Claimed at the person's next sign-in with that verified email, even if they already have a workspace (an unused one is deleted).
 - `APP_MCP_ALLOWED_EMAILS`: sign-up gate, comma-separated emails and `@domain` entries. When set, only those verified emails get a workspace at first sign-in; anyone else is refused until invited. Existing members and invited people always get in.
 - Client registration: Claude and ChatGPT use Client ID Metadata Documents. `APP_MCP_ALLOW_DCR=true` enables open dynamic registration, for local dev or DCR-only clients.
 
@@ -278,7 +280,7 @@ Drop `--dry-run` to publish; pnpm refuses on uncommitted changes or a branch oth
 
 ## Use the SDK
 
-app-mcp's tools (`render_form`, `render_chart`, `render_<component>`) and workflow prompts are served by app-mcp's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private in the workspace view (`manage_workspace`); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to app-mcp with a server token. app-mcp's views call your tools through the host, so your data tools and their results never leave your server.
+app-mcp's tools (`render_form`, `render_chart`, `render_<component>`) and workflow prompts are served by app-mcp's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private (`public_set`, or ask in chat); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to app-mcp with a server token. app-mcp's views call your tools through the host, so your data tools and their results never leave your server.
 
 ```ts
 import { connectAppMcp, mountAppMcp } from "@app-mcp/sdk";
