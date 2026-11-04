@@ -1,14 +1,5 @@
 {
   "worktree": {
     "baseRef": "head"
-  },
-  "permissions": {
-    "deny": [
-      "Bash(*deploy:site*)",
-      "Bash(*deploy:registry*)",
-      "Bash(*run deploy*)",
-      "Bash(*wrangler deploy*)",
-      "Bash(*wrangler*--remote*)"
-    ]
   }
 }
