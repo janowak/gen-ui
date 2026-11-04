@@ -27,13 +27,13 @@ const files = (name: string): Record<string, string> => ({
         serve: "genui serve .",
         "genui:publish": "npm run build && genui publish .",
       },
-      dependencies: { "@genui/kit": `^${version}` },
-      devDependencies: { "@genui/cli": `^${version}`, typescript: "^5.9.3", vite: "^8.3.5" },
+      dependencies: { "@app-mcp/kit": `^${version}` },
+      devDependencies: { "@app-mcp/cli": `^${version}`, typescript: "^5.9.3", vite: "^8.3.5" },
     },
     null,
     2,
   )}\n`,
-  "vite.config.ts": `import { genui } from "@genui/kit/vite";
+  "vite.config.ts": `import { genui } from "@app-mcp/kit/vite";
 import { defineConfig } from "vite";
 
 // Builds a single-file dist/index.html plus dist/genui.component.json from src/component.ts.
@@ -85,7 +85,7 @@ export default defineConfig({ plugins: [genui()] });
   </body>
 </html>
 `,
-  "src/component.ts": `import { defineComponent, z } from "@genui/kit";
+  "src/component.ts": `import { defineComponent, z } from "@app-mcp/kit";
 
 // What the model sees: the tool render_${name}, its description and its props.
 export default defineComponent({
@@ -99,7 +99,7 @@ export default defineComponent({
   }),
 });
 `,
-  "src/main.ts": `import { mount, type ContextOf } from "@genui/kit";
+  "src/main.ts": `import { mount, type ContextOf } from "@app-mcp/kit";
 import component from "./component";
 
 const questionEl = document.getElementById("question")!;
@@ -135,7 +135,7 @@ mount(component, render);
 `,
   "README.md": `# ${name}
 
-A genui component, built with [@genui/kit](https://www.npmjs.com/package/@genui/kit).
+A genui component, built with [@app-mcp/kit](https://www.npmjs.com/package/@app-mcp/kit).
 
 \`\`\`bash
 npm install

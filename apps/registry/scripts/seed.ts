@@ -2,8 +2,8 @@
 // a server token (the demo), a password user who manages it, and examples/rating with its workflows in prod.
 // Safe to re-run: tokens from the environment that still work are kept, and publishing the same bundle again
 // is a no-op. Prints the values for .env.worktree as JSON on stdout; everything else goes to stderr.
-import { DEFAULT_ENVIRONMENT } from "@genui/format";
-import { readComponentDir, readWorkflowDir } from "@genui/runtime/local";
+import { DEFAULT_ENVIRONMENT } from "@app-mcp/format";
+import { readComponentDir, readWorkflowDir } from "@app-mcp/runtime/local";
 import { authConfigFromEnv, createAuth } from "../src/auth.js";
 import { openDatabase } from "../src/db-node.js";
 import { Store, type Scope } from "../src/store.js";

@@ -1,4 +1,4 @@
-import type { ChartType, SeriesData, ValueFormat } from "@genui/format";
+import type { ChartType, SeriesData, ValueFormat } from "@app-mcp/format";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,

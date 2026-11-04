@@ -1,4 +1,4 @@
-import type { Field } from "@genui/format";
+import type { Field } from "@app-mcp/format";
 import { describe, expect, it } from "vitest";
 import { begin, fail, finish, restoreValues, submitStatus, type SavedForm } from "./saved";
 

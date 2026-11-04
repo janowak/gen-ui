@@ -1,4 +1,4 @@
-import { Theme, type ThemeTokens } from "@genui/format";
+import { Theme, type ThemeTokens } from "@app-mcp/format";
 
 /**
  * shadcn token ← MCP Apps host variable. shadcn's generated styles.css stays untouched:

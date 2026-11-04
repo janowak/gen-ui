@@ -8,10 +8,10 @@ WORKDIR /repo
 RUN corepack enable
 COPY . .
 # Only the registry and the workspace packages it depends on
-RUN pnpm install --frozen-lockfile --filter "@genui/registry..."
-RUN pnpm --filter "@genui/registry..." build
+RUN pnpm install --frozen-lockfile --filter "@app-mcp/registry..."
+RUN pnpm --filter "@app-mcp/registry..." build
 # The registry with its production dependencies, workspace packages included
-RUN pnpm --filter @genui/registry deploy --prod /out
+RUN pnpm --filter @app-mcp/registry deploy --prod /out
 
 FROM node:24-slim
 ENV NODE_ENV=production PORT=4000 GENUI_DB=/data/genui.sqlite

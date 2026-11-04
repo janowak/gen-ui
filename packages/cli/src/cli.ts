@@ -4,9 +4,9 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_ENVIRONMENT_INSTRUCTIONS, Theme, type Workflow } from "@genui/format";
-import { readComponentDir, readWorkflowDir, readWorkflowFile, type ComponentDir, type WorkflowFile } from "@genui/runtime/local";
-import type { ServeOptions } from "@genui/runtime/serve";
+import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_ENVIRONMENT_INSTRUCTIONS, Theme, type Workflow } from "@app-mcp/format";
+import { readComponentDir, readWorkflowDir, readWorkflowFile, type ComponentDir, type WorkflowFile } from "@app-mcp/runtime/local";
+import type { ServeOptions } from "@app-mcp/runtime/serve";
 import { init } from "./init.js";
 
 /** genui cloud. Self-hosted registries pass --url or GENUI_URL. */
@@ -57,11 +57,11 @@ Serve options:
   --refresh-url <url>   POSTed on every change, like an environment's refresh URL
   --no-build            Don't run the components' watch builds; serve dist/ as it is
 Everything reloads on save: components with a vite.config are rebuilt, and connected clients get
-the new tools. Without a token, clients only render (no data tools); @genui/sdk passes any token
+the new tools. Without a token, clients only render (no data tools); @app-mcp/sdk passes any token
 (e.g. "local") and gets data tools, as with a server token on the registry.
 
 A component dir contains a manifest (genui.component.json) and the built single-file HTML.
-Built with @genui/kit/vite, both are generated into dist/. A hand-written manifest sits next to
+Built with @app-mcp/kit/vite, both are generated into dist/. A hand-written manifest sits next to
 the sources and points at dist/index.html by default (override with "bundle" in the manifest).
 
 Workflows sit next to the components they use, as <name>.workflow.md in the component dir or its
@@ -224,11 +224,11 @@ interface KitDev {
   watchBuild?(options: { root: string; onBuild?(error?: Error): void }): Promise<{ close(): Promise<void> }>;
 }
 
-/** @genui/kit's dev tools, resolved from the component so they match the kit it builds with. */
+/** @app-mcp/kit's dev tools, resolved from the component so they match the kit it builds with. */
 async function kitDev(root: string): Promise<KitDev | undefined> {
   let entry: string;
   try {
-    entry = createRequire(resolve(root, "package.json")).resolve("@genui/kit/dev");
+    entry = createRequire(resolve(root, "package.json")).resolve("@app-mcp/kit/dev");
   } catch {
     return undefined;
   }
@@ -242,10 +242,10 @@ const exists = (path: string) =>
   );
 const VITE_CONFIGS = ["vite.config.ts", "vite.config.mts", "vite.config.js", "vite.config.mjs"];
 
-/** Runs the component's dev server with the local host from @genui/kit, resolved from the component. */
+/** Runs the component's dev server with the local host from @app-mcp/kit, resolved from the component. */
 async function dev(dir: string) {
   const root = resolve(dir);
-  const { startDev } = (await kitDev(root)) ?? fail(`@genui/kit not found from ${root}. Add it to the component: pnpm add @genui/kit`);
+  const { startDev } = (await kitDev(root)) ?? fail(`@app-mcp/kit not found from ${root}. Add it to the component: pnpm add @app-mcp/kit`);
   const port = values.port === undefined ? undefined : Number(values.port);
   const server = await startDev({ root, port }).catch((error: Error) => fail(error.message));
   console.log("\n  genui dev: props form, theme and mock tools for your component\n");
@@ -276,14 +276,14 @@ async function serve(dirs: string[]) {
     if (values["no-build"] || !(await Promise.all(VITE_CONFIGS.map((file) => exists(resolve(root, file))))).some(Boolean)) return undefined;
     const kit = await kitDev(root);
     if (!kit?.watchBuild) {
-      log(`not building ${dir}: @genui/kit with watchBuild not found from it; serving its dist/ as it is`);
+      log(`not building ${dir}: @app-mcp/kit with watchBuild not found from it; serving its dist/ as it is`);
       return undefined;
     }
     log(`building ${dir} (rebuilds on save)`);
     return kit.watchBuild({ root, onBuild });
   };
 
-  const { startServe } = await import("@genui/runtime/serve");
+  const { startServe } = await import("@app-mcp/runtime/serve");
   const served = await startServe({
     dirs,
     theme: values.theme,
@@ -307,7 +307,7 @@ async function serve(dirs: string[]) {
     lines.unshift(
       `genui serve: ${served.url}`,
       `Claude Code: claude mcp add --transport http genui ${served.url}`,
-      `@genui/sdk:  connectGenUI({ url: "${served.url}", token: "local" })`,
+      `@app-mcp/sdk:  connectGenUI({ url: "${served.url}", token: "local" })`,
     );
   } else {
     lines.unshift("genui serve over stdio");

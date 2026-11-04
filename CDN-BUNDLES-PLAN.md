@@ -47,7 +47,7 @@ View-specific entry files are 1–13 KB.
 - **Switch.** `GENUI_ASSETS_URL`. Unset means today's single-file bundles.
   - Self-host defaults to inline, so browsers never need to reach a company's registry.
   - Cloud turns it on once §6 passes for Claude and ChatGPT.
-- **Component contract.** The runtime is pinned by hash in each component's page. A component built against an older `@genui/kit` keeps loading the runtime it was built with.
+- **Component contract.** The runtime is pinned by hash in each component's page. A component built against an older `@app-mcp/kit` keeps loading the runtime it was built with.
 
 ---
 
@@ -98,10 +98,10 @@ Also:
 
 ## 7. Steps
 
-1. **Build.** A second output mode in `@genui/ui`: the small page plus hashed assets plus SRI, next to today's single-file build.
+1. **Build.** A second output mode in `@app-mcp/ui`: the small page plus hashed assets plus SRI, next to today's single-file build.
 2. **Release.** CI uploads assets to R2 before the registry points any `ui://` URI at them.
 3. **Registry.** With `GENUI_ASSETS_URL` set, serve the small page and its CSP; otherwise inline. Same switch in the registry MCP's management views.
-4. **Kit.** `@genui/kit`'s Vite plugin treats the runtime as external, imports it from the asset domain, and records the runtime hash in the manifest. Publish checks validate it.
+4. **Kit.** `@app-mcp/kit`'s Vite plugin treats the runtime as external, imports it from the asset domain, and records the runtime hash in the manifest. Publish checks validate it.
 5. **Lazy chunks.** Date picker (and later other heavy field types) load only when used.
 6. **Docs.** Self-host stays inline. Cloud DPA and security notes cover the asset domain.
 

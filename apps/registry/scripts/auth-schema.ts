@@ -1,5 +1,5 @@
 // Writes better-auth's tables to migrations/0002_better_auth.sql, from the plugins auth.ts configures.
-// Run it after changing them: pnpm --filter @genui/registry auth-schema
+// Run it after changing them: pnpm --filter @app-mcp/registry auth-schema
 import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { getMigrations } from "better-auth/db/migration";

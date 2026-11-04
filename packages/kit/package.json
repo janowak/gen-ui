@@ -1,5 +1,5 @@
 {
-  "name": "@genui/kit",
+  "name": "@app-mcp/kit",
   "version": "0.1.0",
   "description": "Build genui components for MCP Apps hosts like Claude and ChatGPT",
   "type": "module",
@@ -45,7 +45,7 @@
     "test": "pnpm build:harness && vitest run"
   },
   "dependencies": {
-    "@genui/format": "workspace:^",
+    "@app-mcp/format": "workspace:^",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "vite-plugin-singlefile": "^2.3.4",

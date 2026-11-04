@@ -1,4 +1,4 @@
-import { connectGenUI, mountGenUI } from "@genui/sdk";
+import { connectGenUI, mountGenUI } from "@app-mcp/sdk";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";

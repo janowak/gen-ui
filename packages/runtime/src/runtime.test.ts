@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY } from "@app-mcp/format";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import { mountGenUI, type CatalogSource } from "./runtime.js";
 import { viewBundles } from "./views.js";
 
 const require = createRequire(import.meta.url);
-const view = (name: string) => readFile(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
+const view = (name: string) => readFile(require.resolve(`@app-mcp/ui/views/${name}.html`), "utf8");
 const views = viewBundles({ form: await view("form"), chart: await view("chart") });
 
 async function connect() {

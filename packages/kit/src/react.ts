@@ -4,7 +4,7 @@ import { pageViewStore, setterOf, valueOf, type SetState, type StateInfo } from 
 /**
  * `useState` kept per render: a re-rendered message comes back as the user left it. Where it's
  * kept (host state, localStorage, memory) and under which render id is worked out underneath, by
- * the store the view attached to its `App` (`mount` from `@genui/kit`, or `pageViewStore().attach`).
+ * the store the view attached to its `App` (`mount` from `@app-mcp/kit`, or `pageViewStore().attach`).
  * `key` tells several states in one view apart. Like useState, `initial` is read once.
  */
 export function useViewState<T>(initial: T | (() => T), key = "state"): [T, SetState<T>, StateInfo] {

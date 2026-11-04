@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_BUNDLE_BYTES } from "@genui/format";
+import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { localCatalog, parseWorkflowFile, readComponentDir, readWorkflowDir } from "./local.js";
 import { contentHash } from "./views.js";
@@ -21,7 +21,7 @@ describe("readComponentDir", () => {
     await writeFile(join(dir, path), content);
   };
 
-  it("reads the manifest @genui/kit/vite generates into dist/, with its bundle next to it", async () => {
+  it("reads the manifest @app-mcp/kit/vite generates into dist/, with its bundle next to it", async () => {
     await write("dist/genui.component.json", JSON.stringify({ ...manifest, bundle: "index.html" }));
     await write("dist/index.html", html);
     const component = await readComponentDir(dir);

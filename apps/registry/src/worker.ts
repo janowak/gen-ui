@@ -1,10 +1,10 @@
-import chart from "@genui/ui/views/chart.html";
-import form from "@genui/ui/views/form.html";
-import manager from "@genui/ui/views/manager.html";
-import workflows from "@genui/ui/views/workflows.html";
-import theme from "@genui/ui/views/theme.html";
-import instructions from "@genui/ui/views/instructions.html";
-import workspace from "@genui/ui/views/workspace.html";
+import chart from "@app-mcp/ui/views/chart.html";
+import form from "@app-mcp/ui/views/form.html";
+import manager from "@app-mcp/ui/views/manager.html";
+import workflows from "@app-mcp/ui/views/workflows.html";
+import theme from "@app-mcp/ui/views/theme.html";
+import instructions from "@app-mcp/ui/views/instructions.html";
+import workspace from "@app-mcp/ui/views/workspace.html";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
 import { createRegistryApp, type Refresher } from "./app.js";

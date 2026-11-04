@@ -1,4 +1,4 @@
-import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY, type ComponentManifest, type Theme } from "@genui/format";
+import { PREVIEW_META_KEY, THEME_META_KEY, VIEW_CONTENT_KEY, VIEW_ID_META_KEY, type ComponentManifest, type Theme } from "@app-mcp/format";
 import type { McpUiDisplayMode, McpUiHostContext, McpUiStyles } from "@modelcontextprotocol/ext-apps";
 import { AppBridge, PostMessageTransport } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { fieldsOf, partials, starterProps, type Field } from "./props.js";

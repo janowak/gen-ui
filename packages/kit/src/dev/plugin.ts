@@ -51,7 +51,7 @@ export function devPlugin(options: { component: string }): Plugin {
               return send(
                 500,
                 "text/javascript",
-                `document.body.textContent = "genui dev: ${HARNESS} is missing. Build @genui/kit first.";`,
+                `document.body.textContent = "genui dev: ${HARNESS} is missing. Build @app-mcp/kit first.";`,
               );
             }
           case "/__genui/component.json":

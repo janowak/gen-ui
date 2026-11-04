@@ -1,4 +1,4 @@
-import type { Field, FormSpec, Option, SubmitValues } from "@genui/format";
+import type { Field, FormSpec, Option, SubmitValues } from "@app-mcp/format";
 
 /** Internal value per field. Selects keep the full option so labels survive re-renders and summaries. */
 export type FieldState = string | number | boolean | string[] | Option | Option[] | undefined;

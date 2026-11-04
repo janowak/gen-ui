@@ -1,6 +1,6 @@
 # Host adapter plan
 
-Every interaction between a genui view and its host goes through one contract, `GenUIHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. A company's own chat is the second implementation: `createHost` in `@genui/element`, rendering views in a shadow root (CUSTOM-CHAT-PLAN.md).
+Every interaction between a genui view and its host goes through one contract, `GenUIHost`: render events, tool calls, model context, messages, display modes, links, theme and state. The kit and the built-in views call the contract, never the ext-apps `App` or `window.openai` directly. Today there is one implementation, an adapter over MCP Apps. A company's own chat is the second implementation: `createHost` in `@app-mcp/element`, rendering views in a shadow root (CUSTOM-CHAT-PLAN.md).
 
 **Status (2026-10-26)**
 - Proposed. This plan keeps views in MCP Apps iframes. CUSTOM-CHAT-PLAN.md builds on it, and replaces §4's `mount(…, { host })` with `view(component, setup)`.
@@ -29,7 +29,7 @@ Three code paths reach the host, and none of them checks what it supports first.
 
 ## 2. The contract
 
-`packages/kit/src/host.ts`, exported as `@genui/kit/host`:
+`packages/kit/src/host.ts`, exported as `@app-mcp/kit/host`:
 
 ```ts
 export const HOST_CONTRACT = 1;
@@ -101,7 +101,7 @@ export function modelBridge(host: GenUIHost): {
 
 ## 3. The MCP Apps adapter
 
-`mcpAppsHost(app)` in `@genui/kit/host` is the only implementation for now:
+`mcpAppsHost(app)` in `@app-mcp/kit/host` is the only implementation for now:
 
 - **Mapping.** The contract maps onto the `App`:
   - `callServerTool`, `updateModelContext`, `sendMessage`, `requestDisplayMode`, `openLink`;

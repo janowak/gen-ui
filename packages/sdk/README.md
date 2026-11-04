@@ -1,9 +1,9 @@
-# @genui/sdk
+# @app-mcp/sdk
 
 Put genui's forms, charts, your components and workflows on your own MCP server, next to your tools. Views call your tools through the host, so your data never goes through genui.
 
 ```ts
-import { connectGenUI, mountGenUI } from "@genui/sdk";
+import { connectGenUI, mountGenUI } from "@app-mcp/sdk";
 
 const genui = connectGenUI({ url: process.env.GENUI_MCP_URL, token: process.env.GENUI_MCP_TOKEN });
 await mountGenUI(server, { genui, watch: true });

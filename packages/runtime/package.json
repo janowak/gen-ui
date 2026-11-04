@@ -1,5 +1,5 @@
 {
-  "name": "@genui/runtime",
+  "name": "@app-mcp/runtime",
   "version": "0.1.0",
   "description": "genui end-user tools on an MCP server: forms, charts, your components and workflows",
   "type": "module",
@@ -35,8 +35,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@genui/format": "workspace:^",
-    "@genui/ui": "workspace:^",
+    "@app-mcp/format": "workspace:^",
+    "@app-mcp/ui": "workspace:^",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@modelcontextprotocol/server": "^2.3.1",

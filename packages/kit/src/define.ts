@@ -1,4 +1,4 @@
-import { COMPONENT_CONTRACT, ComponentManifest } from "@genui/format";
+import { COMPONENT_CONTRACT, ComponentManifest } from "@app-mcp/format";
 import { z } from "zod";
 
 export interface ComponentDefinition<P extends z.ZodObject = z.ZodObject, T extends string = string> {

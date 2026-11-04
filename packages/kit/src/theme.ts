@@ -1,4 +1,4 @@
-import type { Theme } from "@genui/format";
+import type { Theme } from "@app-mcp/format";
 
 const TOKENS = [
   ["primary", "--genui-primary"],

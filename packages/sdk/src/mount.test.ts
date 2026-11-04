@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { createRegistryApp, loadAssets, openDatabase, type Store } from "@genui/registry";
+import { createRegistryApp, loadAssets, openDatabase, type Store } from "@app-mcp/registry";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";

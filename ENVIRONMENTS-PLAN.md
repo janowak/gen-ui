@@ -44,7 +44,7 @@ Replace the beta/stable release pipeline with environments that each workspace d
 - **`members.environment`**: the member's active environment in the management MCP; null means `prod` (§5).
 - **`channel_history`** and `channels` are dropped. No data to keep: one migration drops and rebuilds; workspaces get `prod`, release tokens become publish tokens.
 - **Deleting an environment** deletes its deployments and recipes. SDKs pointed at it get 404 and keep their last tools, as they do today when listing fails.
-- **`@genui/format`:** `CHANNELS` / `Channel` become `EnvironmentName` and `DEFAULT_ENVIRONMENT = "prod"`. `Catalog.channel` becomes `Catalog.environment`.
+- **`@app-mcp/format`:** `CHANNELS` / `Channel` become `EnvironmentName` and `DEFAULT_ENVIRONMENT = "prod"`. `Catalog.channel` becomes `Catalog.environment`.
 
 ---
 

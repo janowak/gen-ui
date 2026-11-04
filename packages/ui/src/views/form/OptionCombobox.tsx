@@ -1,4 +1,4 @@
-import type { Option } from "@genui/format";
+import type { Option } from "@app-mcp/format";
 import { Loader2Icon, RotateCwIcon } from "lucide-react";
 import { Fragment } from "react";
 import { Button } from "@/components/ui/button";

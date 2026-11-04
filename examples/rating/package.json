@@ -1,5 +1,5 @@
 {
-  "name": "@genui/example-rating",
+  "name": "@app-mcp/example-rating",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -10,10 +10,10 @@
     "genui:publish": "genui publish ."
   },
   "dependencies": {
-    "@genui/kit": "workspace:*"
+    "@app-mcp/kit": "workspace:*"
   },
   "devDependencies": {
-    "@genui/cli": "workspace:*",
+    "@app-mcp/cli": "workspace:*",
     "vite": "^8.3.5"
   }
 }

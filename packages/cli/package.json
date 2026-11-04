@@ -1,5 +1,5 @@
 {
-  "name": "@genui/cli",
+  "name": "@app-mcp/cli",
   "version": "0.1.0",
   "description": "genui CLI: start, develop, serve and publish MCP Apps components",
   "type": "module",
@@ -23,8 +23,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@genui/format": "workspace:^",
-    "@genui/runtime": "workspace:^"
+    "@app-mcp/format": "workspace:^",
+    "@app-mcp/runtime": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

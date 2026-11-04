@@ -66,7 +66,7 @@ When: the user wants to return something.
 
 Both kinds are listed in that section by name and description, so the model knows the command ones exist too (only their description, not their full text, to keep the context small).
 
-`serverInstructions(catalog)` in `@genui/format` builds that text; the hosted MCP sends it, so both SDKs pick it up through `getInstructions()` with no change.
+`serverInstructions(catalog)` in `@app-mcp/format` builds that text; the hosted MCP sends it, so both SDKs pick it up through `getInstructions()` with no change.
 
 **Size.** Hosts send instructions every turn. On save, reject when environment instructions + param-less workflows exceed `MAX_INSTRUCTIONS` (raise to 8000 combined), with an error naming the biggest workflows. Command workflows don't count: their text only goes out when someone runs them.
 
@@ -166,6 +166,6 @@ Workflows live in the repo next to the components they use and ship the same way
 - `<name>.workflow.md` in a component dir or its `workflows/`: YAML frontmatter (`title`, `description`, `params`; `name` defaults to the file name) and the instructions as the body. `.json` works for `genui workflow set`.
 - `genui publish <dir>` sends the dir's component and its workflows to the environment (`PUT /v1/workflows/:name`), with the same publish token and its environment limits. A dir may hold only workflows.
 - `genui workflow list | set <file> | rm <name>` for single ones; `genui instructions <file.md> | --clear` for the environment's instructions (admin).
-- `@genui/runtime/local`: `parseWorkflowFile`, `readWorkflowFile`, `readWorkflowDir`, also used by `genui serve`.
+- `@app-mcp/runtime/local`: `parseWorkflowFile`, `readWorkflowFile`, `readWorkflowDir`, also used by `genui serve`.
 - Publishing doesn't delete workflows that left the repo; `genui workflow rm` does. A sync mode (`--prune`) can come later.
 - Example: `examples/rating/workflows/` (`create_order` is a command, `order_feedback` is always-on).

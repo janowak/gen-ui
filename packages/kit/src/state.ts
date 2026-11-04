@@ -1,4 +1,4 @@
-import { readViewId } from "@genui/format";
+import { readViewId } from "@app-mcp/format";
 
 /**
  * Where a view's state is kept:

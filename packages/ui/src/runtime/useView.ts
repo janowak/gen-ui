@@ -1,5 +1,5 @@
-import { PREVIEW_META_KEY, readViewId, THEME_META_KEY } from "@genui/format";
-import { pageViewStore } from "@genui/kit/state";
+import { PREVIEW_META_KEY, readViewId, THEME_META_KEY } from "@app-mcp/format";
+import { pageViewStore } from "@app-mcp/kit/state";
 import type { App, McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { useApp, useHostStyles } from "@modelcontextprotocol/ext-apps/react";
 import { useEffect, useState } from "react";

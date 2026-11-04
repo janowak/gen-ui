@@ -2,7 +2,7 @@
 
 genui for Python MCP servers. `mount_genui` puts genui's tools (`render_form`, `render_chart` and your registry components as `render_<name>`), their `ui://` views and the workflow prompts on an `MCPServer` from the official [`mcp`](https://pypi.org/project/mcp/) SDK (2.3+). Each tool is shown as an MCP App inside the AI client.
 
-The tools are served by genui's end-user MCP, in genui's cloud or your self-hosted genui server. This package forwards their calls there with a server token. genui's views call your own tools through the host, so your data tools and their results never leave your server. It works the same as `@genui/sdk` for Node.
+The tools are served by genui's end-user MCP, in genui's cloud or your self-hosted genui server. This package forwards their calls there with a server token. genui's views call your own tools through the host, so your data tools and their results never leave your server. It works the same as `@app-mcp/sdk` for Node.
 
 ```python
 from mcp.server.mcpserver import MCPServer

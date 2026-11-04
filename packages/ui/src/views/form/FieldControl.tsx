@@ -1,4 +1,4 @@
-import type { Field as FieldSpec, Option } from "@genui/format";
+import type { Field as FieldSpec, Option } from "@app-mcp/format";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";

@@ -1,8 +1,8 @@
-import { mount, type ContextOf } from "@genui/kit";
+import { mount, type ContextOf } from "@app-mcp/kit";
 import rating from "./component";
 
 /**
- * A registry component built with @genui/kit and no UI framework. The kit validates props,
+ * A registry component built with @app-mcp/kit and no UI framework. The kit validates props,
  * applies host styles and the workspace theme (`--genui-*`), only calls tools the server
  * approved, and keeps the rating per render (`ctx.useState`) so a re-rendered message stays rated.
  */

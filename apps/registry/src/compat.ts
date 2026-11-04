@@ -1,4 +1,4 @@
-import { SEMVER } from "@genui/format";
+import { SEMVER } from "@app-mcp/format";
 
 export function parseSemver(version: string): [number, number, number] {
   const match = SEMVER.exec(version);

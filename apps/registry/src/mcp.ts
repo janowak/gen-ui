@@ -12,9 +12,9 @@ import {
   VIEW_ID_META_KEY,
   Workflow,
   MAX_ICON_BYTES,
-} from "@genui/format";
+} from "@app-mcp/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { contentHash, mountGenUI } from "@genui/runtime";
+import { contentHash, mountGenUI } from "@app-mcp/runtime";
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { endUserPath } from "./api.js";
@@ -25,7 +25,7 @@ import { builtInViews, type Assets, type ManagementViewName } from "./views.js";
 type ManagementViews = Record<ManagementViewName, { html: string; uri: string }>;
 const hashed = new WeakMap<Assets, ManagementViews>();
 
-/** Management views shipped with @genui/ui, hashed once per process. */
+/** Management views shipped with @app-mcp/ui, hashed once per process. */
 function managementViews(assets: Assets): ManagementViews {
   let views = hashed.get(assets);
   if (!views) {
@@ -245,7 +245,7 @@ export async function createRegistryMcp(
       title: "Workspace",
       description:
         "Show the workspace's members and pending invites, the end-user MCP address of each environment, and whether it's public. " +
-        "Admins invite people, create server tokens for @genui/sdk, turn the public MCP on or off and set its title, description, website and icon from the view. " +
+        "Admins invite people, create server tokens for @app-mcp/sdk, turn the public MCP on or off and set its title, description, website and icon from the view. " +
         "Pass `invite` to prefill an invite the admin then sends with a click.",
       inputSchema: z.object({ invite: Invite.optional().describe("Someone to invite, prefilled in the view.") }),
       _meta: { ui: { resourceUri: VIEWS.workspace.uri } },
@@ -443,7 +443,7 @@ export async function createRegistryMcp(
     {
       title: "Create token",
       description:
-        "Create a token: server for @genui/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
+        "Create a token: server for @app-mcp/sdk on the company's MCP server, publish for CI, admin for the genui CLI. Shown once, in the view only.",
       inputSchema: z.object({ name: z.string().min(1).max(80), scope: z.enum(["server", "publish", "admin"]).default("server") }),
       _meta: appOnly(VIEWS.workspace.uri),
     },

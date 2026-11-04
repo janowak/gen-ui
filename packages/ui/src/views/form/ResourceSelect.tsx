@@ -1,4 +1,4 @@
-import type { ResourceSource } from "@genui/format";
+import type { ResourceSource } from "@app-mcp/format";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";

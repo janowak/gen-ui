@@ -1,9 +1,9 @@
-# @genui/cli
+# @app-mcp/cli
 
 The `genui` command: start a component, try it locally, and publish it to your genui workspace.
 
 ```bash
-npx @genui/cli init my_poll      # a new component, ready to run
+npx @app-mcp/cli init my_poll      # a new component, ready to run
 cd my_poll && npm install
 npm run dev                      # props form, theme and mock tools in a local host
 npx genui serve                  # a local MCP with it: http://localhost:4100/mcp

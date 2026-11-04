@@ -1,5 +1,5 @@
-import { Field, FormSpec, SubmitResult } from "@genui/format";
-import { useViewState } from "@genui/kit/react";
+import { Field, FormSpec, SubmitResult } from "@app-mcp/format";
+import { useViewState } from "@app-mcp/kit/react";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { CheckCircle2Icon, Loader2Icon } from "lucide-react";
 import { useMemo, useState, type SubmitEvent } from "react";

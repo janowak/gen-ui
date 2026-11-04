@@ -1,4 +1,4 @@
-import { viewBundles, type ViewBundle, type ViewName } from "@genui/runtime";
+import { viewBundles, type ViewBundle, type ViewName } from "@app-mcp/runtime";
 
 export type { ViewName };
 export type ManagementViewName = "manager" | "theme" | "workflows" | "workspace" | "instructions";
@@ -8,7 +8,7 @@ export type ManagementViewName = "manager" | "theme" | "workflows" | "workspace"
  * (assets-node.ts), the Worker bundles it (worker.ts).
  */
 export interface Assets {
-  /** Single-file views from @genui/ui. */
+  /** Single-file views from @app-mcp/ui. */
   views: Record<ViewName | ManagementViewName, string>;
   /** Sign-in and consent pages, built from web/ into dist-web/. */
   pages: Record<"sign-in" | "consent", string>;

@@ -26,7 +26,7 @@ if (config.mode === "self-hosted" && (await store.countWorkspaces()) === 0) {
   const token = await store.createToken(workspace, "admin", "bootstrap");
   console.log(
     `Created workspace. Admin token (shown once, store it now):\n  ${token}\n` +
-      `End-user MCP for @genui/sdk (with a server token: genui token server <name>):\n  ${config.baseURL}/w/${workspace}/mcp\n`,
+      `End-user MCP for @app-mcp/sdk (with a server token: genui token server <name>):\n  ${config.baseURL}/w/${workspace}/mcp\n`,
   );
 }
 

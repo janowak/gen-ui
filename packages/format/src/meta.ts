@@ -1,6 +1,6 @@
 /**
  * The genui view contract: keys the SDK sets in a render tool result's `_meta`, read by the
- * built-in views and by components built with @genui/kit. Keep every `genui/*` key here.
+ * built-in views and by components built with @app-mcp/kit. Keep every `genui/*` key here.
  */
 
 /** Set on registry previews: the view renders without calling tools, which live on the company's own server. */
@@ -27,7 +27,7 @@ export function readViewId(result: { structuredContent?: unknown; _meta?: unknow
 }
 
 /**
- * Version of the component contract above. Components built with @genui/kit declare the version
+ * Version of the component contract above. Components built with @app-mcp/kit declare the version
  * they need in their manifest (`contract`); the SDK skips components that need a newer one.
  */
 export const COMPONENT_CONTRACT = 1;

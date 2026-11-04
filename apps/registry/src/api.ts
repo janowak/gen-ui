@@ -9,7 +9,7 @@ import {
   SEMVER,
   Theme,
   Workflow,
-} from "@genui/format";
+} from "@app-mcp/format";
 import { Hono, type Context, type Next } from "hono";
 import { z } from "zod";
 import type { RegistryAppOptions } from "./app.js";
@@ -120,7 +120,7 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }),
   );
 
-  // Admin: the company server's refresh endpoint (@genui/sdk), called after every change to what the environment
+  // Admin: the company server's refresh endpoint (@app-mcp/sdk), called after every change to what the environment
   // serves, and whether the built-in render_form and render_chart are on. Settings left out stay as they are.
   api.put("/environments/:name", auth("admin"), async (c) => {
     const name = String(c.req.param("name"));

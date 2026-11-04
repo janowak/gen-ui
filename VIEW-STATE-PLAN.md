@@ -34,9 +34,9 @@ A re-rendered view (scroll back, reload, reopen the chat) comes back as the user
 ## 2. Layers
 
 ```
-@genui/kit/state            one store per view: attached to the App, finds the id, picks the backend
- ├─ ctx.useState<T>()       custom components (@genui/kit, no framework)
- └─ useViewState<T>()       React views (@genui/kit/react): the built-in form, React components
+@app-mcp/kit/state            one store per view: attached to the App, finds the id, picks the backend
+ ├─ ctx.useState<T>()       custom components (@app-mcp/kit, no framework)
+ └─ useViewState<T>()       React views (@app-mcp/kit/react): the built-in form, React components
      └─ form                useViewState<SavedForm>(): adds { values, submit } and the submit transitions
 ```
 
@@ -49,10 +49,10 @@ A re-rendered view (scroll back, reload, reopen the chat) comes back as the user
 ## 3. The hook (kit)
 
 ```ts
-// React views (@genui/kit/react)
+// React views (@app-mcp/kit/react)
 const [value, setValue, saved] = useViewState<T>(initial, key?);
 
-// Custom components (@genui/kit): called in render, which runs on every change
+// Custom components (@app-mcp/kit): called in render, which runs on every change
 const [value, setValue, saved] = ctx.useState<T>(initial, key?);
 
 value     // the restored value, else `initial`
@@ -110,9 +110,9 @@ interface StateBackend {
 **Size:** cap a saved entry (and warn in `genui dev`) instead of failing silently. ChatGPT documents no limit for widget state, and a large draft costs every replay.
 
 **Where the code lives:**
-- `packages/kit/src/state.ts`, exported as `@genui/kit/state`.
-- The hook in `packages/kit/src/react.ts`, exported as `@genui/kit/react`, with `react` as an optional peer dependency. `@genui/ui` aliases it to Preact as it does today.
-- `@genui/ui` depends on `@genui/kit` for these two modules only. One implementation for built-in views and custom components.
+- `packages/kit/src/state.ts`, exported as `@app-mcp/kit/state`.
+- The hook in `packages/kit/src/react.ts`, exported as `@app-mcp/kit/react`, with `react` as an optional peer dependency. `@app-mcp/ui` aliases it to Preact as it does today.
+- `@app-mcp/ui` depends on `@app-mcp/kit` for these two modules only. One implementation for built-in views and custom components.
 
 ---
 
@@ -196,13 +196,13 @@ type SubmitStatus = "open" | "pending" | "done" | "interrupted";
    - `apps/registry/src/runtime.ts` (`meta()` → also `structuredContent: { genui: { id } }`) and the previews in `apps/registry/src/mcp.ts`.
    - `VIEW_CONTENT_KEY = "genui"` in `packages/format/src/meta.ts`.
    - Tests: registry runtime and management tests; `packages/sdk/src/mount.test.ts`; Python `test_mount.py`, which checks that `structured_output=False` still forwards `structuredContent`.
-2. **Store and adapter** in `packages/kit/src/state.ts` (`@genui/kit/state`):
+2. **Store and adapter** in `packages/kit/src/state.ts` (`@app-mcp/kit/state`):
    - `attachViewState(app, scope, options)`: the id from `structuredContent` (and `_meta` until M0 check 1 picks one), backend selection, values by hook key.
    - Debounced writes, `flush`, flush on `pagehide` and teardown, the sweep, the size cap.
    - Unit tests with a fake `window.openai`, a fake `Storage` and an `AppBridge`.
 3. **Hooks.**
    - `ctx.useState` and `ctx.viewId` in `packages/kit/src/runtime.ts`; `createRuntime` attaches the store. `ctx.state` goes.
-   - `useViewState` in `packages/kit/src/react.ts` (`@genui/kit/react`) on `useSyncExternalStore`.
+   - `useViewState` in `packages/kit/src/react.ts` (`@app-mcp/kit/react`) on `useSyncExternalStore`.
    - Tests:
      - restore before the id on ChatGPT, after it in the browser;
      - the user's value beats a later restore;

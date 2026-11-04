@@ -5,10 +5,10 @@ A local genui MCP for developers: one command, no registry, workspace, account, 
 **Status (2026-10-26)**
 - Built: steps 1–8. Step 9 checked with MCP clients, not yet in Claude Desktop or Claude Code themselves (see "Checked" below).
 - **Code:**
-  - `@genui/runtime`: `mountGenUI` returns `{ remove() }` and serves old versions through `CatalogSource.bundle`.
-  - `@genui/runtime/local`: `readComponentDir` (also used by `genui publish`) and `localCatalog`.
-  - `@genui/runtime/serve`: `startServe`, `createLocalMcp` and `watchPaths`.
-  - `@genui/kit/dev`: `watchBuild`.
+  - `@app-mcp/runtime`: `mountGenUI` returns `{ remove() }` and serves old versions through `CatalogSource.bundle`.
+  - `@app-mcp/runtime/local`: `readComponentDir` (also used by `genui publish`) and `localCatalog`.
+  - `@app-mcp/runtime/serve`: `startServe`, `createLocalMcp` and `watchPaths`.
+  - `@app-mcp/kit/dev`: `watchBuild`.
   - The CLI: `genui serve`.
 - **Differs from this plan:**
   - Two directories with the same component name don't stop the server: the second is reported and skipped, like any other problem.
@@ -19,11 +19,11 @@ A local genui MCP for developers: one command, no registry, workspace, account, 
   - 25 runtime tests: catalog, both modes, `/revision` and its ETag, live reload with `list_changed`, the Host check, unbuilt components.
   - Manually:
     - `genui serve examples/rating --recipes examples/recipes` over HTTP. Editing `component.ts` rebuilt it and the connected client got the new URI.
-    - The demo through `@genui/sdk` with token `local`: data tools on.
+    - The demo through `@app-mcp/sdk` with token `local`: data tools on.
     - `--stdio` from an MCP client: stdout stays clean while Vite builds.
 - **Left:**
   - Try it in Claude Code and Claude Desktop, and record which hosts re-list on `list_changed`.
-  - `@genui/ui` ships the management views too (about 1 MB packed); `serve` only needs form and chart.
+  - `@app-mcp/ui` ships the management views too (about 1 MB packed); `serve` only needs form and chart.
 
 **Principle: same runtime, different source.** `serve` and the registry's end-user MCP run the same `mountGenUI`. The only difference is where the catalog comes from: the registry reads its database, `serve` reads files on disk. Moving from `serve` to staging or prod only changes the URL and token.
 
@@ -57,7 +57,7 @@ genui serve on http://localhost:4100
 | Flag | What |
 |---|---|
 | `[dirs…]` | Component directories. Default `.` when it has a manifest or a `genui()` Vite config, else none |
-| `--theme <file>` | Theme JSON (`Theme` from `@genui/format`) |
+| `--theme <file>` | Theme JSON (`Theme` from `@app-mcp/format`) |
 | `--instructions <file.md>` | The environment's instructions. Workflows come from each dir's `*.workflow.md` and `workflows/` (`readWorkflowDir`) |
 | `--port <n>` | Default 4100 |
 | `--stdio` | Serve over stdio instead of HTTP. All output goes to stderr |
@@ -66,7 +66,7 @@ genui serve on http://localhost:4100
 
 **Out of scope:** auth, workspaces, environments, publishing, the management MCP and its views.
 
-## 3. Package: `@genui/runtime`
+## 3. Package: `@app-mcp/runtime`
 
 Move the end-user runtime out of `apps/registry` so both servers import it.
 
@@ -78,17 +78,17 @@ Move the end-user runtime out of `apps/registry` so both servers import it.
 | The `ui://genui/c/{name}/{hash}` resource template in `hosted.ts` | `mountGenUI`, behind `CatalogSource.bundle?(hash)`, so `serve` gets old versions too |
 | Manifest + bundle lookup in `cli.ts` `publish()` | `local.ts` `readComponentDir(dir)`, used by `publish` and `serve` |
 
-- The root export (`@genui/runtime`) stays Worker-safe: no `node:fs`, `crypto.randomUUID()` from `globalThis`, assets passed in. The registry's Worker build imports it unchanged.
-- `@genui/runtime/serve` is Node-only: the local source, watcher and HTTP/stdio servers.
+- The root export (`@app-mcp/runtime`) stays Worker-safe: no `node:fs`, `crypto.randomUUID()` from `globalThis`, assets passed in. The registry's Worker build imports it unchanged.
+- `@app-mcp/runtime/serve` is Node-only: the local source, watcher and HTTP/stdio servers.
 - `mountGenUI` returns `{ remove() }`: every tool, resource and prompt handle it registered (they all have `remove()` in `@modelcontextprotocol/server` 2.3). `serve` uses it to remount on change (§5).
-- `@genui/ui`: move the view build's dependencies (React, Base UI, Recharts, …) to `devDependencies`. The published package is only `dist/*.html`, so `npx genui` doesn't install a UI toolkit.
-- `@genui/cli` depends on `@genui/runtime`. `serve` imports `@genui/runtime/serve` lazily, so registry commands stay fast.
+- `@app-mcp/ui`: move the view build's dependencies (React, Base UI, Recharts, …) to `devDependencies`. The published package is only `dist/*.html`, so `npx genui` doesn't install a UI toolkit.
+- `@app-mcp/cli` depends on `@app-mcp/runtime`. `serve` imports `@app-mcp/runtime/serve` lazily, so registry commands stay fast.
 
 ## 4. Local catalog source
 
 `localCatalog({ dirs, theme, instructions })` implements `CatalogSource` from files:
 
-- **Components:** `readComponentDir(dir)`, the same rules as `publish`: a hand-written `genui.component.json` next to the sources, else `dist/genui.component.json` from `@genui/kit/vite`; the bundle path from `bundle` in the manifest, default `dist/index.html`. The manifest is validated with `ComponentManifest`, and the hash is `contentHash(html)` as in the registry.
+- **Components:** `readComponentDir(dir)`, the same rules as `publish`: a hand-written `genui.component.json` next to the sources, else `dist/genui.component.json` from `@app-mcp/kit/vite`; the bundle path from `bundle` in the manifest, default `dist/index.html`. The manifest is validated with `ComponentManifest`, and the hash is `contentHash(html)` as in the registry.
 - **Theme, instructions, workflows:** the theme parsed with `Theme`; workflows from every dir with `readWorkflowDir`.
 - **Snapshot:** `{ catalog: { environment: "prod", theme, components, instructions, workflows }, bundles }`, rebuilt only on change.
 - **Bundles by hash:** every bundle seen since start stays in memory, so a message rendered before a rebuild still loads its own version. A restart forgets them; that's fine locally.
@@ -97,7 +97,7 @@ Move the end-user runtime out of `apps/registry` so both servers import it.
 
 ## 5. Live reload
 
-1. **Build.** For a directory with a `genui()` Vite config, `serve` runs its watch build (`watchBuild(root)`, a new export from `@genui/kit`, loaded from the component directory like `genui dev` loads `startDev`). `--no-build` skips this, e.g. for hand-built bundles or a build the developer runs themselves.
+1. **Build.** For a directory with a `genui()` Vite config, `serve` runs its watch build (`watchBuild(root)`, a new export from `@app-mcp/kit`, loaded from the component directory like `genui dev` loads `startDev`). `--no-build` skips this, e.g. for hand-built bundles or a build the developer runs themselves.
 2. **Watch.** `fs.watch` on each manifest and bundle, the theme and instructions files and the workflow files, debounced 100 ms. On change: reload what changed, bump the revision, log `rating@1.2.1 reloaded (a1b2c3d4)` or the error.
 3. **Push to connected clients.** Each session keeps its server; on change, `mounted.remove()`, `mountGenUI` again, `sendToolListChanged()` and `sendPromptListChanged()`. Hosts that honour `list_changed` see the new tools without reconnecting; the rest pick them up on their next list.
 4. **No stale views.** A rebuilt component has a new content hash, so a new `ui://genui/c/<name>/<hash>` URI. Hosts that cache resources by URI fetch the new HTML.
@@ -117,20 +117,20 @@ Move the end-user runtime out of `apps/registry` so both servers import it.
 ## 7. Docs and the repo
 
 - **README "Run locally":** lead with `npx genui serve` and `claude mcp add`. The full registry setup moves under "Self-host".
-- **Demo:** `GENUI_MCP_URL` defaults to `http://localhost:4100/mcp` with token `local`, so `genui serve` plus `pnpm --filter @genui/demo start` is the whole local stack.
+- **Demo:** `GENUI_MCP_URL` defaults to `http://localhost:4100/mcp` with token `local`, so `genui serve` plus `pnpm --filter @app-mcp/demo start` is the whole local stack.
 - **`.claude/launch.json`:** add a `serve` configuration on port 4100 (`examples/rating`, which has its workflows next to it).
 - **Python SDK:** same URL and `"local"` token. No code change.
 - **Landing page:** a "Try it" section: `npx genui serve` and the Claude Code command.
 
 ## 8. Steps
 
-1. Extract `@genui/runtime`: move files, `mountGenUI` returns `{ remove() }`, resource template behind `bundle(hash)`, registry imports it. Registry tests pass unchanged.
+1. Extract `@app-mcp/runtime`: move files, `mountGenUI` returns `{ remove() }`, resource template behind `bundle(hash)`, registry imports it. Registry tests pass unchanged.
 2. `readComponentDir` in the runtime; `publish` uses it.
 3. `localCatalog` with tests: directories, theme, workflows, broken directory skipped, duplicate names, old hashes kept.
 4. `serve` over HTTP: sessions, direct vs SDK mode, `/revision`, CORS. Test with `@modelcontextprotocol/client`: list, call, read a resource, both modes.
 5. Watch and remount: test that a changed bundle produces a new URI and a `list_changed` notification.
-6. `--stdio`, then `watchBuild` in `@genui/kit` and `--no-build`.
-7. `@genui/ui` dependencies to devDependencies; check `npm pack` sizes for `@genui/cli`.
+6. `--stdio`, then `watchBuild` in `@app-mcp/kit` and `--no-build`.
+7. `@app-mcp/ui` dependencies to devDependencies; check `npm pack` sizes for `@app-mcp/cli`.
 8. README, demo default, launch config.
 9. Manual check: Claude Code over HTTP, Claude Desktop over stdio, playground, demo through the SDK. Edit `examples/rating`, see the new version without reconnecting.
 

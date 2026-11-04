@@ -1,4 +1,4 @@
-import { defineComponent, z } from "@genui/kit";
+import { defineComponent, z } from "@app-mcp/kit";
 
 export default defineComponent({
   name: "rating",

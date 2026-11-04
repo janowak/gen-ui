@@ -11,8 +11,8 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
 
 ## 1. What we deploy
 
-- A static page: `index.html`, 34 KB of CSS, 3 KB of JS and the Geist fonts. `pnpm --filter @genui/site build` writes 236 KB to `apps/site/dist`.
-- No backend, no environment variables. The only workspace dependency is `@genui/ui/styles.css`, read from source, so nothing else has to be built first.
+- A static page: `index.html`, 34 KB of CSS, 3 KB of JS and the Geist fonts. `pnpm --filter @app-mcp/site build` writes 236 KB to `apps/site/dist`.
+- No backend, no environment variables. The only workspace dependency is `@app-mcp/ui/styles.css`, read from source, so nothing else has to be built first.
 - **`master` still has the beta/stable copy.** The environments copy is on the `environments` branch. Deploy from that branch, or merge it first.
 
 ## 2. Hosting: Workers static assets, deployed from a laptop
@@ -80,7 +80,7 @@ Put `apps/site` live at `https://app-mcp.com` on Cloudflare: deployed from a lap
    - Block AI bots off, managed robots.txt off. New zones can start with AI crawlers blocked. We want Claude and ChatGPT search to read the page, and nothing on this zone should challenge AI backends once the MCP hostnames exist.
    - HSTS later, once `registry.`, `mcp.` and `demo.` serve HTTPS: `includeSubDomains`, no preload yet.
 2. **Email Routing:** enable it (it adds the MX and SPF records), forward `hello@` to your inbox and verify that inbox. Add a `_dmarc` TXT record: `v=DMARC1; p=none`. Replies go out from your own address until something can send as `hello@` (out of scope).
-3. **Sign in wrangler:** `pnpm --filter @genui/site exec wrangler login`, as a member of the account in `wrangler.jsonc`. `wrangler whoami` shows the account.
+3. **Sign in wrangler:** `pnpm --filter @app-mcp/site exec wrangler login`, as a member of the account in `wrangler.jsonc`. `wrangler whoami` shows the account.
 4. **Custom domain:** the first production deploy creates it from `routes`, with its DNS record and certificate. Check it under the Worker's Settings → Domains & Routes.
 5. **www:** a proxied `AAAA www 100::` record and a Redirect Rule from the "Redirect from WWW to root" template (301, query kept).
 6. **Web Analytics:** add `app-mcp.com` as a site and copy its token into the snippet (§4.8).

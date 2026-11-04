@@ -1,5 +1,5 @@
 import { relative, resolve } from "node:path";
-import { MAX_BUNDLE_BYTES } from "@genui/format";
+import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
 import type { Logger, Plugin, PluginOption } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { devPlugin } from "./dev/plugin.js";

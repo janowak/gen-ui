@@ -1,6 +1,6 @@
 # Custom chat plan
 
-Render genui components in a company's own chat: their frontend, their backend, their LLM calls. The backend gets genui's tools for its LLM requests and runs them through `@genui/sdk`, server to server. The frontend renders the result as a web component with a shadow root ("light render") instead of an MCP Apps iframe. The company supplies what an MCP Apps host would (tool calls, messages, model context, theme, state) through the host adapter contract from HOST-ADAPTER-PLAN.md.
+Render genui components in a company's own chat: their frontend, their backend, their LLM calls. The backend gets genui's tools for its LLM requests and runs them through `@app-mcp/sdk`, server to server. The frontend renders the result as a web component with a shadow root ("light render") instead of an MCP Apps iframe. The company supplies what an MCP Apps host would (tool calls, messages, model context, theme, state) through the host adapter contract from HOST-ADAPTER-PLAN.md.
 
 **Status (2026-10-26)**
 - Proposed. Needs HOST-ADAPTER-PLAN steps 1–4 first: this is the contract's second implementation.
@@ -37,12 +37,12 @@ view: model.update / model.send ──► the company's chat state → next LLM 
 
 ---
 
-## 2. Server: harness helpers in `@genui/sdk`
+## 2. Server: harness helpers in `@app-mcp/sdk`
 
 Built on `connectGenUI`, which already keeps genui's tools in memory, forwards calls and fetches content-hashed resources once.
 
 ```ts
-import { connectGenUI, genuiHarness } from "@genui/sdk";
+import { connectGenUI, genuiHarness } from "@app-mcp/sdk";
 
 const genui = connectGenUI({ url: process.env.GENUI_MCP_URL, token: SERVER_TOKEN });
 const harness = genuiHarness(genui); // also prefetches the modules of the current tools
@@ -79,14 +79,14 @@ const { forModel, render } = await harness.execute(block.name, block.input);
 
 ---
 
-## 3. Browser: `@genui/element`
+## 3. Browser: `@app-mcp/element`
 
 What a company installs in its chat frontend: the host for its views, a loader, and the React wrapper. The views' own code comes in the modules.
 
 ### React wrapper
 
 ```tsx
-import { GenUIView } from "@genui/element/react";
+import { GenUIView } from "@app-mcp/element/react";
 
 <GenUIView
   module={part.module}             // { tag, hash } from harness.module() or render.module
@@ -107,7 +107,7 @@ import { GenUIView } from "@genui/element/react";
 ### Host
 
 ```ts
-import { createHost, load } from "@genui/element";
+import { createHost, load } from "@app-mcp/element";
 
 const host = createHost({ sendMessage, updateModelContext });
 await load({ tag: "genui-rating", hash }, "/genui");
@@ -155,7 +155,7 @@ One iframe per render made that fine. Now one module serves every render on the 
 
 ```ts
 // src/view.ts
-import { view } from "@genui/kit";
+import { view } from "@app-mcp/kit";
 import rating from "./component";
 import "./view.css";
 
@@ -172,7 +172,7 @@ export default view(rating, (root) => {
 - `setup(root)` runs once per render and returns `render(ctx)`, or `{ render, destroy }`. `root` is a `<div>` in the iframe's body, or the shadow root.
 - The Vite plugin generates both entries from `src/view.ts`, so components no longer have an `index.html`.
 - `mount` goes. This replaces `mount(…, { host })` in HOST-ADAPTER-PLAN §4.
-- The view store comes from the runtime, one per render. React components get it from a provider: `reactView(component, App)` in `@genui/kit/react` sets it up, and `useViewState` reads it.
+- The view store comes from the runtime, one per render. React components get it from a provider: `reactView(component, App)` in `@app-mcp/kit/react` sets it up, and `useViewState` reads it.
 - Theme variables, the dark class and host style variables go on the render's root: `<html>` in the iframe, the custom element in light mode (§5).
 - `genui init`, `examples/rating` and the kit's test fixture move to `view`.
 
@@ -200,7 +200,7 @@ The `genui()` plugin writes a second output in the same `vite build`:
 
 ## 5. CSS rewrite plugin
 
-`shadowCss()` in `@genui/kit/vite`, used by the kit's light build and by `packages/ui`. A PostCSS pass with `postcss-selector-parser` over the collected CSS:
+`shadowCss()` in `@app-mcp/kit/vite`, used by the kit's light build and by `packages/ui`. A PostCSS pass with `postcss-selector-parser` over the collected CSS:
 
 | In | Out | Why |
 |---|---|---|
@@ -226,7 +226,7 @@ The `genui()` plugin writes a second output in the same `vite build`:
 - **One module serves every form on the page.**
   - `pageViewStore()` moves into `HostProvider` (HOST-ADAPTER-PLAN §4).
   - Audit other module-level state under `views/` (option and source loading).
-- **Output:** `dist/form.module.js` and `dist/chart.module.js`, from a switch in `vite.config.ts` like today's `INPUT`. `@genui/runtime`'s view bundles carry their JS and hashes.
+- **Output:** `dist/form.module.js` and `dist/chart.module.js`, from a switch in `vite.config.ts` like today's `INPUT`. `@app-mcp/runtime`'s view bundles carry their JS and hashes.
 - **Management views stay iframe-only:** manager, theme, recipes, guide and workspace. They only run in the registry's own connector.
 
 ---
@@ -242,12 +242,12 @@ The `genui()` plugin writes a second output in the same `vite build`:
   - `POST /v1/components` takes `module` next to `html`. `genui publish` reads it from the manifest's `module`.
   - Re-publishing the same version must match the module hash too.
   - A version without a module (a hand-built bundle) still publishes and works in MCP Apps hosts. Custom chats don't list it.
-- **`@genui/format`:** `MODULE_META_KEY = "genui/module"`, and `CatalogComponent.module?: { hash }`.
-- **`@genui/runtime` `mountGenUI`:**
+- **`@app-mcp/format`:** `MODULE_META_KEY = "genui/module"`, and `CatalogComponent.module?: { hash }`.
+- **`@app-mcp/runtime` `mountGenUI`:**
   - `_meta["genui/module"] = { uri: "genui://module/<hash>", tag }` goes on `render_form`, `render_chart`, `use_recipe` (form module) and every component tool with a module.
   - Resource template `genui://module/{hash}` (`text/javascript`). It resolves built-in modules first, then `CatalogSource.module(hash)`: workspace-scoped like `bundle`, any version.
-  - `@genui/runtime/local` reads `dist/genui.module.js`, so `genui serve` works behind a local harness.
-- **`@genui/sdk`:**
+  - `@app-mcp/runtime/local` reads `dist/genui.module.js`, so `genui serve` works behind a local harness.
+- **`@app-mcp/sdk`:**
   - `GenUIClient.module(hash)` reads a module and keeps it in memory. Modules are content-hashed, so there's nothing to invalidate.
   - `genuiHarness` turns on prefetching the current tools' modules.
   - `mountGenUI` on a company's MCP server passes `_meta` through as today and doesn't mirror module resources, since MCP Apps hosts don't use them.
@@ -260,7 +260,7 @@ The `genui()` plugin writes a second output in the same `vite build`:
 - **Hoisted `@property` rules affect the whole page.** They register `--tw-*` page-wide, with the definitions a Tailwind v4 page registers itself. A page on an older Tailwind could see differences.
 - **`rem` sizes** follow the page's `html` font size. Left as is for now.
 - **Weight:** each module carries its own Preact and kit runtime, so three different components on a page load three copies (the form is ~200 KB gzipped). Sharing the runtime belongs to CDN-BUNDLES-PLAN.
-- **Contract versions:** `@genui/element` and the modules ship separately. A `HOST_CONTRACT` mismatch fails with a clear error.
+- **Contract versions:** `@app-mcp/element` and the modules ship separately. A `HOST_CONTRACT` mismatch fails with a clear error.
 
 ---
 
@@ -276,8 +276,8 @@ The `genui()` plugin writes a second output in the same `vite build`:
    - Second output, placeholders, element definition and version check.
    - `shadowCss()` with fixture tests.
    - Rating builds both outputs.
-3. **`@genui/element`.**
-   - `createHost`, partial JSON, `load`, and `<GenUIView>` in `@genui/element/react`.
+3. **`@app-mcp/element`.**
+   - `createHost`, partial JSON, `load`, and `<GenUIView>` in `@app-mcp/element/react`.
    - Tests in Vitest browser mode (Chromium): shadow root, adopted sheets, document CSS added once, the version conflict.
 4. **Registry and runtime.**
    - `modules` table, publish API and CLI.
@@ -289,7 +289,7 @@ The `genui()` plugin writes a second output in the same `vite build`:
    - Tests against an in-process registry, like `mount.test.ts`.
 6. **Built-in views.**
    - Light entries, `PortalContainer`, the module-level state audit.
-   - Form and chart modules in `@genui/runtime`.
+   - Form and chart modules in `@app-mcp/runtime`.
    - Check that select, combobox and the date picker open, close and take keyboard input inside a shadow root.
 7. **Dev, demo and docs.**
    - `genui dev`: a "Shadow DOM" render mode next to the iframe. Most CSS problems only show there.

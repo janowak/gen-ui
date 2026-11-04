@@ -1,5 +1,5 @@
 {
-  "name": "@genui/sdk",
+  "name": "@app-mcp/sdk",
   "version": "0.1.0",
   "description": "Put genui forms, charts and components on your own MCP server",
   "type": "module",
@@ -31,7 +31,7 @@
     "@modelcontextprotocol/server": "^2.3.1"
   },
   "devDependencies": {
-    "@genui/registry": "workspace:*",
+    "@app-mcp/registry": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/server": "^2.3.1",

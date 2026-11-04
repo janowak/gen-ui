@@ -8,16 +8,16 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 |---|---|
 | `packages/format` | Zod schemas (form, chart, submit result, theme, component manifest) + helpers |
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
-| `packages/sdk` | `@genui/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
+| `packages/sdk` | `@app-mcp/sdk`: `connectGenUI` + `mountGenUI(server, { genui })` put genui's tools on your MCP server and forward calls to genui |
 | `packages/sdk-python` | `genui-sdk`: the same adapter for Python MCP servers (`connect_genui`, `mount_genui`) |
 | `packages/cli` | `genui` CLI: serve (a local MCP) / dev / publish (components and workflows, to an environment) / list / env / theme / workflow / instructions / token |
-| `packages/runtime` | `@genui/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, components and workflow prompts from a `CatalogSource`). Used by the registry and by `genui serve` (`@genui/runtime/serve`); `@genui/runtime/local` reads component dirs and workflow files |
-| `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme, instructions and workflows), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@genui/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
+| `packages/runtime` | `@app-mcp/runtime`: genui's end-user tools on an MCP server (`mountGenUI`: forms, charts, components and workflow prompts from a `CatalogSource`). Used by the registry and by `genui serve` (`@app-mcp/runtime/serve`); `@app-mcp/runtime/local` reads component dirs and workflow files |
+| `apps/registry` | genui server: the registry (HTTP API with workspaces, scoped tokens, immutable versions, environments with their own theme, instructions and workflows), the admin MCP at `/mcp`, and the end-user MCP at `/w/<workspace>/mcp` and `/w/<workspace>/<environment>/mcp` (on `@app-mcp/runtime`). Runs on Node with SQLite (local, Docker) or on Cloudflare Workers with D1 (genui cloud) |
 | `apps/demo` | Example "company" MCP server with mock tools, using the SDK |
 | `apps/playground` | Minimal local MCP Apps host for developing views |
-| `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@genui/ui/styles.css`): `pnpm --filter @genui/site dev` on http://localhost:5180 |
-| `packages/kit` | `@genui/kit`: build custom components. `defineComponent` + `mount` runtime, and the `genui()` Vite plugin |
-| `examples/rating` | Custom component (vanilla TS on `@genui/kit`) published through the registry, with workflows next to it in `workflows/` |
+| `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@app-mcp/ui/styles.css`): `pnpm --filter @app-mcp/site dev` on http://localhost:5180 |
+| `packages/kit` | `@app-mcp/kit`: build custom components. `defineComponent` + `mount` runtime, and the `genui()` Vite plugin |
+| `examples/rating` | Custom component (vanilla TS on `@app-mcp/kit`) published through the registry, with workflows next to it in `workflows/` |
 
 Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/compat` (about 57 KB gzipped less per view), while code, types and shadcn components stay React. [`runtime/preact.ts`](packages/ui/src/runtime/preact.ts) passes `ref` to function components as a prop, like React 19, so components from `shadcn add` work unchanged. Avoid React 19-only APIs (`use`, `useActionState`, `useOptimistic`, `<Activity>`) and fragments as direct children of Recharts charts.
 
@@ -33,19 +33,19 @@ pnpm exec genui serve examples/rating   # http://localhost:4100/mcp
 Then use it from one of these:
 - **Claude Code:** `claude mcp add --transport http genui http://localhost:4100/mcp`
 - **Claude Desktop, or any host that starts the MCP as a command:** `genui serve --stdio …` as the command, with absolute paths.
-- **The playground:** `pnpm --filter @genui/playground dev` (http://localhost:5173), with the URL above.
-- **Your own MCP server, through `@genui/sdk`:** `connectGenUI({ url: "http://localhost:4100/mcp", token: "local" })`. The demo company server does this by default: `pnpm --filter @genui/demo start` serves it on http://localhost:3001/mcp.
+- **The playground:** `pnpm --filter @app-mcp/playground dev` (http://localhost:5173), with the URL above.
+- **Your own MCP server, through `@app-mcp/sdk`:** `connectGenUI({ url: "http://localhost:4100/mcp", token: "local" })`. The demo company server does this by default: `pnpm --filter @app-mcp/demo start` serves it on http://localhost:3001/mcp.
 
 What `serve` does:
 - **Reloads on save.** Components with a `vite.config` are rebuilt; theme, instructions and workflow files are re-read. Connected clients get `list_changed` and the new tools. A rebuilt component gets a new `ui://` URI, and earlier versions keep loading for old messages.
 - **Two modes**, as on the registry:
   - Without a token (Claude talking to it directly), it only renders: forms that call tools are rejected, and form values go back to the conversation.
-  - With any token (`@genui/sdk`), views call your server's tools.
+  - With any token (`@app-mcp/sdk`), views call your server's tools.
 - **Keeps serving.** A component or file that doesn't load is reported and skipped.
 
 Flags: `--theme`, `--instructions`, `--port`, `--host`, `--stdio`, `--suffix`, `--refresh-url`, `--no-build` (`genui --help`). Plan and status: [DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md).
 
-**With the registry** (workspaces, environments, publishing): start it with `pnpm --filter @genui/registry start` (http://localhost:4000; first start prints an admin token). Create a server token with `genui token server demo`. Then point the demo at it in `.env.local` (gitignored):
+**With the registry** (workspaces, environments, publishing): start it with `pnpm --filter @app-mcp/registry start` (http://localhost:4000; first start prints an admin token). Create a server token with `genui token server demo`. Then point the demo at it in `.env.local` (gitignored):
 - `GENUI_MCP_URL`: `http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment.
 - `GENUI_MCP_TOKEN`: the server token.
 
@@ -66,8 +66,8 @@ The registry runs on SQLite either way: a file through `node:sqlite` on Node, or
   - **Node:** applies new files at startup.
   - **Cloudflare:** `wrangler d1 migrations apply`.
   - Both record what ran in the `d1_migrations` table.
-- **better-auth's tables:** `0002_better_auth.sql`, generated from the plugins in `auth.ts`. After changing those plugins, run `pnpm --filter @genui/registry auth-schema` and turn the difference into a new migration.
-- **Tests:** `pnpm --filter @genui/registry test` runs the suite twice, on `node:sqlite` and on a local D1 (Miniflare).
+- **better-auth's tables:** `0002_better_auth.sql`, generated from the plugins in `auth.ts`. After changing those plugins, run `pnpm --filter @app-mcp/registry auth-schema` and turn the difference into a new migration.
+- **Tests:** `pnpm --filter @app-mcp/registry test` runs the suite twice, on `node:sqlite` and on a local D1 (Miniflare).
 - **Size limit:** a D1 row holds at most 2 MB, so bundles are limited to 1.9 MB.
 
 ## Deploy
@@ -96,7 +96,7 @@ pnpm deploy:registry
 Locally, `cp apps/registry/.dev.vars.example apps/registry/.dev.vars`, then:
 
 ```bash
-pnpm --filter @genui/registry dev:worker
+pnpm --filter @app-mcp/registry dev:worker
 ```
 
 It runs on http://localhost:8788 with D1 in `apps/registry/.wrangler/`. Run `pnpm build` first.
@@ -180,19 +180,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile && pnpm build
-      - run: pnpm exec genui publish .   # @genui/cli as a devDependency
+      - run: pnpm exec genui publish .   # @app-mcp/cli as a devDependency
         env:
           GENUI_URL: ${{ vars.GENUI_URL }}
           GENUI_TOKEN: ${{ secrets.GENUI_TOKEN }}
           GENUI_ENV: ${{ vars.GENUI_ENV }}
 ```
-- A published component is `genui.component.json` (name, version, description, JSON Schema `props`, `tools` it calls) plus a single-file HTML bundle. With `@genui/kit`, both are generated into `dist/`; a hand-written manifest next to the sources also works.
+- A published component is `genui.component.json` (name, version, description, JSON Schema `props`, `tools` it calls) plus a single-file HTML bundle. With `@app-mcp/kit`, both are generated into `dist/`; a hand-written manifest next to the sources also works.
 
 ## Build a component
 
-Start one outside this repo with `npx @genui/cli init my_poll`: a vanilla TypeScript component (no tools, so it works on the public MCP) with `dev`, `build`, `serve` and `genui:publish` scripts. The rest of this section is what's inside.
+Start one outside this repo with `npx @app-mcp/cli init my_poll`: a vanilla TypeScript component (no tools, so it works on the public MCP) with `dev`, `build`, `serve` and `genui:publish` scripts. The rest of this section is what's inside.
 
-`@genui/kit` hides the MCP Apps plumbing behind one contract. Describe the component once:
+`@app-mcp/kit` hides the MCP Apps plumbing behind one contract. Describe the component once:
 
 ```ts
 // src/component.ts: props validate in the view and publish as the tool's JSON Schema
@@ -221,9 +221,9 @@ Render it with `mount(component, render)`. `render` gets the same live context o
 - Claude and other MCP Apps hosts: `localStorage` in the view's sandbox, this browser only, swept after ~30 days.
 - Storage blocked: memory, until the host renders the message again.
 
-`persistence` says which applies. Which of these hold on each real host is checked in the M0 spike ([VIEW-STATE-PLAN.md](VIEW-STATE-PLAN.md) §7–8). Data that must hold (answered once, across devices) belongs in your own tool, keyed by `viewId`. React views use the same state through `useViewState` from `@genui/kit/react`.
+`persistence` says which applies. Which of these hold on each real host is checked in the M0 spike ([VIEW-STATE-PLAN.md](VIEW-STATE-PLAN.md) §7–8). Data that must hold (answered once, across devices) belongs in your own tool, keyed by `viewId`. React views use the same state through `useViewState` from `@app-mcp/kit/react`.
 
-Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--genui-primary`, `--genui-accent`, `--genui-radius`, `--genui-chart-1..5`) are applied to the document for you. In `vite.config.ts`, `plugins: [genui()]` from `@genui/kit/vite` inlines everything into one HTML file, checks the bundle size and generates the manifest. Then `genui publish .`.
+Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--genui-primary`, `--genui-accent`, `--genui-radius`, `--genui-chart-1..5`) are applied to the document for you. In `vite.config.ts`, `plugins: [genui()]` from `@app-mcp/kit/vite` inlines everything into one HTML file, checks the bundle size and generates the manifest. Then `genui publish .`.
 
 **Develop locally** with `genui dev` (or plain `vite`) in the component directory. No registry, server or chat needed. It opens a local MCP Apps host:
 - **Props:** a form generated from the props schema (or raw JSON), optionally streamed in like a model writes them. **Render** starts a new view; **Replay** keeps the view id, so saved state comes back.
@@ -268,7 +268,7 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 ## Publish the npm packages
 
-`@genui/cli`, `@genui/kit` and `@genui/sdk` are what users install; they depend on `@genui/format`, `@genui/runtime` and `@genui/ui`, so all six go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `genui` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
+`@app-mcp/cli`, `@app-mcp/kit` and `@app-mcp/sdk` are what users install; they depend on `@app-mcp/format`, `@app-mcp/runtime` and `@app-mcp/ui`, so all six go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `genui` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
 
 ```bash
 pnpm build && pnpm -r --filter "./packages/*" publish --access public --dry-run
@@ -281,7 +281,7 @@ Drop `--dry-run` to publish; pnpm refuses on uncommitted changes or a branch oth
 genui's tools (`render_form`, `render_chart`, `render_<component>`) and workflow prompts are served by genui's end-user MCP. It's public by default: anyone with its address can add it as a connector, with no data tools. An admin can make it private in the workspace view (`manage_workspace`); then only servers with a server token can use it. The SDK puts them on your MCP server, next to your own tools, and forwards their calls to genui with a server token. genui's views call your tools through the host, so your data tools and their results never leave your server.
 
 ```ts
-import { connectGenUI, mountGenUI } from "@genui/sdk";
+import { connectGenUI, mountGenUI } from "@app-mcp/sdk";
 
 // Once per process: lists genui's tools and prompts in the background. The URL picks the
 // environment: /w/<workspace>/mcp for prod, /w/<workspace>/<environment>/mcp for the others.
@@ -299,7 +299,7 @@ Each deployment of your server (dev, staging, prod) points `GENUI_MCP_URL` at it
 **Picking up changes.** Every publish, theme, instructions or workflow change bumps the environment's revision. When genui's tools are used and the SDK's copy is older than `refreshSeconds` (default 60), it checks the revision in the background and re-lists only if it changed; a host never waits on it. To serve changes right away, mount the SDK's refresh endpoint and register its URL. genui then calls it on every change:
 
 ```ts
-import { refreshHandler } from "@genui/sdk";
+import { refreshHandler } from "@app-mcp/sdk";
 
 app.post("/genui/refresh", (c) => refreshHandler(genui)(c.req.raw)); // Hono; any (Request) => Response framework
 // Express: app.post("/genui/refresh", (req, res) => { void genui.refresh(req.body?.revision); res.sendStatus(202); });

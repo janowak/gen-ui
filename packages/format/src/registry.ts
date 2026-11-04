@@ -34,7 +34,7 @@ export const ComponentManifest = z.object({
     .int()
     .min(1)
     .optional()
-    .describe("Component contract version the bundle was built against (set by @genui/kit). Absent for hand-built bundles."),
+    .describe("Component contract version the bundle was built against (set by @app-mcp/kit). Absent for hand-built bundles."),
 });
 export type ComponentManifest = z.infer<typeof ComponentManifest>;
 

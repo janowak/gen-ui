@@ -64,7 +64,7 @@ describe("startServe", () => {
     expect(direct.isError).toBe(true);
   });
 
-  it("turns data tools on for @genui/sdk, which sends a token", async () => {
+  it("turns data tools on for @app-mcp/sdk, which sends a token", async () => {
     await component("1.0.0");
     const { url } = await start();
     const sdk = await connect(url!, "local");
@@ -89,7 +89,7 @@ describe("startServe", () => {
     expect((await client.readResource({ uri: before })).contents[0]).toMatchObject({ text: "<p>rating 1.0.0</p>" });
   });
 
-  it("answers the revision with an ETag, as the registry does for @genui/sdk", async () => {
+  it("answers the revision with an ETag, as the registry does for @app-mcp/sdk", async () => {
     await component("1.0.0");
     const { url } = await start();
     const revisionUrl = url!.replace(/\/mcp$/, "/revision");

@@ -1,4 +1,4 @@
-import { PREVIEW_META_KEY, Theme, THEME_META_KEY } from "@genui/format";
+import { PREVIEW_META_KEY, Theme, THEME_META_KEY } from "@app-mcp/format";
 import type { App, McpUiDisplayMode } from "@modelcontextprotocol/ext-apps";
 import { z } from "zod";
 import type { ComponentDefinition } from "./define.js";

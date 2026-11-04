@@ -1,4 +1,4 @@
-import { isCommand, Workflow, type WorkflowParam } from "@genui/format";
+import { isCommand, Workflow, type WorkflowParam } from "@app-mcp/format";
 import { Loader2Icon, PencilIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";

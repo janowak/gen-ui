@@ -1,4 +1,4 @@
-import { ChartSpec, ChartType, SeriesMapping, inlineSeries, rowsToSeries, type SeriesData } from "@genui/format";
+import { ChartSpec, ChartType, SeriesMapping, inlineSeries, rowsToSeries, type SeriesData } from "@app-mcp/format";
 import { Loader2Icon, RotateCwIcon } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

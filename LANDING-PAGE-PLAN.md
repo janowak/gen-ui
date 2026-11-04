@@ -54,7 +54,7 @@ Same card layout, four columns on `lg`, two on `md`. Each step has a short parag
 | # | Title | Copy | Snippet |
 |---|---|---|---|
 | 1 | Register | Sign in with GitHub, Google or your company's login. You get a workspace with prod and an MCP address your customers can connect to. | `https://app-mcp.com/w/acme/mcp` |
-| 2 | Add your components | Write them with `@genui/kit` in TypeScript or your framework, or describe a form as a recipe. Props are a Zod schema; the build is one HTML file. | `defineComponent({ … })` + `genui publish --env staging` |
+| 2 | Add your components | Write them with `@app-mcp/kit` in TypeScript or your framework, or describe a form as a recipe. Props are a Zod schema; the build is one HTML file. | `defineComponent({ … })` + `genui publish --env staging` |
 | 3 | Test them | Add the staging address as a connector next to prod. Try the flow in Claude or ChatGPT; tools end in `_staging` so you always know which one ran. | the env table (prod 1.2.0 / staging 1.3.0), shrunk |
 | 4 | Your customers use it | Publish the tested version to prod without rebuilding. Customers add one connector, and running chats pick up the change. | `genui publish rating@1.3.0 --env prod` |
 
@@ -112,4 +112,4 @@ This can either replace the intros of 3.4 and 3.5 or sit just above them as a su
 - The page reads hero → 4-step main path → what you can build → ladder → proxy → self-host → CTA.
 - `mountGenUI` doesn't appear above §3.4.
 - Title, description and og tags match the new H1.
-- `pnpm --filter @genui/site build` passes, and the page has been checked at phone width and in dark mode in the preview.
+- `pnpm --filter @app-mcp/site build` passes, and the page has been checked at phone width and in dark mode in the preview.

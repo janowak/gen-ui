@@ -353,7 +353,7 @@ export function WorkspaceView() {
           <p className="text-sm text-muted-foreground">
             {state.public
               ? "Anyone with an address below can add it as a connector. Your own server can use it too, with a server token."
-              : "Private: only your own server can use it, with a server token (@genui/sdk)."}
+              : "Private: only your own server can use it, with a server token (@app-mcp/sdk)."}
           </p>
           {state.connectors.map((c) => (
             <div key={c.environment} className="flex items-center gap-2">
@@ -371,7 +371,7 @@ export function WorkspaceView() {
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Tokens</h3>
             <p className="text-sm text-muted-foreground">
-              <b>server</b>: your MCP server forwards genui's tools with @genui/sdk. <b>publish</b>: you or CI publish components with{" "}
+              <b>server</b>: your MCP server forwards genui's tools with @app-mcp/sdk. <b>publish</b>: you or CI publish components with{" "}
               <code>genui publish</code>. <b>admin</b>: every genui CLI command.
             </p>
             {state.created && (
@@ -389,7 +389,7 @@ export function WorkspaceView() {
                 {state.created.scope !== "server" && (
                   <p className="text-xs text-muted-foreground">
                     Use it as <code>GENUI_TOKEN</code>: <code>GENUI_TOKEN=… npx genui publish</code> in a component made with{" "}
-                    <code>npx @genui/cli init</code>.
+                    <code>npx @app-mcp/cli init</code>.
                   </p>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import { Theme, type ThemeTokens } from "@genui/format";
+import { Theme, type ThemeTokens } from "@app-mcp/format";
 import { Loader2Icon, Maximize2Icon, RotateCcwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";

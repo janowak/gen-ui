@@ -17,7 +17,7 @@ export function bundle(name: ViewName, html: string): ViewBundle {
   return { name, html, hash, uri: `ui://genui/${name}/${hash}` };
 }
 
-/** The built-in form and chart views with their `ui://` URIs, from the HTML in @genui/ui. */
+/** The built-in form and chart views with their `ui://` URIs, from the HTML in @app-mcp/ui. */
 export function viewBundles(html: Record<ViewName, string>): Record<ViewName, ViewBundle> {
   return { form: bundle("form", html.form), chart: bundle("chart", html.chart) };
 }

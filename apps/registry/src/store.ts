@@ -11,7 +11,7 @@ import {
   type Workflow,
   MAX_INSTRUCTIONS,
   serverInstructions,
-} from "@genui/format";
+} from "@app-mcp/format";
 import { breakingChanges, compareSemver } from "./compat.js";
 import { statement, type Database, type Statement } from "./db.js";
 
@@ -121,7 +121,7 @@ export interface EnvironmentInfo {
   name: string;
   /** Bumped by every change to what the environment serves. */
   revision: number;
-  /** The company's server endpoint genui calls on each change (@genui/sdk's refresh handler). */
+  /** The company's server endpoint genui calls on each change (@app-mcp/sdk's refresh handler). */
   refreshUrl: string | null;
   lastRefresh: LastRefresh | null;
   /** Whether the end-user MCP offers the built-in render_form and render_chart. */

@@ -16,7 +16,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/demo",
+        "@app-mcp/demo",
         "start"
       ],
       "port": 3001
@@ -26,7 +26,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/playground",
+        "@app-mcp/playground",
         "dev"
       ],
       "port": 5173
@@ -36,7 +36,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/registry",
+        "@app-mcp/registry",
         "start"
       ],
       "port": 4000
@@ -46,7 +46,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/site",
+        "@app-mcp/site",
         "dev"
       ],
       "port": 5180
@@ -56,7 +56,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/registry",
+        "@app-mcp/registry",
         "exec",
         "wrangler",
         "dev"
@@ -68,7 +68,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "@genui/site",
+        "@app-mcp/site",
         "exec",
         "wrangler",
         "dev",

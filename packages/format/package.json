@@ -1,5 +1,5 @@
 {
-  "name": "@genui/format",
+  "name": "@app-mcp/format",
   "version": "0.1.0",
   "description": "Schemas for genui forms, charts, workflows, themes and component manifests",
   "type": "module",

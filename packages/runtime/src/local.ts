@@ -9,7 +9,7 @@ import {
   Theme,
   Workflow,
   type Catalog,
-} from "@genui/format";
+} from "@app-mcp/format";
 import { parse as parseYaml } from "yaml";
 import type { z } from "zod";
 import type { CatalogSource, Snapshot } from "./runtime.js";
@@ -38,7 +38,7 @@ function parseJson(text: string, path: string): unknown {
 
 /**
  * Reads a component directory: a hand-written `genui.component.json` next to the sources, else the
- * one @genui/kit/vite generates into dist/. The bundle is `bundle` from the manifest, relative to
+ * one @app-mcp/kit/vite generates into dist/. The bundle is `bundle` from the manifest, relative to
  * the manifest, or dist/index.html. Throws with a message for the developer.
  */
 export async function readComponentDir(dir: string): Promise<ComponentDir> {

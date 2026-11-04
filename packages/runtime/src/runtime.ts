@@ -13,7 +13,7 @@ import {
   type CatalogComponent,
   type Theme,
   workflowMessage,
-} from "@genui/format";
+} from "@app-mcp/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, ResourceNotFoundError, ResourceTemplate, type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -245,7 +245,7 @@ export async function mountGenUI(target: McpServer, options: GenUIOptions): Prom
   }
 
   for (const component of snapshot?.catalog.components ?? []) {
-    // Built with a newer @genui/kit than this server serves: it would render without data it expects.
+    // Built with a newer @app-mcp/kit than this server serves: it would render without data it expects.
     if ((component.manifest.contract ?? 0) > COMPONENT_CONTRACT) {
       if (!tooNew.has(component.hash)) {
         tooNew.add(component.hash);

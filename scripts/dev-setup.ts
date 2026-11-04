@@ -132,10 +132,10 @@ const launch = {
       runtimeArgs: ["packages/cli/dist/cli.js", "serve", "examples/rating", "--port", String(ports.serve)],
       port: ports.serve,
     },
-    { name: "demo", ...pnpm("@genui/demo", "start"), port: ports.demo },
-    { name: "playground", ...vite("@genui/playground", ports.playground), port: ports.playground },
-    { name: "registry", ...pnpm("@genui/registry", "start"), port: ports.registry },
-    { name: "site", ...vite("@genui/site", ports.site), port: ports.site },
+    { name: "demo", ...pnpm("@app-mcp/demo", "start"), port: ports.demo },
+    { name: "playground", ...vite("@app-mcp/playground", ports.playground), port: ports.playground },
+    { name: "registry", ...pnpm("@app-mcp/registry", "start"), port: ports.registry },
+    { name: "site", ...vite("@app-mcp/site", ports.site), port: ports.site },
   ],
 };
 writeFileSync(join(root, ".claude/launch.json"), `${JSON.stringify(launch, null, 2)}\n`);
@@ -144,8 +144,8 @@ git("update-index", "--skip-worktree", ".claude/launch.json");
 run("pnpm", ["install"]);
 run("pnpm", ["build"]);
 
-console.log("\n$ pnpm --filter @genui/registry run seed");
-const seeded = execFileSync("pnpm", ["--filter", "@genui/registry", "run", "seed"], {
+console.log("\n$ pnpm --filter @app-mcp/registry run seed");
+const seeded = execFileSync("pnpm", ["--filter", "@app-mcp/registry", "run", "seed"], {
   cwd: root,
   encoding: "utf8",
   stdio: ["ignore", "pipe", "inherit"],

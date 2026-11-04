@@ -1,4 +1,4 @@
-import { MAX_BUNDLE_BYTES } from "@genui/format";
+import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createApi } from "./api.js";

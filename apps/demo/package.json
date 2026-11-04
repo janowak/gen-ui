@@ -1,5 +1,5 @@
 {
-  "name": "@genui/demo",
+  "name": "@app-mcp/demo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "dev": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --watch --import tsx src/main.ts"
   },
   "dependencies": {
-    "@genui/sdk": "workspace:*",
+    "@app-mcp/sdk": "workspace:*",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/express": "^2.0.2",
     "@modelcontextprotocol/node": "^2.1.1",

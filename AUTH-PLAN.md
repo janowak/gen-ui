@@ -144,7 +144,7 @@ cloudflared tunnel run --url http://localhost:4000 genui-dev
 In the repo root's `.env.local`: `GENUI_MODE=hosted`, `GENUI_PUBLIC_URL=https://api-dev.app-mcp.com`, the `genui dev` Google client and the `genui dev` GitHub app. Start the registry:
 
 ```bash
-pnpm --filter @genui/registry start
+pnpm --filter @app-mcp/registry start
 ```
 
 For quick work without a connector, skip the tunnel: `GENUI_PUBLIC_URL=http://localhost:4000` and `GENUI_PASSWORD_LOGIN=true`.

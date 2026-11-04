@@ -1,5 +1,5 @@
 /* The views' shadcn theme (base-nova, neutral): the site and the genui views share one palette. */
-@import "@genui/ui/styles.css";
+@import "@app-mcp/ui/styles.css";
 
 @source "../index.html";
 @source "../404.html";

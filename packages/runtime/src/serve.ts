@@ -13,9 +13,9 @@ import { viewBundles, type ViewBundle, type ViewName } from "./views.js";
 
 const require = createRequire(import.meta.url);
 
-/** The built-in form and chart views from @genui/ui. */
+/** The built-in form and chart views from @app-mcp/ui. */
 export async function loadViews(): Promise<Record<ViewName, ViewBundle>> {
-  const view = (name: ViewName) => readFile(require.resolve(`@genui/ui/views/${name}.html`), "utf8");
+  const view = (name: ViewName) => readFile(require.resolve(`@app-mcp/ui/views/${name}.html`), "utf8");
   const [form, chart] = await Promise.all([view("form"), view("chart")]);
   return viewBundles({ form, chart });
 }
@@ -63,7 +63,7 @@ const rpcError = (status: number, message: string) =>
  * tells the client its lists changed.
  *
  * Who connects decides the mode, as on the registry's end-user MCP: with any bearer token it's
- * upstream for @genui/sdk (data tools on); without one it's a host talking to it directly, which
+ * upstream for @app-mcp/sdk (data tools on); without one it's a host talking to it directly, which
  * only renders.
  */
 export function createLocalMcp(options: LocalMcpOptions) {
@@ -119,7 +119,7 @@ export function createLocalMcp(options: LocalMcpOptions) {
   }
 
   return {
-    /** HTTP: the MCP at /mcp and its revision at /revision (what @genui/sdk checks). */
+    /** HTTP: the MCP at /mcp and its revision at /revision (what @app-mcp/sdk checks). */
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
       if (!options.anyHost && !LOCAL_HOSTS.has(url.hostname))
@@ -207,7 +207,7 @@ export interface ServeOptions extends LocalCatalogOptions {
   suffix?: string;
   /** POSTed `{ type: "genui.refresh", environment, revision }` on every change, like the registry's refresh URL. */
   refreshUrl?: string;
-  /** Builds component directories that have a build, and rebuilds them on change (@genui/kit's watchBuild). */
+  /** Builds component directories that have a build, and rebuilds them on change (@app-mcp/kit's watchBuild). */
   build?: (dir: string, onBuild: (error?: Error) => void) => Promise<{ close(): Promise<void> } | undefined>;
   /** Where lines for the developer go. Default stderr, so stdout stays free for stdio. */
   log?: (line: string) => void;

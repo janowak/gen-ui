@@ -1,4 +1,4 @@
-import type { Field } from "@genui/format";
+import type { Field } from "@app-mcp/format";
 import { initialState, type FormState } from "./values";
 
 /** What the form keeps per render (`useViewState`): the draft, then how the submit went. */

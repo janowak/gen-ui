@@ -1,4 +1,4 @@
-import { getItems, rowsToSeries, type ChartSpec, type SeriesData } from "@genui/format";
+import { getItems, rowsToSeries, type ChartSpec, type SeriesData } from "@app-mcp/format";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { callTool } from "@/runtime/tools";

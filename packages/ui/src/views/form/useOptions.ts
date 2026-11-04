@@ -1,4 +1,4 @@
-import { toOptions, type Option, type ResourceSource } from "@genui/format";
+import { toOptions, type Option, type ResourceSource } from "@app-mcp/format";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useRef, useState } from "react";
 import { callTool } from "@/runtime/tools";

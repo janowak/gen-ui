@@ -47,7 +47,7 @@ Vite+ itself was tried on gen-ui and dropped (see "Why not Vite+"). All work hap
   - `oxlint` 1.89.0, `oxfmt` 0.74.0 and `@oxlint/migrate` 1.89.0
 
 **Principle: use each upstream tool directly.** Nothing that is published or deployed changes:
-- `@genui/kit` and `@genui/cli` keep `vite` as a peer.
+- `@app-mcp/kit` and `@app-mcp/cli` keep `vite` as a peer.
 - `genui init` still scaffolds plain Vite projects.
 - Docker, Workers, Pages and the VPS run the same outputs as before.
 

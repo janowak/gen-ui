@@ -1,4 +1,4 @@
-import { MAX_ENVIRONMENT_INSTRUCTIONS } from "@genui/format";
+import { MAX_ENVIRONMENT_INSTRUCTIONS } from "@app-mcp/format";
 import { Loader2Icon, SaveIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";

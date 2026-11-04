@@ -12,8 +12,8 @@
     "check": "oxfmt --check && oxlint --deny-warnings",
     "dev:setup": "node scripts/dev-setup.ts",
     "genui": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.worktree packages/cli/dist/cli.js",
-    "deploy:site": "pnpm --filter @genui/site run deploy",
-    "deploy:registry": "pnpm --filter @genui/registry run deploy"
+    "deploy:site": "pnpm --filter @app-mcp/site run deploy",
+    "deploy:registry": "pnpm --filter @app-mcp/registry run deploy"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

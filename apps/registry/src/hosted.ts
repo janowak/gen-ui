@@ -1,5 +1,5 @@
-import { DEFAULT_ENVIRONMENT, serverInstructions } from "@genui/format";
-import { mountGenUI, type CatalogSource } from "@genui/runtime";
+import { DEFAULT_ENVIRONMENT, serverInstructions } from "@app-mcp/format";
+import { mountGenUI, type CatalogSource } from "@app-mcp/runtime";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -11,7 +11,7 @@ import { builtInViews } from "./views.js";
 /**
  * Who the end-user MCP serves. Public: anyone with the URL of a workspace that didn't make it private,
  * with no data tools. Upstream: a company's own MCP server, forwarding genui's tools through
- * @genui/sdk with a server token; views call the company's data tools on that server.
+ * @app-mcp/sdk with a server token; views call the company's data tools on that server.
  */
 type Hosted = { workspace: { id: string; name: string }; environment: string; dataTools: boolean; origin: string };
 type BundleLookup = (hash: string) => Promise<string | undefined>;
@@ -114,7 +114,7 @@ export async function createHostedMcp(
 /**
  * End-user MCP at /w/<workspace>/mcp (prod) and /w/<workspace>/<environment>/mcp. The URL alone picks
  * the environment, so what a connector serves never depends on who switched what.
- * - With a server token: upstream for the company's own MCP server (@genui/sdk), data tools on.
+ * - With a server token: upstream for the company's own MCP server (@app-mcp/sdk), data tools on.
  * - Without: public, unless an admin made the workspace private. Anyone with the URL can render the
  *   workspace's forms, charts and components; form values go back to the conversation.
  */

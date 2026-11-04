@@ -1,4 +1,4 @@
-// @genui/registry on Node: the shared registry plus the Node pieces main.ts uses, for tests and embedding.
+// @app-mcp/registry on Node: the shared registry plus the Node pieces main.ts uses, for tests and embedding.
 export { fetchClientMetadataResource } from "@better-auth/cimd/node";
 export {
   createRegistryApp,
