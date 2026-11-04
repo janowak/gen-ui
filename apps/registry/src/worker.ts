@@ -27,12 +27,13 @@ const assets: Assets = {
 
 /**
  * Client ID Metadata Documents over plain fetch. A Worker has no private network behind it to reach,
- * which is what the Node transport's DNS pinning protects; https only, and redirects are never followed.
+ * which is what the Node transport's DNS pinning protects; https only, and redirects are never followed:
+ * Workers reject better-auth's `redirect: "error"`, and with "manual" a redirect fails as a non-200.
  */
 const fetchClientMetadataResource: MetadataFetch = async (input, init) => {
-  const request = new Request(input, init);
+  const request = new Request(input, { ...init, redirect: "manual" });
   if (new URL(request.url).protocol !== "https:") throw new TypeError("Client metadata is fetched over https only");
-  return fetch(request, { redirect: "manual" });
+  return fetch(request);
 };
 
 interface Registry {
