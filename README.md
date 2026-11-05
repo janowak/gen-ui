@@ -285,10 +285,13 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 `@app-mcp/cli`, `@app-mcp/kit` and `@app-mcp/sdk` are what users install; they depend on `@app-mcp/format`, `@app-mcp/runtime` and `@app-mcp/ui`, so all six go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `app-mcp` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
 
 ```bash
-pnpm build && pnpm -r --filter "./packages/*" publish --access public --dry-run
+pnpm publish:packages --dry-run
+pnpm publish:packages
 ```
 
-Drop `--dry-run` to publish; pnpm refuses on uncommitted changes or a branch other than master. To try a release without publishing, `pnpm pack` each package and point a test project at the tarballs (`file:` dependencies plus `overrides` for the internal ones).
+The command builds, checks formatting/lint/types, runs tests, then publishes all six npm packages in dependency order. It verifies that they share one version. Actual publishing requires a clean `master` in the main checkout; dry runs also work with local edits or from a worktree. Bump and commit the package versions before publishing. The script does not bump versions automatically or publish the Python SDK to PyPI. Run `npm login` first if needed.
+
+To try a release without publishing, `pnpm pack` each package and point a test project at the tarballs (`file:` dependencies plus `overrides` for the internal ones).
 
 ## Use the SDK
 
