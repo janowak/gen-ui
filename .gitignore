@@ -14,3 +14,8 @@ dist-web
 .dev.vars
 registry.env
 .claude/worktrees/
+
+# Registry static view artifacts and local asset stores
+apps/registry/dist-static/
+apps/registry/dist-static-views.txt
+*.sqlite.assets/

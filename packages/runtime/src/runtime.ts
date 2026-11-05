@@ -17,12 +17,12 @@ import {
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { fromJsonSchema, ResourceNotFoundError, ResourceTemplate, type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import type { ViewBundle, ViewName } from "./views.js";
+import { document, type UiBundle, type ViewBundle, type ViewName } from "./views.js";
 
 /** An environment's catalog plus every bundle it references. */
 export interface Snapshot {
   catalog: Catalog;
-  bundles: Record<string, string>;
+  bundles: Record<string, UiBundle>;
 }
 
 /** Where custom components, workflows and the theme come from: the registry's store, or files on disk. */
@@ -32,7 +32,7 @@ export interface CatalogSource {
    * Any component bundle by content hash, including versions the snapshot no longer serves, so
    * old messages a host renders again still load. Without it, only the current versions resolve.
    */
-  bundle?(hash: string): Promise<string | undefined>;
+  bundle?(hash: string): Promise<UiBundle | undefined>;
 }
 
 /** What `mountAppMcp` registered. `remove()` takes it all off the server, which tells connected clients the lists changed. */
@@ -143,7 +143,7 @@ export async function mountAppMcp(target: McpServer, options: AppMcpOptions): Pr
 
   for (const view of Object.values(views)) {
     registerAppResource(server, `app-mcp ${view.name}`, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
-      contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html }],
+      contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html, _meta: view._meta }],
     }));
   }
 
@@ -222,11 +222,12 @@ export async function mountAppMcp(target: McpServer, options: AppMcpOptions): Pr
   }
 
   // Registry components: render_<name>, each backed by its own content-hashed ui:// resource.
-  function mountComponent(component: CatalogComponent, html: string) {
+  function mountComponent(component: CatalogComponent, value: UiBundle) {
+    const { html, _meta } = document(value);
     const { manifest, hash } = component;
     const uri = `ui://app-mcp/c/${manifest.name}/${hash}`;
     registerAppResource(server, `app-mcp ${manifest.name}`, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
-      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html }],
+      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html, _meta }],
     }));
     registerAppTool(
       server,
@@ -267,9 +268,10 @@ export async function mountAppMcp(target: McpServer, options: AppMcpOptions): Pr
       new ResourceTemplate("ui://app-mcp/c/{name}/{hash}", { list: undefined }),
       { mimeType: RESOURCE_MIME_TYPE },
       async (uri, { hash }) => {
-        const html = await lookup(String(hash));
-        if (html === undefined) throw new ResourceNotFoundError(uri.href);
-        return { contents: [{ uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: html }] };
+        const value = await lookup(String(hash));
+        if (value === undefined) throw new ResourceNotFoundError(uri.href);
+        const { html, _meta } = document(value);
+        return { contents: [{ uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: html, _meta }] };
       },
     );
   }

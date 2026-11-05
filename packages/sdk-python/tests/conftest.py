@@ -31,6 +31,7 @@ class FakeAppMcp:
     def __init__(self) -> None:
         self.rating: str | None = None  # current version
         self.versions: dict[str, str] = {}  # version -> html
+        self.resource_meta: dict[str, Any] | None = None
         self.down = False
         self.sessions = 0
 
@@ -66,7 +67,7 @@ class FakeAppMcp:
         def render_rating(question: str) -> CallToolResult:
             return result("Showing Star rating.")
 
-        server.add_resource(TextResource(uri=self.uri(version), name="app-mcp rating", mime_type=MIME, text=self.versions[version]))
+        server.add_resource(TextResource(uri=self.uri(version), name="app-mcp rating", mime_type=MIME, text=self.versions[version], meta=self.resource_meta))
 
         @server.resource("ui://app-mcp/c/rating/{digest}", mime_type=MIME)
         def rating_version(digest: str) -> str:
@@ -76,6 +77,14 @@ class FakeAppMcp:
         def add_item(details: str | None = None) -> str:
             return f"Show a form with the name and submit to create_item.\n\ndetails: {details}"
 
+        async def resource_metadata(ctx: Any, call_next: Any) -> Any:
+            result = await call_next(ctx)
+            if ctx.method == "resources/read" and self.resource_meta:
+                for content in result.get("contents", []):
+                    content["_meta"] = self.resource_meta
+            return result
+
+        server.middleware.append(resource_metadata)
         return server
 
     def client(self, mode: str = "legacy") -> Client:

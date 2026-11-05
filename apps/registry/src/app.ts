@@ -1,4 +1,5 @@
-import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
+import { assetHeaders, type StaticHosting } from "./static-assets.js";
+import { MAX_PUBLISH_BYTES } from "@app-mcp/format";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createApi } from "./api.js";
@@ -16,6 +17,7 @@ export type { Assets } from "./views.js";
 export interface RegistryAppOptions {
   /** The views and pages the registry serves, loaded by the runtime it runs on. */
   assets: Assets;
+  staticHosting?: StaticHosting;
   /** Let refresh URLs use http and private addresses. For self-hosted installs and tests. */
   allowPrivateWebhooks?: boolean;
   /** Public URL of the registry, for the absolute URLs hosts are given (the connector icon). Default: each request's origin. */
@@ -26,7 +28,30 @@ export interface RegistryAppOptions {
 export function createRegistryApp(db: Database, options: RegistryAppOptions): { app: Hono; store: Store; refresher: Refresher } {
   const store = new Store(db);
   const app = new Hono();
-  app.use(bodyLimit({ maxSize: MAX_BUNDLE_BYTES * 2 }));
+  app.use(bodyLimit({ maxSize: MAX_PUBLISH_BYTES * 2 }));
+  if (options.staticHosting) {
+    const hosting = options.staticHosting;
+    const assetURL = new URL(hosting.baseURL.endsWith("/") ? hosting.baseURL : `${hosting.baseURL}/`);
+    const prefix = assetURL.pathname;
+    app.use(async (c, next) => {
+      const url = new URL(c.req.url);
+      if (
+        options.baseURL &&
+        assetURL.origin !== new URL(options.baseURL).origin &&
+        url.origin === assetURL.origin &&
+        (!url.pathname.startsWith(prefix) || !["GET", "HEAD"].includes(c.req.method))
+      )
+        return c.notFound();
+      await next();
+    });
+    app.get(`${prefix}:key`, async (c) => {
+      const key = c.req.param("key");
+      if (!key || !/^[a-f0-9]{64}\.(js|css)$/.test(key)) return c.notFound();
+      const asset = await hosting.store.get(key);
+      if (!asset) return c.notFound();
+      return new Response(new Uint8Array(asset.body), { headers: assetHeaders(asset.contentType) });
+    });
+  }
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/v1", createApi(store, options));
   enableHosting(app, store, options);

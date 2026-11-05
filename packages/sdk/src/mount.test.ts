@@ -179,4 +179,20 @@ describe("mountAppMcp", () => {
     expect((await client.listTools()).tools.map((t) => t.name)).toEqual(["search_customers"]);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("could not list app-mcp's tools"));
   });
+  it("preserves resource CSP through the adapter for current and historical versions", async () => {
+    const meta = { ui: { csp: { resourceDomains: ["https://assets.app-mcp.com"] } } };
+    const first = await store.publish(acme, { ...rating("1.0.0"), name: "static_csp" }, html("static old"), "prod", meta);
+    await store.publish(acme, { ...rating("1.1.0"), name: "static_csp" }, html("static new"), "prod", meta);
+    const appMcp = connect();
+    const { client, handle } = await companyServer(appMcp);
+    try {
+      const uri = await resourceUri(client, "render_static_csp");
+      expect((await client.readResource({ uri })).contents[0]!._meta).toEqual(meta);
+      expect((await client.readResource({ uri: `ui://app-mcp/c/static_csp/${first.hash}` })).contents[0]!._meta).toEqual(meta);
+    } finally {
+      handle.close();
+      await client.close();
+      appMcp.close();
+    }
+  });
 });

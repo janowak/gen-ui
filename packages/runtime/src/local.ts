@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
   ComponentManifest,
-  MAX_BUNDLE_BYTES,
+  MAX_PUBLISH_BYTES,
   MAX_ENVIRONMENT_INSTRUCTIONS,
   MAX_INSTRUCTIONS,
   serverInstructions,
@@ -60,7 +60,7 @@ export async function readComponentDir(dir: string): Promise<ComponentDir> {
   const html = await readFile(bundlePath, "utf8").catch(() => undefined);
   if (html === undefined) throw new Error(`bundle not found at ${bundlePath}; build it first`);
   const bytes = Buffer.byteLength(html);
-  if (bytes > MAX_BUNDLE_BYTES) throw new Error(`${bundlePath} is ${bytes} bytes; the registry accepts up to ${MAX_BUNDLE_BYTES}`);
+  if (bytes > MAX_PUBLISH_BYTES) throw new Error(`${bundlePath} is ${bytes} bytes; the build budget is ${MAX_PUBLISH_BYTES}`);
 
   return { manifest: parsed.data, html, hash: contentHash(html), manifestPath, bundlePath };
 }

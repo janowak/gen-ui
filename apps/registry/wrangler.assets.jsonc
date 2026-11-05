@@ -1,0 +1,15 @@
+// Dedicated asset edge: no database placement, sessions or authenticated endpoints.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "app-mcp-assets",
+  "account_id": "9341ca52ab56b808dfd9a4a673fce52c",
+  "main": "src/asset-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "assets.app-mcp.com", "custom_domain": true }],
+  "observability": { "enabled": true },
+  "assets": { "directory": "./dist-static", "binding": "STATIC_ASSETS", "run_worker_first": true },
+  "r2_buckets": [{ "binding": "ASSET_BUCKET", "bucket_name": "app-mcp-assets" }],
+  "vars": { "APP_MCP_ASSET_URL": "https://assets.app-mcp.com/assets/" },
+}

@@ -32,7 +32,7 @@ function managementViews(assets: Assets): ManagementViews {
   if (!views) {
     const load = (name: ManagementViewName) => ({
       html: assets.views[name],
-      uri: `ui://app-mcp-registry/${name}/${contentHash(assets.views[name])}`,
+      uri: `ui://app-mcp-registry/${name}/${contentHash(JSON.stringify([assets.views[name], assets.viewMetadata?.[name]]))}`,
     });
     hashed.set(assets, (views = Object.fromEntries(MANAGEMENT_VIEWS.map((name) => [name, load(name)])) as ManagementViews));
   }
@@ -81,7 +81,8 @@ export async function createRegistryMcp(
   // The summary and tokens views copy addresses and secrets to the clipboard, which the host must allow.
   const copies = new Set<ManagementViewName>(["workspace", "tokens"]);
   for (const [name, view] of Object.entries(VIEWS) as [ManagementViewName, ManagementViews[ManagementViewName]][]) {
-    const _meta = copies.has(name) ? { ui: { permissions: { clipboardWrite: {} } } } : undefined;
+    const base = assets.viewMetadata?.[name];
+    const _meta = copies.has(name) ? { ...base, ui: { ...(base?.ui as object), permissions: { clipboardWrite: {} } } } : base;
     registerAppResource(server, view.uri, view.uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
       contents: [{ uri: view.uri, mimeType: RESOURCE_MIME_TYPE, text: view.html, ...(_meta ? { _meta } : {}) }],
     }));
@@ -355,13 +356,14 @@ export async function createRegistryMcp(
   );
 
   // Preview the version the active environment serves of each component, rendered with props the model provides.
-  const bundles = await Promise.all(catalog.components.map((component) => store.bundle(ws, component.hash)));
+  const bundles = await Promise.all(catalog.components.map((component) => store.resource(ws, component.hash)));
   for (const [i, component] of catalog.components.entries()) {
-    const html = bundles[i];
-    if (!html) continue;
+    const resource = bundles[i];
+    if (!resource) continue;
+    const { html, _meta } = resource;
     const uri = `ui://app-mcp-registry/preview/${component.name}/${component.hash}`;
     registerAppResource(server, uri, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
-      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html }],
+      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html, _meta }],
     }));
     registerAppTool(
       server,

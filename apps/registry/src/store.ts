@@ -1,3 +1,4 @@
+import type { UiDocument } from "@app-mcp/runtime";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   DEFAULT_ENVIRONMENT,
@@ -812,8 +813,8 @@ export class Store {
   }
 
   private publishedVersion(workspaceId: string, name: string, version: string) {
-    return this.db.get<{ id: string; hash: string; manifest: string }>(
-      "SELECT v.id, v.hash, v.manifest FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND co.name = ? AND v.version = ?",
+    return this.db.get<{ id: string; hash: string; manifest: string; source_hash: string | null }>(
+      "SELECT v.id, v.hash, v.manifest, v.source_hash FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND co.name = ? AND v.version = ?",
       workspaceId,
       name,
       version,
@@ -829,14 +830,16 @@ export class Store {
     manifest: ComponentManifest,
     html: string,
     environment: string = DEFAULT_ENVIRONMENT,
+    resourceMeta?: Record<string, unknown>,
+    sourceHash?: string,
   ): Promise<PublishResult> {
     await this.requireEnvironment(workspaceId, environment);
-    const hash = sha256(html).slice(0, 16);
+    const hash = sha256(resourceMeta ? JSON.stringify({ html, _meta: resourceMeta }) : html).slice(0, 16);
     const json = JSON.stringify(manifest);
 
     const same = await this.publishedVersion(workspaceId, manifest.name, manifest.version);
     if (same) {
-      if (same.hash !== hash || same.manifest !== json) {
+      if ((sourceHash ? (same.source_hash ?? same.hash) !== sourceHash : same.hash !== hash) || same.manifest !== json) {
         throw new RegistryError(
           409,
           `${manifest.name}@${manifest.version} already exists with different content; versions are immutable. To serve it here without rebuilding: app-mcp publish ${manifest.name}@${manifest.version} --env ${environment}`,
@@ -847,7 +850,7 @@ export class Store {
         manifest.name,
         environment,
         { id: same.id, manifest },
-        { version: manifest.version, hash, created: false },
+        { version: manifest.version, hash: same.hash, created: false },
       );
     }
 
@@ -869,12 +872,14 @@ export class Store {
             createdAt,
           ),
           statement(
-            "INSERT INTO versions (id, component_id, version, hash, manifest, html, created_at) SELECT ?, id, ?, ?, ?, ?, ? FROM components WHERE workspace_id = ? AND name = ?",
+            "INSERT INTO versions (id, component_id, version, hash, manifest, html, resource_meta, source_hash, created_at) SELECT ?, id, ?, ?, ?, ?, ?, ?, ? FROM components WHERE workspace_id = ? AND name = ?",
             versionId,
             manifest.version,
             hash,
             json,
             html,
+            resourceMeta ? JSON.stringify(resourceMeta) : null,
+            sourceHash ?? null,
             createdAt,
             workspaceId,
             manifest.name,
@@ -884,7 +889,7 @@ export class Store {
     } catch (error) {
       // Another publish of this version got there first: answer as a re-run (or a conflict) against it.
       if (isUniqueViolation(error) && (await this.publishedVersion(workspaceId, manifest.name, manifest.version))) {
-        return this.publish(workspaceId, manifest, html, environment);
+        return this.publish(workspaceId, manifest, html, environment, resourceMeta, sourceHash);
       }
       throw error;
     }
@@ -982,13 +987,17 @@ export class Store {
     return { environment, theme, components, instructions, workflows, builtIns: settings?.builtIns ?? true };
   }
 
-  /** Bundles are looked up within the caller's workspace only: no cross-tenant sharing by hash. */
   async bundle(workspaceId: string, hash: string): Promise<string | undefined> {
-    const row = await this.db.get<{ html: string }>(
-      "SELECT v.html FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND v.hash = ? LIMIT 1",
+    return (await this.resource(workspaceId, hash))?.html;
+  }
+
+  /** Bundles are looked up within the caller's workspace only: no cross-tenant sharing by hash. */
+  async resource(workspaceId: string, hash: string): Promise<UiDocument | undefined> {
+    const row = await this.db.get<{ html: string; resource_meta: string | null }>(
+      "SELECT v.html, v.resource_meta FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND v.hash = ? LIMIT 1",
       workspaceId,
       hash,
     );
-    return row?.html;
+    return row ? { html: row.html, ...(row.resource_meta ? { _meta: JSON.parse(row.resource_meta) } : {}) } : undefined;
   }
 }

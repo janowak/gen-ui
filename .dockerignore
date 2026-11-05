@@ -14,3 +14,7 @@ registry.env
 .git
 .idea
 .claude
+
+**/dist-static
+**/dist-static-views.txt
+**/*.sqlite.assets

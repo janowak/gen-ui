@@ -3,3 +3,4 @@ APP_MCP_PUBLIC_URL=http://localhost:8788
 APP_MCP_AUTH_SECRET=dev-only-secret-change-me
 APP_MCP_PASSWORD_LOGIN=true
 APP_MCP_ALLOW_DCR=true
+APP_MCP_ASSET_URL=http://localhost:8789/assets/

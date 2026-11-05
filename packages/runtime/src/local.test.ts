@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
+import { MAX_PUBLISH_BYTES } from "@app-mcp/format";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { localCatalog, parseWorkflowFile, readComponentDir, readWorkflowDir } from "./local.js";
 import { contentHash } from "./views.js";
@@ -48,8 +48,8 @@ describe("readComponentDir", () => {
     await expect(readComponentDir(dir)).rejects.toThrow(/invalid manifest[\s\S]*name: reserved/);
     await write("app-mcp.component.json", JSON.stringify(manifest));
     await expect(readComponentDir(dir)).rejects.toThrow("bundle not found");
-    await write("dist/index.html", "x".repeat(MAX_BUNDLE_BYTES + 1));
-    await expect(readComponentDir(dir)).rejects.toThrow("the registry accepts up to");
+    await write("dist/index.html", "x".repeat(MAX_PUBLISH_BYTES + 1));
+    await expect(readComponentDir(dir)).rejects.toThrow("the build budget is");
   });
 });
 

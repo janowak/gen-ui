@@ -19,6 +19,7 @@
   "workers_dev": false,
   "routes": [{ "pattern": "api.app-mcp.com", "custom_domain": true }],
   // Created with: wrangler d1 create app-mcp --jurisdiction eu (data stays in the EU)
+  "r2_buckets": [{ "binding": "ASSET_BUCKET", "bucket_name": "app-mcp-assets" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "app-mcp", "database_id": "48612e6f-7b92-40e1-9727-09952a776da3", "migrations_dir": "migrations" },
   ],
@@ -27,5 +28,6 @@
   "vars": {
     "APP_MCP_MODE": "hosted",
     "APP_MCP_PUBLIC_URL": "https://api.app-mcp.com",
+    "APP_MCP_ASSET_URL": "https://assets.app-mcp.com/assets/",
   },
 }

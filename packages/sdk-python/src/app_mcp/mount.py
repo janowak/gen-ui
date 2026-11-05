@@ -204,7 +204,7 @@ def mount_app_mcp(
         async def load() -> str:
             return await read(uri)
 
-        server.add_resource(FunctionResource(uri=uri, name=uri, mime_type=mime_type or RESOURCE_MIME_TYPE, fn=load))
+        server.add_resource(FunctionResource(uri=uri, name=uri, mime_type=mime_type or RESOURCE_MIME_TYPE, fn=load, meta=cached.contents[0].meta if cached and cached.contents else None))
 
     # Earlier component versions, for old messages the host renders again: read from app_mcp.
     @server.resource("ui://app-mcp/c/{name}/{digest}", name="app-mcp component version", mime_type=RESOURCE_MIME_TYPE)
@@ -227,7 +227,18 @@ def mount_app_mcp(
     with lock:
         sync()
 
-    cleanup: list[Callable[[], None]] = []
+    async def forward_resource(ctx: Any, call_next: Callable[[Any], Awaitable[Any]]) -> Any:
+        # Forward the complete contents, including CSP. Converting to a string through
+        # FunctionResource loses metadata and prevents hosts from loading CDN assets.
+        if ctx.method == "resources/read":
+            uri = str((ctx.params or {}).get("uri", ""))
+            if uri in resources or uri.startswith("ui://app-mcp/c/"):
+                result = await app_mcp.read_resource(uri)
+                return result.model_dump(mode="json", by_alias=True, exclude_none=True)
+        return await call_next(ctx)
+
+    server.middleware.append(forward_resource)
+    cleanup: list[Callable[[], None]] = [lambda: server.middleware.remove(forward_resource)]
     if watch:
         notifier = _Notifier(server, bus)
         server.middleware.append(notifier.middleware)

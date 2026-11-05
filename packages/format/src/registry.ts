@@ -60,3 +60,6 @@ export interface Catalog {
 
 /** Max bundle size accepted by the registry. D1 stores at most 2 MB per row; the rest is room for the manifest. */
 export const MAX_BUNDLE_BYTES = 1_900_000;
+
+/** Build/publish budget before the registry extracts immutable JS/CSS. */
+export const MAX_PUBLISH_BYTES = 25_000_000;

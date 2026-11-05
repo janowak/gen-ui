@@ -68,7 +68,7 @@ The registry runs on SQLite either way: a file through `node:sqlite` on Node, or
   - Both record what ran in the `d1_migrations` table.
 - **better-auth's tables:** `0002_better_auth.sql`, generated from the plugins in `auth.ts`. After changing those plugins, run `pnpm --filter @app-mcp/registry auth-schema` and turn the difference into a new migration.
 - **Tests:** `pnpm --filter @app-mcp/registry test` runs the suite twice, on `node:sqlite` and on a local D1 (Miniflare).
-- **Size limit:** a D1 row holds at most 2 MB, so bundles are limited to 1.9 MB.
+- **Size limits:** component builds/publishes allow up to 25 MB. Static hosting extracts JS/CSS before storing the shell; HTML left in D1 is limited to 1.9 MB. Registries embedded without static hosting retain the 1.9 MB publish limit.
 
 ## Deploy
 
@@ -87,7 +87,11 @@ Also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID`/`GITHU
 - **GitHub:** an OAuth App with callback URL `https://api.app-mcp.com/api/auth/callback/github`.
 - **Sign-up gate (optional):** `APP_MCP_ALLOWED_EMAILS`, as a secret or a var, limits who gets a workspace (see [Management](#management-in-claude--chatgpt)).
 
-Deploy: builds the sign-in pages, applies new migrations to the D1 database, then deploys the Worker.
+Create the static asset bucket once with `wrangler r2 bucket create app-mcp-assets`.
+A separate edge Worker (`wrangler.assets.jsonc`) serves `assets.app-mcp.com` without database placement, auth setup, API or MCP routes. The registry Worker remains near D1; static requests stay at the edge.
+`APP_MCP_ASSET_URL` configures its public directory URL (default `https://assets.app-mcp.com/assets/`); set the same URL in both Worker configs and update the asset Worker’s custom domain route if using another hostname. The shared R2 binding/bucket is configured in both Worker configs; when changing the bucket name, also set `APP_MCP_ASSET_BUCKET` for the deployment upload script.
+
+Deploy builds the sign-in pages and static view artifacts, uploads built-in assets to R2 (retaining previous hashes), applies new migrations, then deploys the asset Worker followed by the registry Worker. Built-ins are also included as static deployment assets so cold isolates do not need to upload them. Uploaded components use R2; asset responses are cached at the edge and in browsers with a one-year immutable policy.
 
 ```bash
 pnpm deploy:registry
@@ -99,7 +103,7 @@ Locally, `cp apps/registry/.dev.vars.example apps/registry/.dev.vars`, then:
 pnpm --filter @app-mcp/registry dev:worker
 ```
 
-It runs on http://localhost:8788 with D1 in `apps/registry/.wrangler/`. Run `pnpm build` first.
+It runs on http://localhost:8788 with D1 in `apps/registry/.wrangler/`. Start `pnpm --filter @app-mcp/registry dev:assets` in a second terminal for static assets on http://localhost:8789. The example `.dev.vars` points asset URLs there. Run `pnpm build` first.
 
 ### Self-hosted: Docker
 
@@ -115,7 +119,7 @@ docker compose up -d
 docker compose logs registry
 ```
 
-Fill in `registry.env` before starting; the logs show the admin token printed at first start. Back up the `app-mcp-data` volume. Claude and ChatGPT need to reach `APP_MCP_PUBLIC_URL` over https, so put a reverse proxy or a tunnel in front.
+Fill in `registry.env` before starting; the logs show the admin token printed at first start. Back up the `app-mcp-data` volume, including the static asset directory next to the database. Claude and ChatGPT need to reach `APP_MCP_PUBLIC_URL` over https, so put a reverse proxy or a tunnel in front.
 
 ## Registry and environments
 
@@ -188,6 +192,14 @@ jobs:
 ```
 - A published component is `app-mcp.component.json` (name, version, description, JSON Schema `props`, `tools` it calls) plus a single-file HTML bundle. With `@app-mcp/kit`, both are generated into `dist/`; a hand-written manifest next to the sources also works.
 
+## Static resource hosting
+
+Publishing uploads all JS/CSS objects before activating an immutable component version. The registry stores the small HTML shell and its MCP CSP metadata together. Current resources, historical versions, previews, built-ins and SDK forwarding preserve that metadata. Asset URLs use full SHA-256 hashes, and shells include subresource integrity checks; JSON script data stays inline. Existing component builds and inline versions remain compatible. Images/fonts embedded in scripts or styles are cached with those files; separate asset builds/code splitting are not required or supported by this publishing format yet.
+
+On Node, `APP_MCP_ASSET_DIR` defaults to `<APP_MCP_DB>.assets`; `APP_MCP_ASSET_URL` defaults to `<APP_MCP_PUBLIC_URL>/assets/`. Set it to a dedicated hostname or CDN URL routed to the registry's asset directory path. Serving uses CORS for anonymous module/font loading, explicit MIME types and immutable caching; no authentication is required for assets. Embedded registries can supply `staticHosting: { baseURL, store }` and prepare their built-ins with `hostViews`.
+
+Keep asset URLs and old objects available indefinitely for old conversations and rollback; changing the configured URL does not rewrite previous releases (publish a new version to adopt a new URL). Never include secrets or user data in static files, even in a private workspace. A failed publish may leave unreferenced content-addressed objects, but never activates a partial release. There is no automatic garbage collection.
+
 ## Build a component
 
 Start one outside this repo with `npx @app-mcp/cli init my_poll`: a vanilla TypeScript component (no tools, so it works on the public MCP) with `dev`, `build`, `serve` and `app-mcp:publish` scripts. The rest of this section is what's inside.
@@ -223,7 +235,7 @@ Render it with `mount(component, render)`. `render` gets the same live context o
 
 `persistence` says which applies. Which of these hold on each real host is checked in the M0 spike ([VIEW-STATE-PLAN.md](VIEW-STATE-PLAN.md) §7–8). Data that must hold (answered once, across devices) belongs in your own tool, keyed by `viewId`. React views use the same state through `useViewState` from `@app-mcp/kit/react`.
 
-Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--app-mcp-primary`, `--app-mcp-accent`, `--app-mcp-radius`, `--app-mcp-chart-1..5`) are applied to the document for you. In `vite.config.ts`, `plugins: [appMcp()]` from `@app-mcp/kit/vite` inlines everything into one HTML file, checks the bundle size and generates the manifest. Then `app-mcp publish .`.
+Host styles (`--color-*`, `--font-*`, dark mode) and the workspace theme (`--app-mcp-primary`, `--app-mcp-accent`, `--app-mcp-radius`, `--app-mcp-chart-1..5`) are applied to the document for you. In `vite.config.ts`, `plugins: [appMcp()]` from `@app-mcp/kit/vite` inlines everything into one HTML file, checks the 25 MB build budget and generates the manifest. Publishing extracts executable inline scripts and styles into content-addressed static files, leaving an HTML shell with `<script>`/`<link>` references. Local development keeps the self-contained HTML. Then `app-mcp publish .`.
 
 **Develop locally** with `app-mcp dev` (or plain `vite`) in the component directory. No registry, server or chat needed. It opens a local MCP Apps host:
 - **Props:** a form generated from the props schema (or raw JSON), optionally streamed in like a model writes them. **Render** starts a new view; **Replay** keeps the view id, so saved state comes back.

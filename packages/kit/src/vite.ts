@@ -1,5 +1,5 @@
 import { relative, resolve } from "node:path";
-import { MAX_BUNDLE_BYTES } from "@app-mcp/format";
+import { MAX_PUBLISH_BYTES } from "@app-mcp/format";
 import type { Logger, Plugin, PluginOption } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { devPlugin } from "./dev/plugin.js";
@@ -8,16 +8,16 @@ import { DEFAULT_COMPONENT, loadManifest } from "./load.js";
 export interface AppMcpPluginOptions {
   /** Module whose default export is `defineComponent(...)`. Default `src/component.ts`. Must not touch the DOM. */
   component?: string;
-  /** Warn above this bundle size, in KB. Default 500. The registry rejects bundles above 1.9 MB. */
+  /** Warn above this bundle size, in KB. Default 500. The registry rejects bundles above 25 MB. */
   budgetKb?: number;
 }
 
 const kb = (bytes: number) => `${Math.round(bytes / 1024)} KB`;
 
 /**
- * Builds an app-mcp component: one self-contained HTML file (JS, CSS and assets inlined, as MCP Apps
- * hosts require) plus `app-mcp.component.json` generated from the component definition, both in
- * the output directory, ready for `app-mcp publish`.
+ * Builds a portable single-file HTML component plus `app-mcp.component.json`, both in
+ * the output directory, ready for `app-mcp publish`. The registry extracts JS/CSS into
+ * immutable static assets; local MCPs continue to serve the portable HTML.
  *
  * In dev (`vite` or `app-mcp dev`), serves a local MCP Apps host at `/` that renders the component
  * with a props form, theme controls and mock tools, and reloads it when files change.
@@ -50,13 +50,13 @@ export function appMcp(options: AppMcpPluginOptions = {}): PluginOption[] {
         const leftovers = Object.keys(bundle).filter((name) => name !== page.fileName);
         if (leftovers.length) {
           this.error(
-            `app-mcp: not inlined into ${page.fileName}: ${leftovers.join(", ")}. MCP Apps hosts load one HTML file; import assets from code so Vite can inline them.`,
+            `app-mcp: not inlined into ${page.fileName}: ${leftovers.join(", ")}. Portable builds need one HTML file; import assets from code so Vite can inline them.`,
           );
         }
 
         const bytes = Buffer.byteLength(page.source);
-        if (bytes > MAX_BUNDLE_BYTES)
-          this.error(`app-mcp: ${page.fileName} is ${kb(bytes)}; the registry accepts up to ${kb(MAX_BUNDLE_BYTES)}.`);
+        if (bytes > MAX_PUBLISH_BYTES)
+          this.error(`app-mcp: ${page.fileName} is ${kb(bytes)}; the build budget is ${kb(MAX_PUBLISH_BYTES)}.`);
         if (bytes > budget)
           this.warn(`${page.fileName} is ${kb(bytes)}, over the ${kb(budget)} budget. Large bundles render slowly in chat.`);
 

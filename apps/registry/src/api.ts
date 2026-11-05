@@ -1,9 +1,12 @@
+import { contentHash } from "@app-mcp/runtime";
+import { externalize } from "./static-assets.js";
 import {
   Branding,
   ComponentManifest,
   DEFAULT_ENVIRONMENT,
   EnvironmentName,
   MAX_BUNDLE_BYTES,
+  MAX_PUBLISH_BYTES,
   MAX_ENVIRONMENT_INSTRUCTIONS,
   MAX_ICON_BYTES,
   SEMVER,
@@ -48,7 +51,7 @@ const InstructionsBody = z.object({ instructions: z.string().max(MAX_ENVIRONMENT
 type Env = { Variables: { caller: TokenInfo } };
 
 /** Token-authenticated REST API used by CI (publish) and the CLI (admin). Server tokens use the end-user MCP. */
-export function createApi(store: Store, options: Pick<RegistryAppOptions, "allowPrivateWebhooks"> = {}): Hono<Env> {
+export function createApi(store: Store, options: Pick<RegistryAppOptions, "allowPrivateWebhooks" | "staticHosting"> = {}): Hono<Env> {
   const api = new Hono<Env>();
 
   function auth(required: Scope, scopes = ALLOWED[required]) {
@@ -89,10 +92,14 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   api.post("/components", auth("publish"), async (c) => {
     const { manifest, html, environment } = PublishBody.parse(await body(c));
     allowPublish(c, environment);
-    if (new TextEncoder().encode(html).byteLength > MAX_BUNDLE_BYTES)
-      throw new RegistryError(413, `Bundle exceeds ${MAX_BUNDLE_BYTES} bytes`);
+    const limit = options.staticHosting ? MAX_PUBLISH_BYTES : MAX_BUNDLE_BYTES;
+    if (new TextEncoder().encode(html).byteLength > limit) throw new RegistryError(413, `Bundle exceeds ${limit} bytes`);
     if (!/<html[\s>]/i.test(html)) throw new RegistryError(400, "Bundle must be a single-file HTML document");
-    const result = await store.publish(ws(c), manifest, html, environment);
+    await store.requireEnvironment(ws(c), environment);
+    const resource = options.staticHosting ? await externalize(html, options.staticHosting) : { html };
+    if (new TextEncoder().encode(resource.html).byteLength > MAX_BUNDLE_BYTES)
+      throw new RegistryError(413, `HTML shell exceeds ${MAX_BUNDLE_BYTES} bytes; move large inline markup into scripts or styles`);
+    const result = await store.publish(ws(c), manifest, resource.html, environment, resource._meta, contentHash(html));
     return c.json(result, result.created ? 201 : 200);
   });
 

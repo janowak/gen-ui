@@ -14,3 +14,7 @@ export { loadAssets } from "./assets-node.js";
 export { authConfigFromEnv, type AuthConfig } from "./auth.js";
 export { openDatabase } from "./db-node.js";
 export { enableManagement } from "./management.js";
+
+export { fileAssetStore } from "./static-assets-node.js";
+export { externalize, type StaticHosting, type StaticAssetStore } from "./static-assets.js";
+export { hostViews } from "./views.js";

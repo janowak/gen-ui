@@ -152,3 +152,16 @@ async def test_mounts_nothing_when_app_mcp_was_never_reached(fake_app_mcp: FakeA
             assert [t.name for t in (await client.list_tools()).tools] == ["search_customers"]
             assert handle.tools() == []
     assert "could not list app-mcp's tools" in caplog.text
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_preserves_csp_for_current_and_historical_resources(fake_app_mcp: FakeAppMcp, mode: str) -> None:
+    meta = {"ui": {"csp": {"resourceDomains": ["https://assets.app-mcp.com"]}}}
+    fake_app_mcp.resource_meta = meta
+    app_mcp = app_mcp_client(fake_app_mcp)
+    old_uri = fake_app_mcp.uri("1.0.0")
+    fake_app_mcp.publish("1.1.0")
+    async with company_server(app_mcp, mode=mode) as (client, _):
+        current = await uri_of(client, "render_rating")
+        assert (await client.read_resource(current)).contents[0].meta == meta
+        assert (await client.read_resource(old_uri)).contents[0].meta == meta

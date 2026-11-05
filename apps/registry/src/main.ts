@@ -1,3 +1,5 @@
+import { fileAssetStore } from "./static-assets-node.js";
+import { hostViews } from "./views.js";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { serve } from "@hono/node-server";
 import { createRegistryApp } from "./app.js";
@@ -11,10 +13,15 @@ const PORT = Number(process.env.PORT ?? 4000);
 const DATABASE = process.env.APP_MCP_DB ?? "app-mcp-registry.sqlite";
 
 const db = openDatabase(DATABASE);
-const assets = await loadAssets();
 const config = authConfigFromEnv(process.env);
+const staticHosting = {
+  baseURL: process.env.APP_MCP_ASSET_URL ?? `${config.baseURL}/assets/`,
+  store: fileAssetStore(process.env.APP_MCP_ASSET_DIR ?? `${DATABASE}.assets`),
+};
+const assets = await hostViews(await loadAssets(), staticHosting);
 const { app, store } = createRegistryApp(db, {
   assets,
+  staticHosting,
   allowPrivateWebhooks: process.env.APP_MCP_ALLOW_PRIVATE_WEBHOOKS === "1",
   baseURL: config.baseURL,
 });

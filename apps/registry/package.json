@@ -11,26 +11,28 @@
     }
   },
   "scripts": {
-    "build": "pnpm build:web && tsc -p tsconfig.json",
+    "build": "pnpm build:web && pnpm build:assets && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "test": "vitest run && APP_MCP_TEST_DB=d1 vitest run",
     "start": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx src/main.ts",
     "seed": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx scripts/seed.ts",
     "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web && INPUT=manage.html vite build web",
     "auth-schema": "node --disable-warning=ExperimentalWarning --import tsx scripts/auth-schema.ts",
+    "dev:assets": "wrangler dev --config wrangler.assets.jsonc --port 8789 --host localhost:8789",
     "dev:worker": "wrangler d1 migrations apply app-mcp --local && wrangler dev",
-    "deploy": "node ../../scripts/main-checkout-only.ts && pnpm build:web && wrangler d1 migrations apply app-mcp --remote && wrangler deploy --tag $(git rev-parse --short HEAD)"
+    "deploy": "node ../../scripts/main-checkout-only.ts && pnpm build:web && pnpm build:assets && tsx scripts/upload-static.ts && wrangler d1 migrations apply app-mcp --remote && wrangler deploy --config wrangler.assets.jsonc --tag $(git rev-parse --short HEAD) && wrangler deploy --tag $(git rev-parse --short HEAD)",
+    "build:assets": "tsx scripts/build-static.ts"
   },
   "dependencies": {
+    "@app-mcp/format": "workspace:*",
+    "@app-mcp/runtime": "workspace:*",
+    "@app-mcp/ui": "workspace:*",
     "@better-auth/cimd": "1.7.12",
     "@better-auth/core": "1.7.12",
     "@better-auth/mcp": "1.7.12",
     "@better-auth/oauth-provider": "1.7.12",
     "@better-auth/utils": "^0.5.0",
     "@better-fetch/fetch": "1.3.2",
-    "@app-mcp/format": "workspace:*",
-    "@app-mcp/runtime": "workspace:*",
-    "@app-mcp/ui": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
@@ -38,6 +40,7 @@
     "better-auth": "1.7.12",
     "better-call": "1.4.4",
     "hono": "^4.13.13",
+    "parse5": "^8.1.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

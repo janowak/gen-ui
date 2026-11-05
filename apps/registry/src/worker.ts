@@ -1,13 +1,5 @@
-import chart from "@app-mcp/ui/views/chart.html";
-import form from "@app-mcp/ui/views/form.html";
-import manager from "@app-mcp/ui/views/manager.html";
-import workflows from "@app-mcp/ui/views/workflows.html";
-import theme from "@app-mcp/ui/views/theme.html";
-import instructions from "@app-mcp/ui/views/instructions.html";
-import workspace from "@app-mcp/ui/views/workspace.html";
-import members from "@app-mcp/ui/views/members.html";
-import tokens from "@app-mcp/ui/views/tokens.html";
-import connector from "@app-mcp/ui/views/connector.html";
+import hostedViewManifest from "../dist-static-views.txt";
+import type { StaticAssetStore } from "./static-assets.js";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
 import manage from "../dist-web/manage.html";
@@ -22,10 +14,14 @@ import type { ExecutionContext, Hono } from "hono";
 
 interface Env {
   DB: D1Binding;
+  ASSET_BUCKET: {
+    put(key: string, body: Uint8Array, options: { httpMetadata: { contentType: string } }): Promise<unknown>;
+    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; httpMetadata?: { contentType?: string } } | null>;
+  };
 }
 
 const assets: Assets = {
-  views: { form, chart, manager, theme, workflows, workspace, members, tokens, connector, instructions },
+  ...JSON.parse(hostedViewManifest),
   pages: { "sign-in": signIn, consent, manage },
 };
 
@@ -47,28 +43,48 @@ interface Registry {
   ready: Promise<unknown>;
 }
 
-function create(env: Env): Registry {
+async function create(env: Env): Promise<Registry> {
   const settings = env as unknown as Record<string, string | undefined>;
   // A random secret per isolate would break every session and connector on the next isolate.
   if (!settings.APP_MCP_AUTH_SECRET) throw new Error("APP_MCP_AUTH_SECRET is not set. Run: wrangler secret put APP_MCP_AUTH_SECRET");
   const db = d1Database(env.DB);
   const config = authConfigFromEnv(settings);
-  const { app, store, refresher } = createRegistryApp(db, { assets, baseURL: config.baseURL });
-  const auth = enableManagement(app, db, store, config, { assets, fetchClientMetadataResource });
+  const assetStore: StaticAssetStore = {
+    async put(key, body, contentType) {
+      await env.ASSET_BUCKET.put(key, body, { httpMetadata: { contentType } });
+    },
+    async get(key) {
+      const object = await env.ASSET_BUCKET.get(key);
+      return object
+        ? { body: new Uint8Array(await object.arrayBuffer()), contentType: object.httpMetadata?.contentType ?? "application/octet-stream" }
+        : undefined;
+    },
+  };
+  const staticHosting = { baseURL: settings.APP_MCP_ASSET_URL ?? "https://assets.app-mcp.com/assets/", store: assetStore };
+  const assetBase = new URL(staticHosting.baseURL.endsWith("/") ? staticHosting.baseURL : `${staticHosting.baseURL}/`);
+  const hosted = JSON.parse(
+    hostedViewManifest
+      .replaceAll("https://app-mcp-assets.invalid/assets/", assetBase.href)
+      .replaceAll("https://app-mcp-assets.invalid", assetBase.origin),
+  ) as Pick<Assets, "views" | "viewMetadata">;
+  const hostedAssets: Assets = { ...assets, ...hosted };
+  const { app, store, refresher } = createRegistryApp(db, { assets: hostedAssets, staticHosting, baseURL: config.baseURL });
+  const auth = enableManagement(app, db, store, config, { assets: hostedAssets, fetchClientMetadataResource });
   return { app, refresher, ready: auth.$context.then((context) => context.checkSchema?.()) };
 }
 
 // One registry per isolate: the bindings and settings don't change between its requests.
-let registry: Registry | undefined;
+let pendingRegistry: Promise<Registry> | undefined;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (!registry) {
-      registry = create(env);
-      // Workers cancel a request's unfinished I/O when it ends (or its client leaves). better-auth's setup
-      // runs once per isolate and every later request waits on it, so it must outlive this request.
-      ctx.waitUntil(registry.ready);
-    }
+    if (!pendingRegistry)
+      pendingRegistry = create(env).catch((error) => {
+        pendingRegistry = undefined;
+        throw error;
+      });
+    ctx.waitUntil(pendingRegistry.then((r) => r.ready));
+    const registry = await pendingRegistry;
     await registry.ready;
     const response = await registry.app.fetch(request, env, ctx);
     // A change starts its refresh URL calls during the request: keep the isolate until they're done.

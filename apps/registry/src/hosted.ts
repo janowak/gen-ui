@@ -1,5 +1,5 @@
 import { DEFAULT_ENVIRONMENT, serverInstructions } from "@app-mcp/format";
-import { mountAppMcp, type CatalogSource } from "@app-mcp/runtime";
+import { mountAppMcp, type UiBundle, type CatalogSource } from "@app-mcp/runtime";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -14,16 +14,16 @@ import { builtInViews } from "./views.js";
  * @app-mcp/sdk with a server token; views call the company's data tools on that server.
  */
 type Hosted = { workspace: { id: string; name: string }; environment: string; dataTools: boolean; origin: string };
-type BundleLookup = (hash: string) => Promise<string | undefined>;
+type BundleLookup = (hash: string) => Promise<UiBundle | undefined>;
 
 /**
  * Bundles never change for a hash, so hosted servers built per request share them from memory.
  * Keys include the workspace (no cross-tenant sharing by hash); least recently used go first.
  */
 function bundleCache(store: Store, maxBytes = 64 * 1024 * 1024) {
-  const entries = new Map<string, string>();
+  const entries = new Map<string, UiBundle>();
   let bytes = 0;
-  return async (workspaceId: string, hash: string): Promise<string | undefined> => {
+  return async (workspaceId: string, hash: string): Promise<UiBundle | undefined> => {
     const key = `${workspaceId}:${hash}`;
     const hit = entries.get(key);
     if (hit !== undefined) {
@@ -31,14 +31,14 @@ function bundleCache(store: Store, maxBytes = 64 * 1024 * 1024) {
       entries.set(key, hit);
       return hit;
     }
-    const html = await store.bundle(workspaceId, hash);
+    const html = await store.resource(workspaceId, hash);
     if (html === undefined) return undefined;
     entries.set(key, html);
-    bytes += html.length;
+    bytes += JSON.stringify(html).length;
     for (const [oldest, value] of entries) {
       if (bytes <= maxBytes) break;
       entries.delete(oldest);
-      bytes -= value.length;
+      bytes -= JSON.stringify(value).length;
     }
     return html;
   };
@@ -49,7 +49,7 @@ export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLo
   return {
     async snapshot(environment) {
       const catalog = await store.catalog(workspaceId, environment);
-      const bundles: Record<string, string> = {};
+      const bundles: Record<string, UiBundle> = {};
       await Promise.all(
         catalog.components.map(async ({ hash }) => {
           const html = await bundle(hash);
@@ -74,7 +74,7 @@ export async function createHostedMcp(
   options: RegistryAppOptions,
   bundle?: BundleLookup,
 ): Promise<McpServer> {
-  const lookup = bundle ?? ((hash: string) => store.bundle(workspace.id, hash));
+  const lookup = bundle ?? ((hash: string) => store.resource(workspace.id, hash));
   const [branding, snapshot] = await Promise.all([
     store.branding(workspace.id),
     storeCatalog(store, workspace.id, lookup).snapshot(environment),
