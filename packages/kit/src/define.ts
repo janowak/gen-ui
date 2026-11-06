@@ -1,4 +1,4 @@
-import { COMPONENT_CONTRACT, ComponentManifest } from "@app-mcp/format";
+import { COMPONENT_CONTRACT, ComponentManifest, type ComponentCsp } from "@app-mcp/format";
 import { z } from "zod";
 
 export interface ComponentDefinition<P extends z.ZodObject = z.ZodObject, T extends string = string> {
@@ -13,6 +13,7 @@ export interface ComponentDefinition<P extends z.ZodObject = z.ZodObject, T exte
   props: P;
   /** Tools on the host MCP server the component calls (typed `tools.call` names, mocked by `app-mcp dev`). */
   tools: readonly T[];
+  csp?: ComponentCsp;
 }
 
 /**
@@ -36,6 +37,7 @@ export function toManifest(component: ComponentDefinition): ComponentManifest {
     description: component.description,
     props,
     tools: [...component.tools],
+    csp: component.csp,
     contract: COMPONENT_CONTRACT,
   });
   if (!parsed.success) {

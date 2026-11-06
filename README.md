@@ -9,6 +9,7 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/format` | Zod schemas (form, chart, submit result, theme, component manifest) + helpers |
 | `packages/ui` | Views (shadcn on Base UI + shadcn charts), written in React and run on Preact, built as single-file `form.html` / `chart.html` |
 | `packages/sdk` | `@app-mcp/sdk`: `connectAppMcp` + `mountAppMcp(server, { appMcp })` put app-mcp's tools on your MCP server and forward calls to app-mcp |
+| `packages/host` | `@app-mcp/host`: embed an interactive assistant or standalone MCP App view in your own application |
 | `packages/sdk-python` | `app-mcp-sdk`: the same adapter for Python MCP servers (`connect_app_mcp`, `mount_app_mcp`) |
 | `packages/cli` | `app-mcp` CLI: serve (a local MCP) / dev / publish (components and workflows, to an environment) / list / env / theme / workflow / instructions / token |
 | `packages/runtime` | `@app-mcp/runtime`: app-mcp's end-user tools on an MCP server (`mountAppMcp`: forms, charts, components and workflow prompts from a `CatalogSource`). Used by the registry and by `app-mcp serve` (`@app-mcp/runtime/serve`); `@app-mcp/runtime/local` reads component dirs and workflow files |
@@ -282,14 +283,14 @@ The registry serves its own MCP server at `/mcp`. Add it as a custom connector. 
 
 ## Publish the npm packages
 
-`@app-mcp/cli`, `@app-mcp/kit` and `@app-mcp/sdk` are what users install; they depend on `@app-mcp/format`, `@app-mcp/runtime` and `@app-mcp/ui`, so all six go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `app-mcp` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
+`@app-mcp/cli`, `@app-mcp/kit` and `@app-mcp/sdk` are what users install; they depend on `@app-mcp/format`, `@app-mcp/runtime` and `@app-mcp/ui`, so all seven go out together, with the same version. `pnpm publish` turns `workspace:^` into real version ranges. Once, create the `app-mcp` organization on npmjs.com and `npm login`. Then, after bumping `version` in each `packages/*/package.json`:
 
 ```bash
 pnpm publish:packages --dry-run
 pnpm publish:packages
 ```
 
-The command builds, checks formatting/lint/types, runs tests, then publishes all six npm packages in dependency order. It verifies that they share one version. Actual publishing requires a clean `master` in the main checkout; dry runs also work with local edits or from a worktree. Bump and commit the package versions before publishing. The script does not bump versions automatically or publish the Python SDK to PyPI. Run `npm login` first if needed.
+The command builds, checks formatting/lint/types, runs tests, then publishes all seven npm packages in dependency order. It verifies that they share one version. Actual publishing requires a clean `master` in the main checkout; dry runs also work with local edits or from a worktree. Bump and commit the package versions before publishing. The script does not bump versions automatically or publish the Python SDK to PyPI. Run `npm login` first if needed.
 
 To try a release without publishing, `pnpm pack` each package and point a test project at the tarballs (`file:` dependencies plus `overrides` for the internal ones).
 

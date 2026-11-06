@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const usage =
-  "Usage: pnpm publish:packages [--dry-run]\n\nBuild, check and publish all six npm packages at their current version.\n--dry-run validates and previews without publishing; allowed with local edits or in a worktree.";
+  "Usage: pnpm publish:packages [--dry-run]\n\nBuild, check and publish all seven npm packages at their current version.\n--dry-run validates and previews without publishing; allowed with local edits or in a worktree.";
 
 function fail(message: string): never {
   console.error(message);
@@ -38,8 +38,8 @@ const packages = readdirSync(join(root, "packages"), { withFileTypes: true })
   )
   .filter((pkg) => !pkg.private);
 const versions = new Set(packages.map((pkg) => pkg.version));
-if (packages.length !== 6 || versions.size !== 1) {
-  fail(`Expected six npm packages with the same version. Found:\n${packages.map((pkg) => `${pkg.name}@${pkg.version}`).join("\n")}`);
+if (packages.length !== 7 || versions.size !== 1) {
+  fail(`Expected seven npm packages with the same version. Found:\n${packages.map((pkg) => `${pkg.name}@${pkg.version}`).join("\n")}`);
 }
 
 if (!dryRun) {

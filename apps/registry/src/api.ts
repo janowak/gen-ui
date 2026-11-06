@@ -1,3 +1,4 @@
+import { componentMetadata } from "@app-mcp/format";
 import { contentHash } from "@app-mcp/runtime";
 import { externalize } from "./static-assets.js";
 import {
@@ -99,7 +100,14 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     const resource = options.staticHosting ? await externalize(html, options.staticHosting) : { html };
     if (new TextEncoder().encode(resource.html).byteLength > MAX_BUNDLE_BYTES)
       throw new RegistryError(413, `HTML shell exceeds ${MAX_BUNDLE_BYTES} bytes; move large inline markup into scripts or styles`);
-    const result = await store.publish(ws(c), manifest, resource.html, environment, resource._meta, contentHash(html));
+    const result = await store.publish(
+      ws(c),
+      manifest,
+      resource.html,
+      environment,
+      componentMetadata(manifest.csp, resource._meta),
+      contentHash(html),
+    );
     return c.json(result, result.created ? 201 : 200);
   });
 

@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "app-mcp CLI: start, develop, serve and publish MCP Apps components",
   "type": "module",
   "license": "MIT",

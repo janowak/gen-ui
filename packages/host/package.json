@@ -1,0 +1,53 @@
+{
+  "name": "@app-mcp/host",
+  "version": "0.3.0",
+  "description": "Embed your MCP tools and interactive app-mcp views in your own application",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "default": "./dist/sandbox.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
+    "@tanstack/ai": "1.2.0",
+    "@tanstack/ai-client": "1.1.0",
+    "@tanstack/ai-cloudflare": "1.2.0",
+    "@tanstack/ai-mcp": "1.1.0",
+    "@tanstack/ai-react": "1.0.2",
+    "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
+    "@types/node": "^24",
+    "@types/react": "^19.3.0",
+    "vitest": "^5.0.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
