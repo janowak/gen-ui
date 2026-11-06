@@ -16,6 +16,24 @@ export const RESERVED_NAMES = ["form", "chart"];
 
 export const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+/** Exact external HTTP(S) origins required by a view. */
+const Origin = z.url({ protocol: /^https?$/ }).regex(/^https?:\/\/[^/?#@*]+$/, "Use an exact origin");
+export const ComponentCsp = z.object({
+  resourceDomains: z.array(Origin).max(30).optional(),
+  connectDomains: z.array(Origin).max(30).optional(),
+});
+export type ComponentCsp = z.infer<typeof ComponentCsp>;
+export function componentMetadata(csp?: ComponentCsp, metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!csp) return metadata;
+  const ui = (metadata?.ui ?? {}) as Record<string, unknown>;
+  const base = (ui.csp ?? {}) as ComponentCsp;
+  const merged = { ...base };
+  for (const key of ["resourceDomains", "connectDomains"] as const) {
+    if (base[key] || csp[key]) merged[key] = [...new Set([...(base[key] ?? []), ...(csp[key] ?? [])])];
+  }
+  return { ...metadata, ui: { ...ui, csp: merged } };
+}
+
 /** `app-mcp.component.json`: published next to the single-file HTML bundle. */
 export const ComponentManifest = z.object({
   name: z
@@ -28,6 +46,7 @@ export const ComponentManifest = z.object({
   props: z
     .record(z.string(), z.unknown())
     .describe("JSON Schema (type: object) of the props the model passes. Becomes the tool's input schema."),
+  csp: ComponentCsp.optional(),
   tools: z.array(z.string()).default([]).describe("Tools on the host MCP server the component calls."),
   contract: z
     .number()

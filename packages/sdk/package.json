@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Put app-mcp forms, charts and components on your own MCP server",
   "type": "module",
   "license": "MIT",

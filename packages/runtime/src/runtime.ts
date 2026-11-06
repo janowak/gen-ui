@@ -1,3 +1,4 @@
+import { componentMetadata } from "@app-mcp/format";
 import { randomUUID } from "node:crypto";
 import {
   ChartSpec,
@@ -227,7 +228,7 @@ export async function mountAppMcp(target: McpServer, options: AppMcpOptions): Pr
     const { manifest, hash } = component;
     const uri = `ui://app-mcp/c/${manifest.name}/${hash}`;
     registerAppResource(server, `app-mcp ${manifest.name}`, uri, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
-      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html, _meta }],
+      contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: html, _meta: componentMetadata(manifest.csp, _meta) }],
     }));
     registerAppTool(
       server,
