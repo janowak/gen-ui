@@ -121,6 +121,18 @@ describe("embedded host", () => {
     }
   });
 
+  it("allows published stylesheets only from declared resource origins", () => {
+    const url = new URL("https://widgets.example/sandbox");
+    url.searchParams.set("csp", JSON.stringify({ resourceDomains: ["https://assets.app-mcp.com"] }));
+    const response = sandboxResponse(new Request(url), ["https://app.example"]);
+    const policy = response.headers.get("content-security-policy")!;
+    expect(policy).toContain("style-src 'unsafe-inline' https://assets.app-mcp.com;");
+    expect(policy).toContain("default-src 'none'");
+    expect(policy).toContain("frame-ancestors https://app.example");
+    const withoutResources = sandboxResponse(new Request("https://widgets.example/sandbox"), ["https://app.example"]);
+    expect(withoutResources.headers.get("content-security-policy")).not.toContain("https://assets.app-mcp.com");
+  });
+
   it("sets restrictive sandbox CSP and rejects injected origins", () => {
     const response = sandboxResponse(new Request("https://widgets.example/sandbox"), ["https://app.example"]);
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors https://app.example");
