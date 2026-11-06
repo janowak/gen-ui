@@ -18,7 +18,7 @@ export function sandboxResponse(request: Request, allowedParents: readonly strin
   } catch {
     return new Response("Invalid CSP origin", { status: 400 });
   }
-  const policy = `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: ${resource}; style-src 'unsafe-inline'; img-src data: blob: ${resource}; font-src data: ${resource}; connect-src ${connect || "'none'"}; frame-src 'self' ${frames}; base-uri 'none'; form-action 'none'; frame-ancestors ${parents.join(" ")}`;
+  const policy = `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: ${resource}; style-src 'unsafe-inline' ${resource}; img-src data: blob: ${resource}; font-src data: ${resource}; connect-src ${connect || "'none'"}; frame-src 'self' ${frames}; base-uri 'none'; form-action 'none'; frame-ancestors ${parents.join(" ")}`;
   const safeParents = JSON.stringify(parents).replaceAll("<", "\\u003c");
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><script>
 const allowed=${safeParents};let guest;let host;
