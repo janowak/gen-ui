@@ -57,6 +57,16 @@ export const ComponentManifest = z.object({
 });
 export type ComponentManifest = z.infer<typeof ComponentManifest>;
 
+/**
+ * What a publisher sends. Without `version` the registry assigns one: the published version whose bundle
+ * and manifest match, else the next patch after the newest. Versions stay immutable either way.
+ */
+export const PublishManifest = ComponentManifest.extend({ version: ComponentManifest.shape.version.optional() });
+export type PublishManifest = z.infer<typeof PublishManifest>;
+
+/** The version a component without one shows as when served locally (`app-mcp dev`). */
+export const LOCAL_VERSION = "0.0.0";
+
 export interface CatalogComponent {
   name: string;
   version: string;

@@ -72,7 +72,7 @@ export function appMcp(options: AppMcpPluginOptions = {}): PluginOption[] {
           fileName: "app-mcp.component.json",
           source: `${JSON.stringify({ ...manifest, bundle: page.fileName }, null, 2)}\n`,
         });
-        summary = `app-mcp: ${manifest.name}@${manifest.version} → ${outDir}/${page.fileName} (${kb(bytes)}) + ${outDir}/app-mcp.component.json`;
+        summary = `app-mcp: ${manifest.name}@${manifest.version ?? "auto"} → ${outDir}/${page.fileName} (${kb(bytes)}) + ${outDir}/app-mcp.component.json`;
       },
     },
     closeBundle() {

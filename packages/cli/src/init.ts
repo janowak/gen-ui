@@ -90,7 +90,6 @@ export default defineConfig({ plugins: [appMcp()] });
 // What the model sees: the tool render_${name}, its description and its props.
 export default defineComponent({
   name: "${name}",
-  version: "0.1.0",
   title: "Quick choice",
   description: "Ask the user to pick one of a few options inside the chat. Use it when a question has a short list of answers.",
   props: z.object({
@@ -149,7 +148,7 @@ Publish it to your workspace with a publish token (Workspace → Tokens in the a
 APP_MCP_TOKEN=<publish token> npm run app-mcp:publish
 \`\`\`
 
-Your workspace's MCP then offers \`render_${name}\`. Bump \`version\` in \`src/component.ts\` for every publish.
+Your workspace's MCP then offers \`render_${name}\`. The registry versions it: a changed build gets the next patch, an unchanged one is a no-op. To manage versions yourself, set \`version\` in \`src/component.ts\`.
 `,
 });
 

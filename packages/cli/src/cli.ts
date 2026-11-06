@@ -299,7 +299,7 @@ async function serve(dirs: string[]) {
 
   const tools = served.catalog
     .components()
-    .map((c) => `render_${c.manifest.name}${suffix ? `_${suffix}` : ""} (${c.manifest.name}@${c.manifest.version})`);
+    .map((c) => `render_${c.manifest.name}${suffix ? `_${suffix}` : ""} (${c.manifest.name}@${c.manifest.version ?? "auto"})`);
   const workflows = (await served.catalog.snapshot(suffix ?? DEFAULT_ENVIRONMENT))?.catalog.workflows ?? [];
   const lines = [`serving render_form, render_chart${tools.length ? `, ${tools.join(", ")}` : ""}`];
   if (workflows.length) lines.push(`workflows: ${workflows.map(describeWorkflow).join(", ")}`);

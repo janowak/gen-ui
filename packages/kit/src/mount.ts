@@ -1,6 +1,7 @@
 import { App, applyDocumentTheme, applyHostFonts, applyHostStyleVariables, type McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import type { z } from "zod";
 import type { ComponentDefinition } from "./define.js";
+import { LOCAL_VERSION } from "@app-mcp/format";
 import { createRuntime, type ComponentContext, type RuntimeOptions } from "./runtime.js";
 import { THEME_VARIABLES, themeVariables } from "./theme.js";
 
@@ -15,7 +16,7 @@ export function mount<P extends z.ZodObject, T extends string>(
   render: (ctx: ComponentContext<z.output<P>, T>) => void,
   options: RuntimeOptions = {},
 ): ComponentContext<z.output<P>, T> {
-  const app = new App({ name: `app-mcp-${component.name}`, version: component.version });
+  const app = new App({ name: `app-mcp-${component.name}`, version: component.version ?? LOCAL_VERSION });
   const root = document.documentElement;
   let host: McpUiHostContext | undefined;
   let themed: string | undefined;

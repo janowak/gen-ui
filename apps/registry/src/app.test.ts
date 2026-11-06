@@ -352,3 +352,28 @@ describe("workflows", () => {
     expect((await call("PUT", "/v1/instructions", admin, { instructions: null })).body.instructions).toBeNull();
   });
 });
+
+describe("auto versioning", () => {
+  const auto = (html: string, extra: Record<string, unknown> = {}, environment?: string) =>
+    call("POST", "/v1/components", publisher, {
+      manifest: { name: "poll", description: "Ask a poll.", props: { type: "object" }, ...extra },
+      html: HTML(html),
+      environment,
+    });
+
+  it("starts at 0.1.0, bumps the patch on any change and keeps the version when nothing changed", async () => {
+    expect(await auto("a")).toMatchObject({ status: 201, body: { version: "0.1.0", created: true } });
+    expect(await auto("a")).toMatchObject({ status: 200, body: { version: "0.1.0", created: false } });
+    expect(await auto("b")).toMatchObject({ status: 201, body: { version: "0.1.1", created: true } });
+    expect(await auto("b", { description: "Ask a quick poll." })).toMatchObject({ status: 201, body: { version: "0.1.2" } });
+  });
+
+  it("reuses an older version with the same content instead of minting a new one", async () => {
+    expect(await auto("a", {}, "staging")).toMatchObject({ status: 200, body: { version: "0.1.0", environments: { prod: "0.1.2", staging: "0.1.0" } } });
+  });
+
+  it("continues after a version set by hand", async () => {
+    expect((await auto("c", { version: "2.0.0" })).body.version).toBe("2.0.0");
+    expect((await auto("d")).body.version).toBe("2.0.1");
+  });
+});

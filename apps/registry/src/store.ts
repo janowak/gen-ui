@@ -6,15 +6,19 @@ import {
   type Branding,
   type Catalog,
   type CatalogComponent,
-  type ComponentManifest,
+  ComponentManifest,
+  type PublishManifest,
   type IconType,
   type Theme,
   type Workflow,
   MAX_INSTRUCTIONS,
   serverInstructions,
 } from "@app-mcp/format";
-import { breakingChanges, compareSemver } from "./compat.js";
+import { breakingChanges, compareSemver, parseSemver } from "./compat.js";
 import { statement, type Database, type Statement } from "./db.js";
+
+const bundleHash = (html: string, resourceMeta?: Record<string, unknown>) =>
+  sha256(resourceMeta ? JSON.stringify({ html, _meta: resourceMeta }) : html).slice(0, 16);
 
 export type Scope = "server" | "publish" | "admin";
 export type Role = "member" | "admin";
@@ -827,14 +831,64 @@ export class Store {
    */
   async publish(
     workspaceId: string,
-    manifest: ComponentManifest,
+    manifest: PublishManifest,
     html: string,
     environment: string = DEFAULT_ENVIRONMENT,
     resourceMeta?: Record<string, unknown>,
     sourceHash?: string,
   ): Promise<PublishResult> {
+    if (manifest.version === undefined) {
+      await this.requireEnvironment(workspaceId, environment);
+      // A concurrent auto publish can take the patch this one picked: pick again against it.
+      for (let attempt = 0; ; attempt++) {
+        const version = await this.autoVersion(workspaceId, manifest, html, resourceMeta, sourceHash);
+        try {
+          return await this.publish(workspaceId, { ...manifest, version }, html, environment, resourceMeta, sourceHash);
+        } catch (error) {
+          if (!(error instanceof RegistryError && error.status === 409) || attempt >= 4) throw error;
+        }
+      }
+    }
+    return this.publishExact(workspaceId, ComponentManifest.parse(manifest), html, environment, resourceMeta, sourceHash);
+  }
+
+  /** The newest published version with this content, else the next patch after the newest version (0.1.0 for a new component). */
+  private async autoVersion(
+    workspaceId: string,
+    manifest: PublishManifest,
+    html: string,
+    resourceMeta?: Record<string, unknown>,
+    sourceHash?: string,
+  ): Promise<string> {
+    const hash = bundleHash(html, resourceMeta);
+    const rows = await this.db.all<{ version: string; hash: string; source_hash: string | null; manifest: string }>(
+      "SELECT v.version, v.hash, v.source_hash, v.manifest FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND co.name = ?",
+      workspaceId,
+      manifest.name,
+    );
+    rows.sort((a, b) => compareSemver(b.version, a.version));
+    const same = rows.find(
+      (row) =>
+        (sourceHash ? (row.source_hash ?? row.hash) === sourceHash : row.hash === hash) &&
+        row.manifest === JSON.stringify(ComponentManifest.parse({ ...manifest, version: row.version })),
+    );
+    if (same) return same.version;
+    const newest = rows[0]?.version;
+    if (!newest) return "0.1.0";
+    const [major, minor, patch] = parseSemver(newest);
+    return `${major}.${minor}.${patch + 1}`;
+  }
+
+  private async publishExact(
+    workspaceId: string,
+    manifest: ComponentManifest,
+    html: string,
+    environment: string,
+    resourceMeta?: Record<string, unknown>,
+    sourceHash?: string,
+  ): Promise<PublishResult> {
     await this.requireEnvironment(workspaceId, environment);
-    const hash = sha256(resourceMeta ? JSON.stringify({ html, _meta: resourceMeta }) : html).slice(0, 16);
+    const hash = bundleHash(html, resourceMeta);
     const json = JSON.stringify(manifest);
 
     const same = await this.publishedVersion(workspaceId, manifest.name, manifest.version);
@@ -889,7 +943,7 @@ export class Store {
     } catch (error) {
       // Another publish of this version got there first: answer as a re-run (or a conflict) against it.
       if (isUniqueViolation(error) && (await this.publishedVersion(workspaceId, manifest.name, manifest.version))) {
-        return this.publish(workspaceId, manifest, html, environment, resourceMeta, sourceHash);
+        return this.publishExact(workspaceId, manifest, html, environment, resourceMeta, sourceHash);
       }
       throw error;
     }

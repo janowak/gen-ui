@@ -1,7 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
-  ComponentManifest,
+  LOCAL_VERSION,
+  PublishManifest,
   MAX_PUBLISH_BYTES,
   MAX_ENVIRONMENT_INSTRUCTIONS,
   MAX_INSTRUCTIONS,
@@ -17,7 +18,8 @@ import { contentHash } from "./views.js";
 
 /** A component as it sits on disk, ready to publish or serve. */
 export interface ComponentDir {
-  manifest: ComponentManifest;
+  /** No `version` means the registry assigns one on publish. */
+  manifest: PublishManifest;
   html: string;
   /** Content hash of the bundle, as the registry computes it. */
   hash: string;
@@ -53,7 +55,7 @@ export async function readComponentDir(dir: string): Promise<ComponentDir> {
   if (text === undefined) throw new Error(`no app-mcp.component.json in ${root} or its dist/; build it first`);
 
   const raw = parseJson(text, manifestPath) as Record<string, unknown>;
-  const parsed = ComponentManifest.safeParse(raw);
+  const parsed = PublishManifest.safeParse(raw);
   if (!parsed.success) throw new Error(`invalid manifest ${manifestPath}:\n${issues(parsed.error)}`);
 
   const bundlePath = resolve(dirname(manifestPath), typeof raw.bundle === "string" ? raw.bundle : "dist/index.html");
@@ -247,9 +249,9 @@ function describe(before: State, after: State): string[] {
   const lines: string[] = [];
   for (const c of after.components) {
     const old = before.components.find((b) => b.manifest.name === c.manifest.name);
-    if (!old) lines.push(`${c.manifest.name}@${c.manifest.version} added (${c.hash})`);
+    if (!old) lines.push(`${c.manifest.name}@${c.manifest.version ?? LOCAL_VERSION} added (${c.hash})`);
     else if (old.hash !== c.hash || JSON.stringify(old.manifest) !== JSON.stringify(c.manifest))
-      lines.push(`${c.manifest.name}@${c.manifest.version} reloaded (${c.hash})`);
+      lines.push(`${c.manifest.name}@${c.manifest.version ?? LOCAL_VERSION} reloaded (${c.hash})`);
   }
   for (const b of before.components)
     if (!after.components.some((c) => c.manifest.name === b.manifest.name)) lines.push(`${b.manifest.name} removed`);
@@ -280,7 +282,10 @@ export async function localCatalog(options: LocalCatalogOptions): Promise<LocalC
       const catalog: Catalog = {
         environment,
         theme: state.theme,
-        components: state.components.map(({ manifest, hash }) => ({ name: manifest.name, version: manifest.version, hash, manifest })),
+        components: state.components.map(({ manifest, hash }) => {
+          const version = manifest.version ?? LOCAL_VERSION;
+          return { name: manifest.name, version, hash, manifest: { ...manifest, version } };
+        }),
         instructions: state.instructions,
         workflows: state.workflows,
       };

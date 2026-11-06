@@ -3,7 +3,7 @@ import { contentHash } from "@app-mcp/runtime";
 import { externalize } from "./static-assets.js";
 import {
   Branding,
-  ComponentManifest,
+  PublishManifest,
   DEFAULT_ENVIRONMENT,
   EnvironmentName,
   MAX_BUNDLE_BYTES,
@@ -34,7 +34,7 @@ export const endUserPath = (workspaceId: string, environment: string) =>
 const denied = (required: Scope, got: Scope) => `Requires ${required === "admin" ? "an" : "a"} ${required} token (got ${got})`;
 
 const PublishBody = z.object({
-  manifest: ComponentManifest,
+  manifest: PublishManifest,
   html: z.string().min(1),
   environment: EnvironmentName.default(DEFAULT_ENVIRONMENT),
 });
