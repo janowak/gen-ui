@@ -369,7 +369,10 @@ describe("auto versioning", () => {
   });
 
   it("reuses an older version with the same content instead of minting a new one", async () => {
-    expect(await auto("a", {}, "staging")).toMatchObject({ status: 200, body: { version: "0.1.0", environments: { prod: "0.1.2", staging: "0.1.0" } } });
+    expect(await auto("a", {}, "staging")).toMatchObject({
+      status: 200,
+      body: { version: "0.1.0", environments: { prod: "0.1.2", staging: "0.1.0" } },
+    });
   });
 
   it("continues after a version set by hand", async () => {
