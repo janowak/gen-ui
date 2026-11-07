@@ -92,6 +92,8 @@ export async function createEmbeddedSession(options: EmbeddedSessionOptions) {
       maxTokens?: number;
       modelOptions?: Record<string, unknown>;
       reasoning?: "off" | "low" | "medium" | "high";
+      /** Sent when a turn ends on tool work and the closing summary still writes no text. */
+      summaryFallback?: string;
     }): AsyncGenerator<StreamChunk> {
       const controller = new AbortController();
       const abort = () => controller.abort(input.signal?.reason);
@@ -136,21 +138,40 @@ export async function createEmbeddedSession(options: EmbeddedSessionOptions) {
         }
         if (needsSummary && !failed && !controller.signal.aborted) {
           processor.finalizeStream();
-          // Reserve one model call to report completed/partial work. No tools can run here.
-          yield* chat({
+          // Reserve one model call to report completed/partial work. The work goes in as a plain-text
+          // log, not tool-call history: some models (gpt-oss) answer that history with another tool
+          // call even when no tools are offered, which leaves the turn with no reply at all.
+          const messageId = `summary-${crypto.randomUUID()}`;
+          let text = false;
+          for await (const chunk of chat({
             adapter: input.adapter,
             threadId: input.threadId,
-            messages: processor.getMessages(),
-            systemPrompts: [
-              client.instructions ?? "",
-              ...(input.systemPrompts ?? []),
-              "Tool work is finished for this turn. Answer the user's request using only the retrieved evidence. Report partial work honestly. Do not request more tools.",
-            ],
+            messages: [{ role: "user", content: workLog(processor.getMessages()) }],
+            // Not the turn's own system prompts: their tool instructions make the model plan more
+            // tool work (in its reasoning, or as text) instead of reporting to the user.
+            systemPrompts: [SUMMARY_PROMPT],
             modelOptions: input.modelOptions ?? (input.adapter.name === "cloudflare" ? { max_tokens: input.maxTokens ?? 2048 } : undefined),
             reasoning: input.reasoning,
             agentLoopStrategy: maxIterations(1),
             abortController: controller,
-          });
+          })) {
+            if (chunk.type.startsWith("TEXT_MESSAGE_")) {
+              if (chunk.type === "TEXT_MESSAGE_CONTENT" && chunk.delta.trim()) text = true;
+              yield { ...chunk, messageId } as StreamChunk;
+            } else if (chunk.type === "RUN_STARTED" || chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR") {
+              // Usage and errors still reach the caller; a stray tool call or its reasoning does not.
+              yield chunk;
+            }
+          }
+          if (!text && !controller.signal.aborted) {
+            const fallbackId = `${messageId}-fallback`;
+            const timestamp = Date.now();
+            yield* [
+              { type: "TEXT_MESSAGE_START", messageId: fallbackId, role: "assistant", timestamp },
+              { type: "TEXT_MESSAGE_CONTENT", messageId: fallbackId, delta: input.summaryFallback ?? SUMMARY_FALLBACK, timestamp },
+              { type: "TEXT_MESSAGE_END", messageId: fallbackId, timestamp },
+            ] as StreamChunk[];
+          }
         }
       } finally {
         input.signal?.removeEventListener("abort", abort);
@@ -189,6 +210,32 @@ export async function createEmbeddedSession(options: EmbeddedSessionOptions) {
     },
     close: () => client.close(),
   };
+}
+
+const SUMMARY_PROMPT =
+  "An assistant was working on the user's request with tools and hit its step limit before writing anything to the user. The message you receive is the log of that conversation and tool work. Write the assistant's short status report to the user (2–4 sentences, plain text, in the language the user wrote in): what was done (name things created or found), what failed or is unfinished, and that the user can send another message to continue. Report only what the log shows. Do not do the user's task yourself, do not invent results, do not call tools and do not write tool calls.";
+const SUMMARY_FALLBACK = "I stopped before finishing this reply. Send another message to continue.";
+const LOG_LIMIT = 8000;
+
+/** The conversation and this turn's tool work as plain text, newest last, for the closing summary. */
+function workLog(messages: UIMessage[]): string {
+  const results = new Map<string, { content: unknown; state?: string }>();
+  for (const message of messages) for (const part of message.parts) if (part.type === "tool-result") results.set(part.toolCallId, part);
+  const lines: string[] = [];
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type === "text" && part.content.trim())
+        lines.push(`${message.role === "user" ? "User" : "Assistant"}: ${part.content.trim().slice(0, 1500)}`);
+      if (part.type === "tool-call") {
+        const result = results.get(part.id);
+        const outcome = !result
+          ? "did not run"
+          : `${result.state === "error" ? "failed" : "ok"}: ${(typeof result.content === "string" ? result.content : JSON.stringify(result.content)).slice(0, 300)}`;
+        lines.push(`Tool ${part.name}(${part.arguments.slice(0, 200)}) ${outcome}`);
+      }
+    }
+  }
+  return lines.join("\n").slice(-LOG_LIMIT);
 }
 
 export { StreamProcessor } from "@tanstack/ai-client";
