@@ -121,6 +121,47 @@ describe("embedded host", () => {
     }
   });
 
+  it("summarises from a plain-text log and falls back when the model answers with a tool call", async () => {
+    const server = new McpServer({ name: "research", version: "1" });
+    server.registerTool("lookup", { inputSchema: z.object({ q: z.string() }) }, async () => ({
+      content: [{ type: "text", text: "Rynek, 49.97 N" }],
+    }));
+    const session = await createEmbeddedSession({ transport: await localMcpTransport(server), modelTools: ["lookup"], appTools: [] });
+    const adapter = fakeText();
+    adapter.setResponses([
+      { toolCalls: [{ name: "lookup", input: { q: "Bochnia" } }] },
+      (call) => {
+        // One plain-text user message: no tool-call history for the model to continue.
+        expect(call.request.tools ?? []).toHaveLength(0);
+        expect(call.request.messages).toHaveLength(1);
+        expect(call.request.messages[0]).toMatchObject({ role: "user" });
+        const log = JSON.stringify(call.request.messages[0]);
+        expect(log).toContain("User: Plan a walk");
+        expect(log).toContain('Tool lookup({\\"q\\":\\"Bochnia\\"}) ok: Rynek, 49.97 N');
+        // What gpt-oss does with tool history: another tool call instead of text.
+        return { toolCalls: [{ name: "lookup", input: { q: "again" } }] };
+      },
+    ]);
+    const chunks = [];
+    try {
+      for await (const chunk of session.stream({
+        adapter,
+        threadId: "fallback",
+        messages: [{ role: "user", content: "Plan a walk" }],
+        maxTurns: 2,
+        summaryFallback: "Stopped early",
+      }))
+        chunks.push(chunk);
+      expect(adapter.state.callCount).toBe(2);
+      expect(chunks.filter((chunk) => chunk.type === "TOOL_CALL_START")).toHaveLength(1);
+      const text = chunks.flatMap((chunk) => (chunk.type === "TEXT_MESSAGE_CONTENT" ? [chunk.delta] : [])).join("");
+      expect(text).toBe("Stopped early");
+    } finally {
+      await session.close();
+      await server.close();
+    }
+  });
+
   it("allows published stylesheets only from declared resource origins", () => {
     const url = new URL("https://widgets.example/sandbox");
     url.searchParams.set("csp", JSON.stringify({ resourceDomains: ["https://assets.app-mcp.com"] }));

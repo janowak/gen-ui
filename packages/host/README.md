@@ -38,7 +38,7 @@ Remote connections use `transport: { type: 'http', url, headers }`. Never accept
 
 The session loads MCP instructions, tools and UI resources. Model-only and app-only visibility are respected; model and widget tools have separate explicit allowlists. Your MCP tools must still validate ownership and permissions. The host does not grant access.
 
-Sessions default to eight model turns, 24 tool calls and, for Cloudflare, 2048 output tokens per model request. Other adapters accept their provider-specific `modelOptions`. One model turn is reserved for a tool-free summary if the tool loop exhausts its turn budget. Pass `signal`, `maxTurns`, `maxToolCalls`, `maxTokens` and optional `reasoning` to configure them. Close in `finally`, after consuming the stream. Configure the chosen adapter's timeout/retry policy separately.
+Sessions default to eight model turns, 24 tool calls and, for Cloudflare, 2048 output tokens per model request. Other adapters accept their provider-specific `modelOptions`. One model turn is reserved for a tool-free summary if the tool loop exhausts its turn budget: the model gets the conversation and the turn's tool work as a plain-text log (not tool-call history, which some models such as gpt-oss answer with another tool call) and writes a short status report. Only its text reaches the stream; if it still writes none, the stream ends with `summaryFallback` (an English default otherwise), so a turn never ends without a reply. Pass `signal`, `maxTurns`, `maxToolCalls`, `maxTokens` and optional `reasoning` to configure them. Close in `finally`, after consuming the stream. Configure the chosen adapter's timeout/retry policy separately.
 
 ## React
 
