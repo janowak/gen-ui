@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/ui",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "app-mcp built-in views (forms, charts) as single-file MCP Apps HTML",
   "type": "module",
   "license": "MIT",
