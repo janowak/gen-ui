@@ -15,6 +15,9 @@ export type WorkflowParam = z.infer<typeof WorkflowParam>;
  * components to use. With params it is a slash command (an MCP prompt taking them); without, it is
  * part of the server instructions the model always has.
  */
+/** A workflow's own steps. */
+export const MAX_WORKFLOW_INSTRUCTIONS = 10000;
+
 export const Workflow = z
   .object({
     name: WorkflowName,
@@ -23,7 +26,7 @@ export const Workflow = z
     instructions: z
       .string()
       .min(1)
-      .max(4000)
+      .max(MAX_WORKFLOW_INSTRUCTIONS)
       .describe("The steps for the model: what to ask, which tools and components (render_form, render_<component>) to use, in order."),
     params: z.array(WorkflowParam).max(10).default([]).describe("With params the workflow is a slash command taking them."),
   })

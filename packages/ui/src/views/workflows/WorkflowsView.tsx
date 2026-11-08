@@ -1,4 +1,4 @@
-import { isCommand, Workflow, type WorkflowParam } from "@app-mcp/format";
+import { isCommand, MAX_WORKFLOW_INSTRUCTIONS, Workflow, type WorkflowParam } from "@app-mcp/format";
 import { Loader2Icon, PencilIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -132,7 +132,7 @@ export function WorkflowsView() {
               />
               <Textarea
                 rows={8}
-                maxLength={4000}
+                maxLength={MAX_WORKFLOW_INSTRUCTIONS}
                 aria-label="Instructions"
                 placeholder="The steps: what to ask, which tools to call (render_form, render_<component>, your server's tools), in order."
                 value={workflow.instructions}

@@ -37,7 +37,7 @@ export const Workflow = z.object({
   name: WorkflowName,
   title: z.string().max(80).optional(),
   description: z.string().min(1).max(300),   // when to use it; the command's description
-  instructions: z.string().min(1).max(4000), // the playbook: steps, which tools and components, in order
+  instructions: z.string().min(1).max(10000), // the playbook: steps, which tools and components, in order
   params: z.array(WorkflowParam).max(10).default([]),
 });
 ```
