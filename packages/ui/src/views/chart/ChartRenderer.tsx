@@ -1,17 +1,25 @@
 import type { ChartType, SeriesData, ValueFormat } from "@app-mcp/format";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
+import { areaY, barX, barY, defineChart, group, lineY, ruleY, stack } from "@tanstack/charts";
+import { decorative } from "@tanstack/charts/mark/decorative";
+import { d3Curve } from "@tanstack/charts/d3/shape";
+import { pie, polar, radialArc } from "@tanstack/charts/polar";
+import { Chart as PreactChart, type ChartProps } from "@tanstack/charts/preact";
+import { scaleBand } from "@tanstack/charts/scales/band";
+import { scaleLinear } from "@tanstack/charts/scales/linear";
+import { scalePoint } from "@tanstack/charts/scales/point";
+import { tooltip } from "@tanstack/charts/tooltip";
+import { curveMonotoneX } from "d3-shape";
+import { useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 /** shadcn defines --chart-1..5. */
 const PALETTE_SIZE = 5;
 const color = (i: number) => `var(--chart-${(i % PALETTE_SIZE) + 1})`;
+const HEIGHT = 256;
+const monotone = d3Curve(curveMonotoneX);
+
+/** The adapter is typed against Preact's JSX; this package type-checks JSX against React's. */
+const Chart = PreactChart as unknown as <TDatum>(props: ChartProps<TDatum>) => React.ReactNode;
 
 /** `compact` gives short axis ticks ("€40K"); tooltips use the full value. */
 export function formatValue(value: number, format?: ValueFormat, unit?: string, compact = false): string {
@@ -33,6 +41,18 @@ export function formatValue(value: number, format?: ValueFormat, unit?: string, 
   return unit ? `${text} ${unit}` : text;
 }
 
+/** One row per (category, series): the long format TanStack marks consume. */
+interface Row {
+  category: string;
+  series: string;
+  value: number;
+}
+
+interface LegendItem {
+  label: string;
+  color: string;
+}
+
 interface Props {
   type: ChartType;
   data: SeriesData;
@@ -42,143 +62,196 @@ interface Props {
 
 export function ChartRenderer({ type, data, stacked, horizontal }: Props) {
   if (type === "pie" || type === "donut") return <PieRenderer data={data} donut={type === "donut"} />;
+  return <CartesianRenderer type={type} data={data} stacked={stacked} horizontal={horizontal} />;
+}
 
-  const config: ChartConfig = Object.fromEntries(data.series.map((s, i) => [s.key, { label: s.name, color: color(i) }]));
-  const rows = data.categories.map((category, i) => ({
-    category,
-    ...Object.fromEntries(data.series.map((s) => [s.key, s.values[i]])),
-  }));
-  const first = data.series[0];
-  const tick = (v: number) => formatValue(v, first?.format, first?.unit, true);
-  const tooltip = (
-    <ChartTooltip
-      content={
-        <ChartTooltipContent
-          formatter={(value, name) => {
-            const s = data.series.find((x) => x.key === name);
-            return (
-              <div className="flex w-full justify-between gap-4">
-                <span className="text-muted-foreground">{s?.name ?? name}</span>
-                <span className="font-mono font-medium tabular-nums">{formatValue(Number(value), s?.format, s?.unit)}</span>
-              </div>
-            );
-          }}
-        />
-      }
-    />
-  );
-  const legend = data.series.length > 1 ? <ChartLegend content={<ChartLegendContent />} /> : null;
-  const stackId = stacked ? "stack" : undefined;
-
-  if (type === "bar") {
-    return (
-      <ChartContainer config={config} className="aspect-auto h-64 w-full">
-        <BarChart data={rows} layout={horizontal ? "vertical" : "horizontal"} accessibilityLayer>
-          <CartesianGrid vertical={horizontal} horizontal={!horizontal} />
-          {/* No fragments here: recharts detects them with react-is, which never matches Preact's. */}
-          {horizontal ? (
-            <XAxis type="number" tickFormatter={tick} tickLine={false} axisLine={false} />
-          ) : (
-            <XAxis dataKey="category" tickLine={false} axisLine={false} tickMargin={8} />
-          )}
-          {horizontal ? (
-            <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} />
-          ) : (
-            <YAxis tickFormatter={tick} tickLine={false} axisLine={false} width={56} />
-          )}
-          {tooltip}
-          {legend}
-          {data.series.map((s) => (
-            <Bar
-              key={s.key}
-              dataKey={s.key}
-              fill={`var(--color-${s.key})`}
-              stackId={stackId}
-              radius={stacked ? 0 : 4}
-              isAnimationActive={false}
-            />
-          ))}
-        </BarChart>
-      </ChartContainer>
+function CartesianRenderer({ type, data, stacked, horizontal }: Props) {
+  const definition = useMemo(() => {
+    const rows: Row[] = data.series.flatMap((s) =>
+      data.categories.map((category, i) => ({ category, series: s.key, value: s.values[i] ?? Number.NaN })),
     );
-  }
+    const first = data.series[0];
+    const valueAxis = {
+      scale: scaleLinear,
+      nice: true,
+      grid: { strokeOpacity: 1, stroke: "var(--border)" },
+      axis: { line: false, ticks: { size: 0, padding: 8, format: (v: number) => formatValue(v, first?.format, first?.unit, true) } },
+    };
+    const categoryAxis = { axis: { line: false, ticks: { size: 0, padding: 8 } } };
+    // An invisible rule at 0 keeps zero in the value domain, as recharts did.
+    const zero = ruleY([0], { strokeOpacity: 0 });
+    const colorScale = { domain: data.series.map((s) => s.key), range: data.series.map((_, i) => color(i)) };
+    const layout = stacked ? stack() : group({ padding: 0.1 });
+    const interaction = { maxFocusDistance: Number.POSITIVE_INFINITY, tooltip } as const;
 
-  if (type === "area") {
-    return (
-      <ChartContainer config={config} className="aspect-auto h-64 w-full">
-        <AreaChart data={rows} accessibilityLayer>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="category" tickLine={false} axisLine={false} tickMargin={8} />
-          <YAxis tickFormatter={tick} tickLine={false} axisLine={false} width={56} />
-          {tooltip}
-          {legend}
-          {data.series.map((s) => (
-            <Area
-              key={s.key}
-              dataKey={s.key}
-              type="monotone"
-              stroke={`var(--color-${s.key})`}
-              fill={`var(--color-${s.key})`}
-              fillOpacity={0.3}
-              stackId={stackId}
-              isAnimationActive={false}
-            />
-          ))}
-        </AreaChart>
-      </ChartContainer>
-    );
-  }
+    if (type === "bar" && horizontal) {
+      return defineChart({
+        marks: [barX(rows, { y: "category", x: "value", color: "series", layout, radius: stacked ? 0 : 4 })],
+        scales: { y: { scale: () => scaleBand<string>().padding(0.2), ...categoryAxis }, x: valueAxis },
+        color: colorScale,
+        focus: "group-y",
+        ...interaction,
+      });
+    }
+    if (type === "bar") {
+      return defineChart({
+        marks: [barY(rows, { x: "category", y: "value", color: "series", layout, radius: stacked ? 0 : 4 })],
+        scales: { x: { scale: () => scaleBand<string>().padding(0.2), ...categoryAxis }, y: valueAxis },
+        color: colorScale,
+        focus: "group-x",
+        ...interaction,
+      });
+    }
+    const x = { scale: () => scalePoint<string>().padding(0.1), ...categoryAxis };
+    if (type === "area") {
+      return defineChart({
+        marks: [
+          areaY(rows, {
+            x: "category",
+            y: "value",
+            color: "series",
+            curve: monotone,
+            fillOpacity: 0.3,
+            ...(stacked ? { layout: stack() } : { y1: 0 }),
+          }),
+          // Areas paint no outline; draw each series' top edge, at its stacked height when stacked.
+          decorative(
+            lineY(stacked ? stackedTops(data) : rows, {
+              x: "category",
+              y: "value",
+              z: "series",
+              color: "series",
+              curve: monotone,
+              strokeWidth: 1.5,
+            }),
+          ),
+          zero,
+        ],
+        scales: { x, y: valueAxis },
+        color: colorScale,
+        focus: "group-x",
+        ...interaction,
+      });
+    }
+    return defineChart({
+      marks: [lineY(rows, { x: "category", y: "value", z: "series", color: "series", curve: monotone, strokeWidth: 2 }), zero],
+      scales: { x, y: valueAxis },
+      color: colorScale,
+      focus: "group-x",
+      ...interaction,
+    });
+  }, [type, data, stacked, horizontal]);
 
+  const series = (key: unknown) => data.series.find((s) => s.key === key);
   return (
-    <ChartContainer config={config} className="aspect-auto h-64 w-full">
-      <LineChart data={rows} accessibilityLayer>
-        <CartesianGrid vertical={false} />
-        <XAxis dataKey="category" tickLine={false} axisLine={false} tickMargin={8} />
-        <YAxis tickFormatter={tick} tickLine={false} axisLine={false} width={56} />
-        {tooltip}
-        {legend}
-        {data.series.map((s) => (
-          <Line
-            key={s.key}
-            dataKey={s.key}
-            type="monotone"
-            stroke={`var(--color-${s.key})`}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
+    <ChartFrame legend={data.series.length > 1 ? data.series.map((s, i) => ({ label: s.name, color: color(i) })) : []}>
+      <Chart
+        definition={definition}
+        ariaLabel={data.series.map((s) => s.name).join(", ")}
+        height={HEIGHT}
+        renderTooltipBody={({ points }) => (
+          <TooltipBody
+            title={String(points[0]?.datum && (points[0].datum as Row).category)}
+            items={points.map((p) => {
+              const row = p.datum as Row;
+              const s = series(row.series);
+              return { label: s?.name ?? row.series, color: p.color, value: formatValue(row.value, s?.format, s?.unit) };
+            })}
           />
-        ))}
-      </LineChart>
-    </ChartContainer>
+        )}
+      />
+    </ChartFrame>
+  );
+}
+
+/** Each series' running total per category: the top edge of a stacked area. */
+function stackedTops(data: SeriesData): Row[] {
+  const totals = data.categories.map(() => 0);
+  return data.series.flatMap((s) =>
+    data.categories.map((category, i) => {
+      totals[i]! += s.values[i] ?? 0;
+      return { category, series: s.key, value: totals[i]! };
+    }),
   );
 }
 
 /** Pie and donut plot the first series, one slice per category. */
 function PieRenderer({ data, donut }: { data: SeriesData; donut: boolean }) {
   const series = data.series[0];
-  // Each slice carries its own `fill`, which recharts reads from the data.
-  const slices = data.categories.map((name, i) => ({ key: `c${i}`, name, value: series?.values[i] ?? 0, fill: `var(--color-c${i})` }));
-  const config: ChartConfig = Object.fromEntries(slices.map((s, i) => [s.key, { label: s.name, color: color(i) }]));
+  const definition = useMemo(() => {
+    const rows = data.categories.map((name, i) => ({ name, value: Math.max(0, series?.values[i] ?? 0) }));
+    return defineChart({
+      marks: [
+        polar({
+          inset: 4,
+          marks: [
+            radialArc(pie(rows, { value: "value" }), {
+              innerRadius: donut ? ({ radius }) => radius * 0.55 : 0,
+              color: "name",
+              key: "name",
+              stroke: "var(--card)",
+              strokeWidth: 2,
+            }),
+          ],
+          scales: { angle: null, radius: null },
+        }),
+      ],
+      scales: { x: null, y: null },
+      color: { domain: data.categories, range: data.categories.map((_, i) => color(i)) },
+      tooltip,
+    });
+  }, [data, series, donut]);
+
   return (
-    <ChartContainer config={config} className="mx-auto aspect-square h-64">
-      <PieChart>
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              nameKey="key"
-              hideLabel
-              formatter={(value, _name, item) => (
-                <div className="flex w-full justify-between gap-4">
-                  <span className="text-muted-foreground">{(item.payload as { name: string }).name}</span>
-                  <span className="font-mono font-medium tabular-nums">{formatValue(Number(value), series?.format, series?.unit)}</span>
-                </div>
-              )}
-            />
-          }
-        />
-        <Pie data={slices} dataKey="value" nameKey="key" innerRadius={donut ? "55%" : 0} strokeWidth={2} isAnimationActive={false} />
-        <ChartLegend content={<ChartLegendContent nameKey="key" />} className="flex-wrap" />
-      </PieChart>
-    </ChartContainer>
+    <ChartFrame legend={data.categories.map((label, i) => ({ label, color: color(i) }))} square>
+      <Chart
+        definition={definition}
+        ariaLabel={series?.name ?? "Chart"}
+        height={HEIGHT}
+        renderTooltipBody={({ points }) => (
+          <TooltipBody
+            items={points.map((p) => {
+              const slice = p.datum as { name: string; value: number };
+              return { label: slice.name, color: p.color, value: formatValue(slice.value, series?.format, series?.unit) };
+            })}
+          />
+        )}
+      />
+    </ChartFrame>
+  );
+}
+
+function ChartFrame({ legend, square, children }: { legend: LegendItem[]; square?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn("app-chart flex w-full flex-col gap-3 text-xs text-muted-foreground", square && "mx-auto max-w-64")}>
+      {children}
+      {legend.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+          {legend.map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5">
+              <span className="size-2 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+              <span className="text-foreground">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TooltipBody({ title, items }: { title?: string; items: { label: string; color: string; value: string }[] }) {
+  return (
+    <div className="grid min-w-32 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      {title && <div className="font-medium text-foreground">{title}</div>}
+      {items.map((item) => (
+        <div key={item.label} className="flex w-full items-center gap-2">
+          <span className="size-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+          <div className="flex flex-1 justify-between gap-4">
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="font-mono font-medium tabular-nums text-foreground">{item.value}</span>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
