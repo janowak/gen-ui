@@ -16,7 +16,7 @@ export type WorkflowParam = z.infer<typeof WorkflowParam>;
  * part of the server instructions the model always has.
  */
 /** A workflow's own steps. */
-export const MAX_WORKFLOW_INSTRUCTIONS = 10000;
+export const MAX_WORKFLOW_INSTRUCTIONS = 50000;
 
 export const Workflow = z
   .object({
