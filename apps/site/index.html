@@ -130,212 +130,223 @@
             class="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pt-1 pb-3 [scrollbar-width:none] sm:-mx-6 sm:gap-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
             data-scroller
           >
-        <figure
-          class="demo m-0 flex w-full shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl bg-muted/40 shadow-sm ring-1 ring-foreground/10"
-          id="demo-form"
-          aria-label="Example: a customer reorders through a form in a chat"
-          data-demo="Form"
-        >
-          <div class="flex h-11 items-center justify-between border-b px-4 text-sm">
-            <span class="font-medium text-muted-foreground">Chat with Packwell Supply</span>
-            <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
-          </div>
-          <ol class="flex flex-1 list-none flex-col gap-4 p-4 sm:p-5">
-            <li class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground" data-reveal>
-              Reorder the mailer boxes from last month, 400 of them, delivered by the 30th.
-            </li>
-            <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
-              <svg
-                class="size-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M10 4v4" />
-                <path d="M2 8h20" />
-                <path d="M6 4v4" />
-              </svg>
-              <span>Opened the <span class="font-medium text-foreground">New order</span> form</span>
-            </li>
-            <li data-reveal>
-              <div class="card">
-                <div class="grid gap-1 px-4">
-                  <div class="text-base leading-snug font-medium">New order</div>
-                  <div class="text-muted-foreground">Check the details and place the order.</div>
-                </div>
-                <div class="flex flex-col gap-4 px-4">
-                  <div class="flex flex-col gap-2" data-field>
-                    <span class="font-medium">Ship to</span>
-                    <span class="input">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
-                      </svg>
-                      <span class="truncate">Halden Coffee, Leeds</span>
-                    </span>
-                  </div>
-                  <div class="flex flex-col gap-2" data-field>
-                    <span class="font-medium">Products</span>
-                    <span class="input">
-                      <span class="badge badge-secondary">Mailer box, medium</span>
-                    </span>
-                  </div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="flex flex-col gap-2" data-field>
-                      <span class="font-medium">Quantity</span>
-                      <span class="input"><span>400</span></span>
-                    </div>
-                    <div class="flex flex-col gap-2" data-field>
-                      <span class="font-medium">Delivery date</span>
-                      <span class="input">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M8 2v4" />
-                          <path d="M16 2v4" />
-                          <rect width="18" height="18" x="3" y="4" rx="2" />
-                          <path d="M3 10h18" />
-                        </svg>
-                        <span class="truncate">Fri, Oct 30</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span class="btn" data-submit>
-                      <svg
-                        class="animate-spin"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                        data-spinner
-                      >
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                      </svg>
-                      <span data-label>Place order</span>
-                    </span>
-                    <span class="flex items-center gap-1.5 text-muted-foreground" data-done>
-                      <svg
-                        class="size-4 text-foreground"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="m9 12 2 2 4-4" />
-                      </svg>
-                      Order 4821 placed
-                    </span>
-                  </div>
-                </div>
+            <figure
+              class="demo m-0 flex w-full shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl bg-muted/40 shadow-sm ring-1 ring-foreground/10"
+              id="demo-form"
+              aria-label="Example: a customer reorders through a form in a chat"
+              data-demo="Form"
+            >
+              <div class="flex h-11 items-center justify-between border-b px-4 text-sm">
+                <span class="font-medium text-muted-foreground">Chat with Packwell Supply</span>
+                <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
               </div>
-            </li>
-            <li class="text-sm" data-reveal>Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.</li>
-          </ol>
-          <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks it and places the
-            order.
-          </figcaption>
-        </figure>
+              <ol class="flex flex-1 list-none flex-col gap-4 p-4 sm:p-5">
+                <li
+                  class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground"
+                  data-reveal
+                >
+                  Reorder the mailer boxes from last month, 400 of them, delivered by the 30th.
+                </li>
+                <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
+                  <svg
+                    class="size-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M10 4v4" />
+                    <path d="M2 8h20" />
+                    <path d="M6 4v4" />
+                  </svg>
+                  <span>Opened the <span class="font-medium text-foreground">New order</span> form</span>
+                </li>
+                <li data-reveal>
+                  <div class="card">
+                    <div class="grid gap-1 px-4">
+                      <div class="text-base leading-snug font-medium">New order</div>
+                      <div class="text-muted-foreground">Check the details and place the order.</div>
+                    </div>
+                    <div class="flex flex-col gap-4 px-4">
+                      <div class="flex flex-col gap-2" data-field>
+                        <span class="font-medium">Ship to</span>
+                        <span class="input">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.3-4.3" />
+                          </svg>
+                          <span class="truncate">Halden Coffee, Leeds</span>
+                        </span>
+                      </div>
+                      <div class="flex flex-col gap-2" data-field>
+                        <span class="font-medium">Products</span>
+                        <span class="input">
+                          <span class="badge badge-secondary">Mailer box, medium</span>
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-2" data-field>
+                          <span class="font-medium">Quantity</span>
+                          <span class="input"><span>400</span></span>
+                        </div>
+                        <div class="flex flex-col gap-2" data-field>
+                          <span class="font-medium">Delivery date</span>
+                          <span class="input">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M8 2v4" />
+                              <path d="M16 2v4" />
+                              <rect width="18" height="18" x="3" y="4" rx="2" />
+                              <path d="M3 10h18" />
+                            </svg>
+                            <span class="truncate">Fri, Oct 30</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span class="btn" data-submit>
+                          <svg
+                            class="animate-spin"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                            data-spinner
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                          </svg>
+                          <span data-label>Place order</span>
+                        </span>
+                        <span class="flex items-center gap-1.5 text-muted-foreground" data-done>
+                          <svg
+                            class="size-4 text-foreground"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                          Order 4821 placed
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="text-sm" data-reveal>Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.</li>
+              </ol>
+              <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks it and places
+                the order.
+              </figcaption>
+            </figure>
 
-        <figure
-          class="demo m-0 flex w-full shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl bg-muted/40 shadow-sm ring-1 ring-foreground/10"
-          id="demo-chart"
-          aria-label="Example: a customer looks at their order history as a chart in a chat"
-          data-demo="Chart"
-        >
-          <div class="flex h-11 items-center justify-between border-b px-4 text-sm">
-            <span class="font-medium text-muted-foreground">Chat with Packwell Supply</span>
-            <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
-          </div>
-          <ol class="flex flex-1 list-none flex-col gap-4 p-4 sm:p-5">
-            <li class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground" data-reveal>
-              How many boxes have we ordered from you this year? Show me by month.
-            </li>
-            <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
-              <svg
-                class="size-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-                <path d="M7 16v-4" />
-                <path d="M12 16V8" />
-                <path d="M17 16v-6" />
-              </svg>
-              <span>Opened the <span class="font-medium text-foreground">Order history</span> chart</span>
-            </li>
-            <li data-reveal>
-              <div class="card">
-                <div class="flex items-start justify-between gap-4 px-4">
-                  <div class="grid gap-1">
-                    <div class="text-base leading-snug font-medium">Order history</div>
-                    <div class="text-muted-foreground">Boxes per month, 2026</div>
-                  </div>
-                  <div class="text-right">
-                    <div class="text-base leading-snug font-medium tabular-nums">3,760</div>
-                    <div class="text-xs text-muted-foreground">boxes</div>
-                  </div>
-                </div>
-                <div class="px-4">
-                  <div class="mt-2 flex h-52 items-end lg:h-62 gap-1.5 border-b sm:gap-2" data-bars role="img" aria-label="Boxes ordered per month, January to October 2026: 220, 260, 310, 280, 350, 400, 380, 420, 500, 640">
-                    <div class="bar" style="--i: 0; height: 34%"></div>
-                    <div class="bar" style="--i: 1; height: 41%"></div>
-                    <div class="bar" style="--i: 2; height: 48%"></div>
-                    <div class="bar" style="--i: 3; height: 44%"></div>
-                    <div class="bar" style="--i: 4; height: 55%"></div>
-                    <div class="bar" style="--i: 5; height: 63%"></div>
-                    <div class="bar" style="--i: 6; height: 59%"></div>
-                    <div class="bar" style="--i: 7; height: 66%"></div>
-                    <div class="bar" style="--i: 8; height: 78%"></div>
-                    <div class="bar bar-current" style="--i: 9; height: 100%"><span>640</span></div>
-                  </div>
-                  <div class="mt-1.5 flex gap-1.5 text-center text-[10px] text-muted-foreground sm:gap-2" aria-hidden="true">
-                    <span class="flex-1">J</span><span class="flex-1">F</span><span class="flex-1">M</span><span class="flex-1">A</span><span class="flex-1">M</span
-                    ><span class="flex-1">J</span><span class="flex-1">J</span><span class="flex-1">A</span><span class="flex-1">S</span
-                    ><span class="flex-1 font-medium text-foreground">O</span>
-                  </div>
-                </div>
+            <figure
+              class="demo m-0 flex w-full shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl bg-muted/40 shadow-sm ring-1 ring-foreground/10"
+              id="demo-chart"
+              aria-label="Example: a customer looks at their order history as a chart in a chat"
+              data-demo="Chart"
+            >
+              <div class="flex h-11 items-center justify-between border-b px-4 text-sm">
+                <span class="font-medium text-muted-foreground">Chat with Packwell Supply</span>
+                <button class="btn btn-ghost h-7 px-2" type="button" data-replay hidden>Replay</button>
               </div>
-            </li>
-            <li class="text-sm" data-reveal>3,760 boxes so far this year. October is your biggest month yet, at 640.</li>
-          </ol>
-          <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            A chart Packwell built for order history. The model opens it with the customer's numbers, so the answer is a picture, not a
-            table of text.
-          </figcaption>
-        </figure>
+              <ol class="flex flex-1 list-none flex-col gap-4 p-4 sm:p-5">
+                <li
+                  class="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm text-primary-foreground"
+                  data-reveal
+                >
+                  How many boxes have we ordered from you this year? Show me by month.
+                </li>
+                <li class="flex items-center gap-2 text-xs text-muted-foreground" data-reveal>
+                  <svg
+                    class="size-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                    <path d="M7 16v-4" />
+                    <path d="M12 16V8" />
+                    <path d="M17 16v-6" />
+                  </svg>
+                  <span>Opened the <span class="font-medium text-foreground">Order history</span> chart</span>
+                </li>
+                <li data-reveal>
+                  <div class="card">
+                    <div class="flex items-start justify-between gap-4 px-4">
+                      <div class="grid gap-1">
+                        <div class="text-base leading-snug font-medium">Order history</div>
+                        <div class="text-muted-foreground">Boxes per month, 2026</div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-base leading-snug font-medium tabular-nums">3,760</div>
+                        <div class="text-xs text-muted-foreground">boxes</div>
+                      </div>
+                    </div>
+                    <div class="px-4">
+                      <div
+                        class="mt-2 flex h-52 items-end lg:h-62 gap-1.5 border-b sm:gap-2"
+                        data-bars
+                        role="img"
+                        aria-label="Boxes ordered per month, January to October 2026: 220, 260, 310, 280, 350, 400, 380, 420, 500, 640"
+                      >
+                        <div class="bar" style="--i: 0; height: 34%"></div>
+                        <div class="bar" style="--i: 1; height: 41%"></div>
+                        <div class="bar" style="--i: 2; height: 48%"></div>
+                        <div class="bar" style="--i: 3; height: 44%"></div>
+                        <div class="bar" style="--i: 4; height: 55%"></div>
+                        <div class="bar" style="--i: 5; height: 63%"></div>
+                        <div class="bar" style="--i: 6; height: 59%"></div>
+                        <div class="bar" style="--i: 7; height: 66%"></div>
+                        <div class="bar" style="--i: 8; height: 78%"></div>
+                        <div class="bar bar-current" style="--i: 9; height: 100%"><span>640</span></div>
+                      </div>
+                      <div class="mt-1.5 flex gap-1.5 text-center text-[10px] text-muted-foreground sm:gap-2" aria-hidden="true">
+                        <span class="flex-1">J</span><span class="flex-1">F</span><span class="flex-1">M</span><span class="flex-1">A</span
+                        ><span class="flex-1">M</span><span class="flex-1">J</span><span class="flex-1">J</span><span class="flex-1">A</span
+                        ><span class="flex-1">S</span><span class="flex-1 font-medium text-foreground">O</span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="text-sm" data-reveal>3,760 boxes so far this year. October is your biggest month yet, at 640.</li>
+              </ol>
+              <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                A chart Packwell built for order history. The model opens it with the customer's numbers, so the answer is a picture, not a
+                table of text.
+              </figcaption>
+            </figure>
           </div>
           <div class="mt-3 flex justify-center">
             <div class="inline-flex rounded-lg bg-muted p-0.5 text-sm" role="group" aria-label="Choose an example" data-tabs></div>
