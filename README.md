@@ -149,6 +149,8 @@ APP_MCP_TOKEN=<admin> app-mcp instructions instructions.md --env staging  # stag
 - `remove` stops serving a component in an environment. Its versions stay published, so `publish <name>@<version>` serves one again and old messages keep rendering.
 - Built-in forms and charts (`render_form`, `render_chart`) are on in every environment until an admin turns them off (`env set --built-ins off`, or the switch under `manage_components`).
 - The CLI talks to app-mcp cloud (`https://api.app-mcp.com`) unless `--url` or `APP_MCP_URL` names another registry. Publish tokens can also run `list` and `env list`.
+- On your own machine, `app-mcp login` replaces the tokens above: it opens the registry's `/cli` page, an admin clicks Allow, and the CLI keeps an admin token in `~/.config/app-mcp/credentials.json` (per registry URL). `--token` and `APP_MCP_TOKEN` win over it, so CI keeps using publish tokens. `app-mcp whoami` prints the workspace with its admin link and end-user MCP; `app-mcp logout` revokes the token.
+- `app-mcp guide` prints the setup guide for AI coding agents (`packages/cli/guide.md`), and `app-mcp init` writes an `AGENTS.md` into each new component.
 
 **Workflows sit next to components.** A workflow is a playbook for the model in your own words: `<name>.workflow.md` in a component dir or its `workflows/`, with YAML frontmatter and the steps as the body. `app-mcp publish <dir>` sends the dir's component and workflows to the environment, with the same publish token (a dir may hold only workflows). `app-mcp workflow set|rm|list` handles single ones; admins can also edit them from the `manage_workflows` view.
 

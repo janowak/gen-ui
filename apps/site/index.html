@@ -358,7 +358,8 @@
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="how-title">How it works</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            From sign-up to your customers using your components, without running a server of your own.
+            From sign-up to your customers using your components, without running a server of your own. Your coding agent can do the first
+            three steps <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#start">from one prompt</a>.
           </p>
           <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-6 md:gap-y-12 lg:grid-cols-4 lg:gap-y-4">
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
@@ -434,85 +435,101 @@
 
       <section class="scroll-mt-14 border-t" id="start" aria-labelledby="start-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started</h2>
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started with one prompt</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Everything runs through two connectors: app-mcp's, where you manage your workspace, and your workspace's own, the one your
-            customers add. Custom connectors need a paid Claude plan or ChatGPT's developer mode.
+            Paste this into Claude Code, Cursor, Codex or any coding agent that can run commands, in your project. It sets everything up and
+            hands you two links: one to manage your workspace, one for your users.
           </p>
-          <div class="mt-8 flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 p-4 ring-1 ring-foreground/10">
-            <span class="text-sm text-muted-foreground">app-mcp's connector</span>
-            <code class="font-mono text-sm text-foreground">https://api.app-mcp.com/mcp</code>
-            <button class="btn btn-outline ml-auto" type="button" data-copy="https://api.app-mcp.com/mcp">Copy</button>
+          <div class="mt-8 rounded-xl bg-muted/40 ring-1 ring-foreground/10">
+            <div class="flex items-center gap-3 border-b px-4 py-2.5">
+              <span class="text-sm text-muted-foreground">Prompt for your coding agent</span>
+              <button
+                class="btn ml-auto"
+                type="button"
+                data-copy="Set up app-mcp in this project. Run `npx @app-mcp/cli guide` and follow it:&#10;sign in, build my first component (ask me what it should show), check it and publish it.&#10;Finish with my admin link and the link my users add."
+              >
+                Copy prompt
+              </button>
+            </div>
+            <pre
+              class="m-0 overflow-x-auto p-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap text-foreground sm:p-6 sm:text-sm"
+            ><code>Set up app-mcp in this project. Run `npx @app-mcp/cli guide` and follow it:
+sign in, build my first component (ask me what it should show), check it and publish it.
+Finish with my admin link and the link my users add.</code></pre>
           </div>
-          <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-10 md:gap-y-12">
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+          <ol class="mt-12 grid list-none gap-12 md:grid-cols-3 md:gap-x-10">
+            <li class="flex flex-col gap-4">
               <h3 class="flex items-center gap-3 font-medium">
                 <span
                   class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
                   aria-hidden="true"
                   >1</span
                 >
-                Add app-mcp and sign in
+                You click Allow
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                In Claude: Settings → Connectors → Add custom connector, with the address above. Connect, then sign in with Google or
-                GitHub. You get a workspace.
+                Your agent runs <code class="font-mono text-[0.9em] text-foreground">app-mcp login</code> and a browser tab opens. Sign in
+                with Google or GitHub and click Allow. You get a workspace, and there is no token to copy or paste into a chat.
               </p>
-              <pre class="code"><code>Settings → Connectors → Add custom connector
-<span class="s">https://api.app-mcp.com/mcp</span></code></pre>
             </li>
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+            <li class="flex flex-col gap-4">
               <h3 class="flex items-center gap-3 font-medium">
                 <span
                   class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
                   aria-hidden="true"
                   >2</span
                 >
-                Try the built-ins
+                Your agent builds and publishes
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Ask Claude to open your app-mcp workspace. It shows your workspace's MCP address: add it as a second connector, then ask for
-                a form or a chart.
+                It follows the
+                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="/llms.txt">setup guide</a> that ships with
+                the CLI: creates the component, checks the build and publishes it. If you already run an MCP server, it connects that too,
+                so views can call your tools.
               </p>
-              <pre class="code"><code><span class="k">"Open my app-mcp workspace"</span>
-→ <span class="s">https://api.app-mcp.com/w/&lt;workspace&gt;/mcp</span></code></pre>
             </li>
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
+            <li class="flex flex-col gap-4">
               <h3 class="flex items-center gap-3 font-medium">
                 <span
                   class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
                   aria-hidden="true"
                   >3</span
                 >
-                Build your component
+                You get two links
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Start one with <code class="font-mono text-[0.9em] text-foreground">app-mcp init</code>, then try it in a local host with
-                live props and theme. It's TypeScript with <code class="font-mono text-[0.9em] text-foreground">@app-mcp/kit</code>; use any
-                framework you like.
+                An admin link, where you change the theme, instructions, workflows and people. And the link your users add as a connector in
+                Claude or ChatGPT. Add it yourself to try the flow as they will.
               </p>
-              <pre class="code"><code>$ <span class="k">npx @app-mcp/cli init</span> my_poll
-$ cd my_poll &amp;&amp; npm install
-$ <span class="k">npm run dev</span></code></pre>
-            </li>
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
-                  aria-hidden="true"
-                  >4</span
-                >
-                Publish it
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Create a publish token in the workspace view and publish. Your workspace's connector now offers
-                <code class="font-mono text-[0.9em] text-foreground">render_my_poll</code>. Remove components or turn off the built-in forms
-                and charts under Manage components.
-              </p>
-              <pre class="code"><code>$ APP_MCP_TOKEN=gnu_publish_… <span class="k">npm run app-mcp:publish</span>
-# Published my_poll@0.1.0 to prod</code></pre>
             </li>
           </ol>
+
+          <div class="mt-16 grid gap-10 border-t pt-12 md:grid-cols-2">
+            <div class="flex flex-col gap-4">
+              <h3 class="font-medium">Prefer to do it by hand?</h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                The same steps as commands. Components are TypeScript with
+                <code class="font-mono text-[0.9em] whitespace-nowrap text-foreground">@app-mcp/kit</code>; use any framework you like.
+              </p>
+              <pre class="code"><code>$ <span class="k">npx @app-mcp/cli login</span>
+$ <span class="k">npx @app-mcp/cli init</span> my_poll
+$ cd my_poll &amp;&amp; npm install
+$ <span class="k">npm run dev</span>              # try it locally
+$ <span class="k">npm run app-mcp:publish</span>  # live in your workspace</code></pre>
+            </div>
+            <div class="flex flex-col gap-4">
+              <h3 class="font-medium">No code yet? Try the built-in forms and charts</h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Add app-mcp's connector in Claude (Settings → Connectors → Add custom connector), sign in, and ask it to open your
+                workspace. It shows your workspace's own address: add that as a second connector and ask for a form or a chart. Custom
+                connectors need a paid Claude plan or ChatGPT's developer mode.
+              </p>
+              <div class="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 p-3">
+                <code class="font-mono text-[13px] text-foreground">https://api.app-mcp.com/mcp</code>
+                <button class="btn btn-outline ml-auto" type="button" data-copy="https://api.app-mcp.com/mcp">Copy</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -88,7 +88,8 @@ export function enableCliLogin(
     if (c.req.header("origin") !== origin) return c.json({ error: "Cross-origin request" }, 403);
     const membership = await member(c.req.raw);
     if (!membership) return c.json({ error: "Sign in at /sign-in" }, 401);
-    if (membership.role !== "admin") return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
+    if (membership.role !== "admin")
+      return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
     const body = ApproveBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "This sign-in link is incomplete. Run app-mcp login again." }, 400);
     const { port, state, challenge, device } = body.data;
@@ -104,7 +105,8 @@ export function enableCliLogin(
   app.post("/cli/token", async (c) => {
     const body = TokenBody.safeParse(await c.req.json().catch(() => ({})));
     const code = body.success ? await verify(body.data.code) : undefined;
-    if (!body.success || !code || code.expires < Date.now()) return c.json({ error: "This sign-in expired. Run app-mcp login again." }, 400);
+    if (!body.success || !code || code.expires < Date.now())
+      return c.json({ error: "This sign-in expired. Run app-mcp login again." }, 400);
     const challenge = base64url(await crypto.subtle.digest("SHA-256", encoder.encode(body.data.verifier)));
     if (challenge !== code.challenge) return c.json({ error: "This sign-in was started by another app-mcp login." }, 400);
     try {

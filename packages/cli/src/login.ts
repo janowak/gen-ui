@@ -8,7 +8,10 @@ import type { Credential } from "./credentials.js";
 /** How long the person has to click Allow in the browser. */
 const WAIT_MS = 5 * 60 * 1000;
 
-const page = (title: string, text: string) => `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>${title} · app-mcp</title>
+const page = (
+  title: string,
+  text: string,
+) => `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>${title} · app-mcp</title>
 <style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;color-scheme:light dark}main{max-width:360px;padding:24px}h1{font-size:18px}</style>
 </head><body><main><h1>${title}</h1><p>${text}</p></main></body></html>`;
 
@@ -44,7 +47,9 @@ export async function login(url: string, options: { browser: boolean; log(line: 
     const server = createServer((req, res) => {
       const query = new URL(req.url ?? "/", "http://127.0.0.1").searchParams;
       if (!req.url?.startsWith("/callback") || query.get("state") !== state || !query.get("code")) {
-        res.writeHead(400, { "content-type": "text/html" }).end(page("Not connected", "This link isn't from the app-mcp login that is waiting."));
+        res
+          .writeHead(400, { "content-type": "text/html" })
+          .end(page("Not connected", "This link isn't from the app-mcp login that is waiting."));
         return;
       }
       res
@@ -52,7 +57,10 @@ export async function login(url: string, options: { browser: boolean; log(line: 
         .end(page("The CLI is connected", "You can close this tab and go back to your terminal."));
       finish(() => resolve(query.get("code")!));
     });
-    const timer = setTimeout(() => finish(() => reject(new Error("nobody allowed the sign-in within 5 minutes. Run app-mcp login again."))), WAIT_MS);
+    const timer = setTimeout(
+      () => finish(() => reject(new Error("nobody allowed the sign-in within 5 minutes. Run app-mcp login again."))),
+      WAIT_MS,
+    );
     const finish = (settle: () => void) => {
       clearTimeout(timer);
       server.close();

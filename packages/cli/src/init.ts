@@ -142,13 +142,55 @@ npm run dev        # props form, theme and mock tools in a local host
 npm run serve      # a local MCP with this component: http://localhost:4100/mcp
 \`\`\`
 
-Publish it to your workspace with a publish token (Workspace → Tokens in the app-mcp connector):
+Publish it to your workspace. Sign in once through the browser, then publish:
 
 \`\`\`bash
-APP_MCP_TOKEN=<publish token> npm run app-mcp:publish
+npx app-mcp login
+npm run app-mcp:publish
 \`\`\`
 
+In CI, set \`APP_MCP_TOKEN\` to a publish token instead (\`npx app-mcp token publish ci\`).
+
 Your workspace's MCP then offers \`render_${name}\`. The registry versions it: a changed build gets the next patch, an unchanged one is a no-op. To manage versions yourself, set \`version\` in \`src/component.ts\`.
+
+Working with an AI coding agent? It reads \`AGENTS.md\`.
+`,
+  "AGENTS.md": `# ${name}: an app-mcp component
+
+This directory is one app-mcp component: a small web view that an AI chat (Claude, ChatGPT) shows when the model calls the tool \`render_${name}\`. For setting up a whole project (sign-in, connecting an MCP server, workflows), run \`npx app-mcp guide\` and follow it.
+
+## Files
+
+- \`src/component.ts\`: what the model sees. \`name\`, \`title\`, \`description\` (when to use it), \`props\` (a Zod schema; each \`.describe()\` is read by the model) and optionally \`tools: ["tool_name"]\`, the company's MCP tools the view calls.
+- \`src/main.ts\`: \`mount(component, render)\`. \`render(ctx)\` runs on every change.
+- \`index.html\`: the markup and styles. Everything is built into one HTML file; don't load scripts, styles or fonts from other hosts.
+
+## The render context
+
+- \`ctx.status\`: \`waiting\`, \`streaming\`, \`ready\`, \`error\` or \`cancelled\`. Render something for each; props are complete only when \`ready\`.
+- \`ctx.props\`: the validated props once ready. \`ctx.partial\`: incomplete props while the model is still writing them, for a preview.
+- \`ctx.tools.call(name, args)\`: calls a declared tool on the company's server and returns \`{ ok, data }\`. It returns \`{ ok: false, unavailable: true }\` where there are no data tools (the hosted connector, registry previews), so handle that.
+- \`ctx.model.send(text)\`: posts a message as the user. \`ctx.model.update(text)\`: adds context for the model's next turn.
+- \`ctx.useState(initial)\`: state kept per rendered message, as \`[value, setValue, { restored }]\`. Wait for \`restored\` before acting on it.
+- Host colors and fonts arrive as CSS variables (\`--color-*\`, \`--font-*\`), the workspace theme as \`--app-mcp-primary\`, \`--app-mcp-accent\` and \`--app-mcp-radius\`. Use them with fallbacks so the view matches the chat in light and dark.
+- React: use \`useViewState\` from \`@app-mcp/kit/react\` for the same saved state.
+
+## Check your work
+
+\`\`\`bash
+npm run build   # type-checks, validates the component, writes dist/
+\`\`\`
+
+Fix every error before publishing. You can't see the view from a terminal: tell the person to run \`npm run dev\`, which opens a local host with a props form, theme and mock tools. \`npm run serve\` runs a local MCP with the component at http://localhost:4100/mcp.
+
+## Publish
+
+\`\`\`bash
+npx app-mcp whoami        # signed in? if not: npx app-mcp login (the person clicks Allow in the browser)
+npm run app-mcp:publish   # builds and publishes to prod; --env <name> for another environment
+\`\`\`
+
+Never ask the person to paste a token into the chat. Workflows (playbooks for the model) go next to the component as \`<name>.workflow.md\` and are published with it.
 `,
 });
 

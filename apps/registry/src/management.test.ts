@@ -16,6 +16,7 @@ let store: Store;
 let clientId: string;
 let workspaceId: string;
 let db: Database;
+let ownerCookie: string;
 const redirectUri = "http://127.0.0.1:9/callback";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
@@ -130,7 +131,7 @@ beforeAll(async () => {
   );
 
   // Stand-in for Claude's Client ID Metadata Document: a public client registered for the test.
-  const owner = await signUp("owner@acme.test");
+  const owner = (ownerCookie = await signUp("owner@acme.test"));
   const res = await fetch(`${base}/api/auth/oauth2/create-client`, {
     method: "POST",
     headers: { cookie: owner, "content-type": "application/json", origin: base },
@@ -544,5 +545,89 @@ describe("web console", () => {
     expect(names).not.toContain("list_tokens");
     const workspace = await web.callTool({ name: "show_workspace", arguments: {} });
     expect(workspace.structuredContent).toMatchObject({ role: "member", workspace: { name: "acme" } });
+  });
+});
+
+describe("app-mcp login", () => {
+  const verifier = randomBytes(32).toString("base64url");
+  const request = {
+    port: 51234,
+    state: randomBytes(16).toString("base64url"),
+    challenge: createHash("sha256").update(verifier).digest("base64url"),
+    device: "test-laptop",
+  };
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const approve = async (cookie: string, body: unknown = request) => post("/cli/approve", body, { cookie, origin: base });
+  const codeFrom = async (res: Response) => new URL(((await res.json()) as { url: string }).url).searchParams.get("code")!;
+
+  // The owner joins the workspace on their first visit; make them an admin whoever joined first.
+  beforeAll(async () => {
+    await fetch(`${base}/cli/workspace`, { headers: { cookie: ownerCookie } });
+    await store.setRole(workspaceId, (await store.memberByEmail(workspaceId, "owner@acme.test")).userId, "admin");
+  });
+
+  it("sends a signed-out person to sign in and back", async () => {
+    const res = await fetch(`${base}/cli?port=51234&state=x`, { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`/sign-in?next=${encodeURIComponent("/cli?port=51234&state=x")}`);
+    const back = await fetch(`${base}${res.headers.get("location")}`, { headers: { cookie: ownerCookie }, redirect: "manual" });
+    expect(back.headers.get("location")).toBe("/cli?port=51234&state=x");
+    const elsewhere = await fetch(`${base}/sign-in?next=${encodeURIComponent("https://evil.test")}`, {
+      headers: { cookie: ownerCookie },
+      redirect: "manual",
+    });
+    expect(elsewhere.headers.get("location")).toBe("/manage");
+    expect((await fetch(`${base}/cli?port=51234`, { headers: { cookie: ownerCookie } })).status).toBe(200);
+  });
+
+  it("gives the CLI an admin token once an admin allows it", async () => {
+    const approved = await approve(ownerCookie);
+    expect(approved.status).toBe(200);
+    const { url } = (await approved.clone().json()) as { url: string };
+    const callback = new URL(url);
+    expect(callback.origin).toBe("http://127.0.0.1:51234");
+    expect(callback.searchParams.get("state")).toBe(request.state);
+    const code = await codeFrom(approved);
+
+    // Until the CLI trades the code, the token authenticates nothing.
+    expect((await store.listTokens(workspaceId)).find((t) => t.name === "CLI on test-laptop")).toMatchObject({
+      scope: "admin",
+      revealed: false,
+    });
+
+    const traded = await post("/cli/token", { code, verifier });
+    expect(traded.status).toBe(200);
+    const body = (await traded.json()) as { token: string; workspace: { id: string; name: string }; mcp: string };
+    expect(body).toMatchObject({ workspace: { id: workspaceId, name: "acme" }, mcp: `${base}/w/${workspaceId}/mcp` });
+
+    const whoami = await fetch(`${base}/v1/whoami`, { headers: { authorization: `Bearer ${body.token}` } });
+    expect(await whoami.json()).toEqual({ workspace: { id: workspaceId, name: "acme" }, scope: "admin", path: `/w/${workspaceId}/mcp` });
+
+    // A code works once.
+    expect((await post("/cli/token", { code, verifier })).status).toBe(400);
+
+    // Logout: the token ends itself.
+    const revoke = () => fetch(`${base}/v1/tokens/current`, { method: "DELETE", headers: { authorization: `Bearer ${body.token}` } });
+    expect((await revoke()).status).toBe(200);
+    expect((await revoke()).status).toBe(401);
+  });
+
+  it("refuses a code without the verifier that started it, or a changed one", async () => {
+    const code = await codeFrom(await approve(ownerCookie));
+    expect((await post("/cli/token", { code, verifier: randomBytes(32).toString("base64url") })).status).toBe(400);
+    expect((await post("/cli/token", { code: `${code.slice(0, -2)}AA`, verifier })).status).toBe(400);
+    expect((await post("/cli/token", { code: "nonsense", verifier })).status).toBe(400);
+    expect((await post("/cli/token", { code, verifier })).status).toBe(200);
+  });
+
+  it("only lets a signed-in admin allow it, from the registry's own page", async () => {
+    expect((await post("/cli/approve", request, { origin: base })).status).toBe(401);
+    expect((await post("/cli/approve", request, { cookie: ownerCookie, origin: "https://evil.test" })).status).toBe(403);
+    expect((await approve(await signUp("kim@acme.test"))).status).toBe(403);
+    expect((await approve(ownerCookie, { ...request, port: 80 })).status).toBe(400);
+    expect((await approve(ownerCookie, { ...request, challenge: "short" })).status).toBe(400);
+    const context = await fetch(`${base}/cli/workspace`, { headers: { cookie: ownerCookie } });
+    expect(await context.json()).toEqual({ workspace: "acme", admin: true });
   });
 });

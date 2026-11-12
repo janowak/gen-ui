@@ -16,7 +16,8 @@
     "app-mcp": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "guide.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",

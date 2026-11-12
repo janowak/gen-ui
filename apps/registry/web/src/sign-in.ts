@@ -28,7 +28,10 @@ providers.style.cssText = "display:flex;flex-direction:column;gap:8px";
 
 /** In an OAuth flow the provider's callback resumes it; otherwise it lands on the console. */
 const social = (provider: string) =>
-  authClient.signIn.social({ provider: provider as "github", ...(oauth ? {} : { callbackURL: CONSOLE, errorCallbackURL: cli ? `/sign-in?next=${encodeURIComponent(next!)}` : "/sign-in" }) });
+  authClient.signIn.social({
+    provider: provider as "github",
+    ...(oauth ? {} : { callbackURL: CONSOLE, errorCallbackURL: cli ? `/sign-in?next=${encodeURIComponent(next!)}` : "/sign-in" }),
+  });
 
 function providerButton(label: string, start: () => Promise<{ data: unknown; error: { message?: string } | null }>) {
   const button = document.createElement("button");
