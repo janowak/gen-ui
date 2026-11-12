@@ -3,6 +3,7 @@ import type { StaticAssetStore } from "./static-assets.js";
 import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
 import manage from "../dist-web/manage.html";
+import cli from "../dist-web/cli.html";
 import { createRegistryApp, type Refresher } from "./app.js";
 import { authConfigFromEnv, type MetadataFetch } from "./auth.js";
 import { d1Database, type D1Binding } from "./db-d1.js";
@@ -22,7 +23,7 @@ interface Env {
 
 const assets: Assets = {
   ...JSON.parse(hostedViewManifest),
-  pages: { "sign-in": signIn, consent, manage },
+  pages: { "sign-in": signIn, consent, manage, cli },
 };
 
 /**

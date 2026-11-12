@@ -16,7 +16,7 @@
     "test": "vitest run && APP_MCP_TEST_DB=d1 vitest run",
     "start": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx src/main.ts",
     "seed": "node --env-file-if-exists=../../.env.local --env-file-if-exists=../../.env.worktree --disable-warning=ExperimentalWarning --import tsx scripts/seed.ts",
-    "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web && INPUT=manage.html vite build web",
+    "build:web": "INPUT=sign-in.html vite build web && INPUT=consent.html vite build web && INPUT=manage.html vite build web && INPUT=cli.html vite build web",
     "auth-schema": "node --disable-warning=ExperimentalWarning --import tsx scripts/auth-schema.ts",
     "dev:assets": "wrangler dev --config wrangler.assets.jsonc --port 8789 --host localhost:8789",
     "dev:worker": "wrangler d1 migrations apply app-mcp --local && wrangler dev",

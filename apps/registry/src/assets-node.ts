@@ -12,15 +12,16 @@ export function loadAssets(): Promise<Assets> {
     const view = (name: string) => readFile(require.resolve(`@app-mcp/ui/views/${name}.html`), "utf8");
     const page = (name: string) => readFile(new URL(`../dist-web/${name}.html`, import.meta.url), "utf8");
     const names = ["form", "chart", ...MANAGEMENT_VIEWS] as const;
-    const [views, signIn, consent, manage] = await Promise.all([
+    const [views, signIn, consent, manage, cli] = await Promise.all([
       Promise.all(names.map(view)),
       page("sign-in"),
       page("consent"),
       page("manage"),
+      page("cli"),
     ]);
     return {
       views: Object.fromEntries(names.map((name, i) => [name, views[i]!])) as Assets["views"],
-      pages: { "sign-in": signIn, consent, manage },
+      pages: { "sign-in": signIn, consent, manage, cli },
     };
   })();
   return loaded;

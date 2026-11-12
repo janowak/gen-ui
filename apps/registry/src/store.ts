@@ -54,6 +54,7 @@ export interface InviteSummary {
 }
 
 export interface TokenInfo {
+  id: string;
   workspaceId: string;
   scope: Scope;
   /** Environments a publish token may publish to; null means all. */
@@ -393,12 +394,13 @@ export class Store {
   }
 
   async resolveToken(token: string): Promise<TokenInfo | undefined> {
-    const row = await this.db.get<{ workspace_id: string; scope: Scope; environments: string | null }>(
-      "SELECT workspace_id, scope, environments FROM tokens WHERE hash = ?",
+    const row = await this.db.get<{ id: string; workspace_id: string; scope: Scope; environments: string | null }>(
+      "SELECT id, workspace_id, scope, environments FROM tokens WHERE hash = ?",
       sha256(token),
     );
     return (
       row && {
+        id: row.id,
         workspaceId: row.workspace_id,
         scope: row.scope,
         environments: row.environments ? (JSON.parse(row.environments) as string[]) : null,

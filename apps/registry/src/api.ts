@@ -86,6 +86,18 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
       throw new RegistryError(403, `This token can't publish to ${environment} (allowed: ${allowed.join(", ")})`);
   }
 
+  // Who a token is: `app-mcp whoami`, and how an agent checks it is signed in before it starts.
+  api.get("/whoami", anyToken(), async (c) => {
+    const { workspaceId, scope, environments } = c.get("caller");
+    const workspace = await store.workspace(workspaceId);
+    return c.json({
+      workspace: { id: workspaceId, name: workspace?.name ?? workspaceId },
+      scope,
+      ...(environments ? { environments } : {}),
+      path: endUserPath(workspaceId, DEFAULT_ENVIRONMENT),
+    });
+  });
+
   api.get("/components", anyToken(), async (c) => c.json({ components: await store.listComponents(ws(c)) }));
 
   // CI: publish an immutable version and point an environment (default prod) at it, older versions included.
@@ -243,6 +255,12 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
       { token: await store.createToken(ws(c), scope, name, environments), scope, ...(environments ? { environments } : {}) },
       201,
     );
+  });
+
+  // `app-mcp logout`: a token ends itself, so a signed-out machine leaves nothing that still works.
+  api.delete("/tokens/current", anyToken(), async (c) => {
+    await store.revokeToken(ws(c), c.get("caller").id);
+    return c.json({ revoked: true });
   });
 
   api.onError((error, c) => {

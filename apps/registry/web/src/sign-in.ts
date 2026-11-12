@@ -13,8 +13,11 @@ const fail = (message?: string) => (error.textContent = message ?? "Sign-in fail
 
 // An AI assistant's OAuth flow brings a signed query; without one, this is a sign-in to the web console.
 const oauth = new URLSearchParams(location.search).has("sig");
-const CONSOLE = "/manage";
-if (!oauth) $<HTMLParagraphElement>("lead").textContent = "to manage your workspace.";
+// `app-mcp login` sends people here with ?next=/cli?…; anything else lands on the console.
+const next = new URLSearchParams(location.search).get("next");
+const cli = Boolean(next?.startsWith("/cli?"));
+const CONSOLE = cli ? next! : "/manage";
+if (!oauth) $<HTMLParagraphElement>("lead").textContent = cli ? "to connect the app-mcp CLI." : "to manage your workspace.";
 // A failed social sign-in comes back with ?error=.
 const returned = new URLSearchParams(location.search).get("error");
 if (returned) fail(returned.replaceAll("_", " "));
@@ -25,7 +28,7 @@ providers.style.cssText = "display:flex;flex-direction:column;gap:8px";
 
 /** In an OAuth flow the provider's callback resumes it; otherwise it lands on the console. */
 const social = (provider: string) =>
-  authClient.signIn.social({ provider: provider as "github", ...(oauth ? {} : { callbackURL: CONSOLE, errorCallbackURL: "/sign-in" }) });
+  authClient.signIn.social({ provider: provider as "github", ...(oauth ? {} : { callbackURL: CONSOLE, errorCallbackURL: cli ? `/sign-in?next=${encodeURIComponent(next!)}` : "/sign-in" }) });
 
 function providerButton(label: string, start: () => Promise<{ data: unknown; error: { message?: string } | null }>) {
   const button = document.createElement("button");

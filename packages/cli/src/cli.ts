@@ -7,7 +7,9 @@ import { parseArgs } from "node:util";
 import { Branding, DEFAULT_ENVIRONMENT, EnvironmentName, MAX_ENVIRONMENT_INSTRUCTIONS, Theme, type Workflow } from "@app-mcp/format";
 import { readComponentDir, readWorkflowDir, readWorkflowFile, type ComponentDir, type WorkflowFile } from "@app-mcp/runtime/local";
 import type { ServeOptions } from "@app-mcp/runtime/serve";
+import { credentialsFile, readCredential, removeCredential, saveCredential } from "./credentials.js";
 import { init } from "./init.js";
+import { login } from "./login.js";
 
 /** app-mcp cloud. Self-hosted registries pass --url or APP_MCP_URL. */
 const DEFAULT_URL = "https://api.app-mcp.com";
@@ -15,6 +17,10 @@ const DEFAULT_URL = "https://api.app-mcp.com";
 const USAGE = `app-mcp <command> [options]
 
 Commands:
+  guide                             How to set app-mcp up in a project, written for AI coding agents
+  login [--no-browser]              Sign in through the browser; an admin clicks Allow, no token to copy
+  logout                            Sign out and revoke the token login was given
+  whoami                            The workspace you are signed in to, its admin link and end-user MCP
   init [dir] [--name n]             Start a new component in dir (default .), ready for dev and publish
   dev [dir] [--port n]              Develop the component in dir (default .) in a local host; no registry needed
   serve [dirs...]                   A local app-mcp MCP with these components and their workflows (default .
@@ -38,12 +44,13 @@ Commands:
 
 Options:
   --url <url>      Registry URL     (env APP_MCP_URL, default ${DEFAULT_URL})
-  --token <token>  Registry token   (env APP_MCP_TOKEN)
+  --token <token>  Registry token   (env APP_MCP_TOKEN; default: the one from app-mcp login)
   --env <name>     Environment for publish, theme, workflow and instructions (env APP_MCP_ENV, default prod)
-  --json           Print the registry's response as JSON (publish, list, env list)
+  --json           Print the registry's response as JSON (publish, list, env list, whoami)
 
-Token scopes: server reads (SDK); publish publishes to any environment, or with --env only to
-those (CI); admin does everything.
+Sign in with app-mcp login on your own machine; it keeps an admin token in ~/.config/app-mcp. CI and
+servers use tokens instead: server reads (SDK); publish publishes to any environment, or with --env
+only to those (CI); admin does everything.
 
 An environment serves exactly what was last published to it, so publishing an older version
 moves it back. Re-publishing the same version with the same bundle is a no-op, so CI jobs can be
@@ -87,6 +94,7 @@ const { values, positionals } = parseArgs({
     stdio: { type: "boolean" },
     suffix: { type: "string" },
     "no-build": { type: "boolean" },
+    "no-browser": { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -102,15 +110,24 @@ if (!command || values.help) {
   process.exit(command ? 0 : 1);
 }
 
+const registryUrl = () => (values.url ?? (process.env.APP_MCP_URL || DEFAULT_URL)).replace(/\/$/, "");
+
 // Only registry commands need these: `app-mcp dev` runs without a registry.
+// --token, then APP_MCP_TOKEN (CI), then what `app-mcp login` saved for this registry.
 function registry() {
-  const url = (values.url ?? (process.env.APP_MCP_URL || DEFAULT_URL)).replace(/\/$/, "");
+  const url = registryUrl();
   const token =
     values.token ??
-    process.env.APP_MCP_TOKEN ??
-    fail("missing --token or APP_MCP_TOKEN: create one in the app-mcp connector, under Workspace → Tokens");
+    (process.env.APP_MCP_TOKEN ||
+      readCredential(url)?.token ||
+      fail(`not signed in to ${url}. Run: app-mcp login   (in CI, set APP_MCP_TOKEN to a publish token)`));
   return { url, token };
 }
+
+/** The two addresses a workspace is reached at: where its admins manage it, and what its end users add. */
+const links = (url: string, mcp: string) =>
+  `  Manage it (admins):         ${url}/manage   (as a connector in Claude or ChatGPT: ${url}/mcp)\n` +
+  `  Your users add (connector): ${mcp}`;
 
 async function api<T = Record<string, unknown>>(method: string, path: string, body?: unknown): Promise<T> {
   const { url, token } = registry();
@@ -321,6 +338,48 @@ async function serve(dirs: string[]) {
 }
 
 switch (command) {
+  case "guide":
+    console.log((await readFile(new URL("../guide.md", import.meta.url), "utf8")).trim());
+    break;
+  case "login": {
+    const url = registryUrl();
+    const { mcp, ...credential } = await login(url, { browser: !values["no-browser"], log: (line) => console.error(line) }).catch(
+      (error: Error) => fail(`sign-in failed: ${(error.cause as Error | undefined)?.message || error.message}`),
+    );
+    saveCredential(url, credential);
+    console.log(
+      `Signed in to the ${credential.workspace.name} workspace as an admin. The token is saved in ${credentialsFile()}.\n\n${links(url, mcp)}`,
+    );
+    break;
+  }
+  case "logout": {
+    const url = registryUrl();
+    const saved = readCredential(url) ?? fail(`not signed in to ${url}`);
+    // Revoke first, so a signed-out machine leaves no working token behind. An already revoked one answers 401.
+    const res = await fetch(`${url}/v1/tokens/current`, { method: "DELETE", headers: { authorization: `Bearer ${saved.token}` } }).catch(
+      () => undefined,
+    );
+    removeCredential(url);
+    console.log(
+      res?.ok || res?.status === 401
+        ? `Signed out of ${saved.workspace.name} and revoked its token.`
+        : `Signed out of ${saved.workspace.name}. The registry couldn't be reached to revoke the token: revoke it under Tokens at ${url}/manage.`,
+    );
+    break;
+  }
+  case "whoami": {
+    const { url } = registry();
+    const me = await api<{ workspace: { id: string; name: string }; scope: string; environments?: string[]; path: string }>(
+      "GET",
+      "/v1/whoami",
+    );
+    const limited = me.environments ? `, limited to ${me.environments.join(", ")}` : "";
+    print(
+      { ...me, url, manage: `${url}/manage`, connector: `${url}/mcp`, mcp: `${url}${me.path}` },
+      `Signed in to the ${me.workspace.name} workspace at ${url} with ${me.scope === "admin" ? "an" : "a"} ${me.scope} token${limited}.\n\n${links(url, `${url}${me.path}`)}`,
+    );
+    break;
+  }
   case "init": {
     const dir = args[0] ?? ".";
     const name = await init(dir, values.name).catch((error: Error) => fail(error.message));
@@ -328,8 +387,11 @@ switch (command) {
     console.log(`Created the ${name} component in ${resolve(dir)}.
 
   ${cd}npm install
-  npm run dev                                       # try it in a local host
-  APP_MCP_TOKEN=<publish token> npm run app-mcp:publish  # publish it to your workspace`);
+  npm run dev              # try it in a local host
+  npx app-mcp login        # once: sign in through the browser
+  npm run app-mcp:publish  # publish it to your workspace
+
+AGENTS.md in it tells an AI coding agent how to work on the component.`);
     break;
   }
   case "dev":

@@ -13,8 +13,8 @@ export interface Assets {
   views: Record<ViewName | ManagementViewName, string>;
   /** Immutable CSP metadata for views externalized by the registry. */
   viewMetadata?: Partial<Record<ViewName | ManagementViewName, UiDocument["_meta"]>>;
-  /** Sign-in, consent and the web console, built from web/ into dist-web/. */
-  pages: Record<"sign-in" | "consent" | "manage", string>;
+  /** Sign-in, consent, the web console and the CLI's sign-in page, built from web/ into dist-web/. */
+  pages: Record<"sign-in" | "consent" | "manage" | "cli", string>;
 }
 
 const hashed = new WeakMap<Assets, Record<ViewName, ViewBundle>>();

@@ -3,6 +3,7 @@ import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } fr
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
+import { enableCliLogin, isCliPath } from "./cli-login.js";
 import { createAuth, resolveMembership, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
 import type { Database } from "./db.js";
 import { createRegistryMcp } from "./mcp.js";
@@ -19,7 +20,8 @@ export interface ManagementRuntime {
  * Management in chat: better-auth (OAuth for MCP clients, sign-in, consent) plus the
  * registry MCP at /mcp. Tokens are bound to `${baseURL}/mcp`; the person's role is read
  * from the database on every request, so role changes apply immediately.
- * The web console at /manage serves the same MCP and views to a browser signed in with a session.
+ * The web console at /manage serves the same MCP and views to a browser signed in with a session,
+ * and /cli signs the app-mcp CLI in from that session.
  */
 export function enableManagement(
   app: Hono,
@@ -65,11 +67,15 @@ export function enableManagement(
   // Sign-in and consent pages (better-auth's client resumes the OAuth flow from them). A sign-in that
   // isn't part of an OAuth flow (no signed query) is for the web console, so a session goes straight there.
   app.get("/sign-in", async (c) => {
-    if (!c.req.query("sig") && (await session(c.req.raw))) return c.redirect("/manage");
+    const next = c.req.query("next");
+    if (!c.req.query("sig") && (await session(c.req.raw))) return c.redirect(isCliPath(next) ? next : "/manage");
     return c.html(assets.pages["sign-in"]);
   });
   app.get("/consent", (c) => c.html(assets.pages.consent));
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
+
+  // `app-mcp login`: an admin allows the CLI from the browser and it gets a token, with no secret to copy.
+  enableCliLogin(app, store, config, assets.pages.cli, session);
 
   // The verified membership travels in authInfo.extra; the handler never reads it from headers.
   // A switch of environment changes the preview tools: open listen streams re-list.
