@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/kit",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Build app-mcp components for MCP Apps hosts like Claude and ChatGPT",
   "type": "module",
   "license": "MIT",

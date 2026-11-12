@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/host",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Embed your MCP tools and interactive app-mcp views in your own application",
   "type": "module",
   "license": "MIT",

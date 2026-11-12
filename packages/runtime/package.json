@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/runtime",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "app-mcp end-user tools on an MCP server: forms, charts, your components and workflows",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",

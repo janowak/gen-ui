@@ -1,6 +1,6 @@
 {
   "name": "@app-mcp/format",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Schemas for app-mcp forms, charts, workflows, themes and component manifests",
   "type": "module",
   "license": "MIT",
