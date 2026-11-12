@@ -103,6 +103,8 @@ const values: Record<string, string> = {
   APP_MCP_PUBLIC_URL: registryUrl,
   APP_MCP_URL: registryUrl,
   APP_MCP_PASSWORD_LOGIN: "true",
+  // Its own session cookie: cookies on localhost ignore the port, so checkouts would sign each other out.
+  APP_MCP_AUTH_COOKIE_PREFIX: `app-mcp-local-wt${slot}`,
 };
 // Shared values come from .env.local; made up here only when it has none.
 const own = (key: string, make: () => string) => {

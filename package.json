@@ -11,6 +11,7 @@
     "format": "oxfmt",
     "check": "oxfmt --check && oxlint --deny-warnings",
     "dev:setup": "node scripts/dev-setup.ts",
+    "dev:tunnel": "cloudflared tunnel run --url http://localhost:4000 50c4b037-363b-413c-9f60-99749a244e35",
     "app-mcp": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.worktree packages/cli/dist/cli.js",
     "deploy:site": "pnpm --filter @app-mcp/site run deploy",
     "deploy:registry": "pnpm --filter @app-mcp/registry run deploy",

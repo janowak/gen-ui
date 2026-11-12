@@ -6,5 +6,5 @@ import { setupDemo } from "./demo";
 import { setupThemeToggle } from "./theme";
 
 setupThemeToggle(document.querySelector("[data-theme-toggle]")!);
-setupDemo(document.getElementById("demo")!);
+setupDemo(document.getElementById("demos")!);
 setupCopy(document);

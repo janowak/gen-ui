@@ -111,6 +111,39 @@
   opacity: 0.5;
 }
 
+/* Chart demo: bars grow in one after another once the chart is in. */
+.demo .bar {
+  @apply relative flex-1 rounded-t-sm bg-foreground/15;
+  transform-origin: bottom;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 70ms);
+}
+
+.demo .bar-current {
+  @apply bg-primary;
+}
+
+.demo .bar span {
+  @apply absolute inset-x-0 -top-5 text-center text-[10px] font-medium tabular-nums;
+  transition: opacity 0.3s ease-out 0.9s;
+}
+
+.motion .demo [data-bars]:not(.is-in) .bar {
+  transform: scaleY(0);
+}
+
+.motion .demo [data-bars]:not(.is-in) .bar span {
+  opacity: 0;
+}
+
+/* Hero example switcher */
+.demo-tab {
+  @apply rounded-md px-3 py-1 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none;
+}
+
+.demo-tab[aria-pressed="true"] {
+  @apply bg-background text-foreground shadow-sm dark:bg-input/50;
+}
+
 /* Data flow diagram */
 .flow {
   display: grid;

@@ -42,6 +42,14 @@
       "port": 4000
     },
     {
+      "name": "tunnel",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:tunnel"
+      ],
+      "url": "https://api-dev.app-mcp.com"
+    },
+    {
       "name": "site",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

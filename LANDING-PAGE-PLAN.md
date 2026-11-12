@@ -3,7 +3,7 @@
 Rework `apps/site/index.html` so the page tells one story: **you can add your own components to the chat, shaped around your own flows, and your customers use them.** The SDK proxy and self-hosting stay on the page, but as later steps for teams that need them, not as the first thing people read.
 
 **Status (2026-10-26)**
-- Done (2026-10-26). Open questions settled: option (c) with a softer demo caption, early-access wording kept, H1 "Your flows, in the chat.". Follow-up: regenerate `public/og.png` (still shows the old tagline; its `og:image:alt` is left matching it).
+- Done (2026-10-26). Open questions settled: option (c) with a softer demo caption, early-access wording kept, H1 "Your flows, in the chat." (changed 2026-11-09 to "Your UX, inside Claude and ChatGPT."). Follow-up: regenerate `public/og.png` (still shows the old tagline; its `og:image:alt` is left matching it).
 - Changed from §3.2 on review: the main path doesn't assume staging. Using environments is up to each team, so the steps say "publish, connect, try it, share the address", and environments are one row under *What you can build*. The "Staging next to prod" block is gone.
 - Copy and layout only. No new build steps, scripts or dependencies. `src/demo.ts` changes only if the hero demo changes (§3.1).
 
@@ -38,7 +38,7 @@ One visual rule makes the order clear: sections 4 and 5 are presented as levels 
 ### 3.1 Hero
 
 - **H1, one of:**
-  - "Your flows, in the chat."
+  - "Your UX, inside Claude and ChatGPT." (live since 2026-11-09; replaced "Your flows, in the chat.")
   - "Give your customers UX that fits the job, inside Claude and ChatGPT."
   - "Components for your use cases, in every AI chat."
 - **Sub:** Build the components your customers' flows need, publish them to app-mcp, and they show up in Claude, ChatGPT and other MCP Apps hosts. No MCP server needed to start.

@@ -33,6 +33,12 @@ export interface AuthConfig {
    * Metadata Documents. Enable for local development or clients that only support DCR.
    */
   dynamicRegistration?: boolean;
+  /**
+   * Prefix for better-auth's cookie names. Browsers scope cookies by host, not port, so every registry on
+   * localhost (main checkout, worktrees, other projects) would otherwise share one session cookie and sign
+   * each other out. Unset elsewhere: deployed registries keep better-auth's names, and renaming them logs everyone out.
+   */
+  cookiePrefix?: string;
 }
 
 export const SSO_PROVIDER_ID = "sso";
@@ -53,8 +59,11 @@ export function authConfigFromEnv(env: Record<string, string | undefined>): Auth
       .filter(Boolean);
   const secret = env.APP_MCP_AUTH_SECRET ?? env.BETTER_AUTH_SECRET;
   if (!secret) console.warn("[app-mcp] APP_MCP_AUTH_SECRET is not set; using a random secret (sessions reset on restart).");
+  const baseURL = (env.APP_MCP_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`).replace(/\/$/, "");
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(new URL(baseURL).hostname);
   return {
-    baseURL: (env.APP_MCP_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`).replace(/\/$/, ""),
+    baseURL,
+    cookiePrefix: env.APP_MCP_AUTH_COOKIE_PREFIX || (local ? "app-mcp-local" : undefined),
     secret: secret ?? randomBytes(32).toString("hex"),
     mode: env.APP_MCP_MODE === "hosted" ? "hosted" : "self-hosted",
     adminEmails: emails(env.APP_MCP_ADMIN_EMAILS),
@@ -93,6 +102,7 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
     baseURL: config.baseURL,
     basePath: "/api/auth",
     secret: config.secret,
+    ...(config.cookiePrefix ? { advanced: { cookiePrefix: config.cookiePrefix } } : {}),
     // node:sqlite's DatabaseSync or the D1 binding: better-auth has a dialect for each.
     database: db.auth as BetterAuthOptions["database"],
     emailAndPassword: { enabled: config.password },
