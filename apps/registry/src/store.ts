@@ -41,6 +41,40 @@ export interface TokenSummary {
   revealed: boolean;
 }
 
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  role: Role;
+  /** The one the web console shows and the CLI and connector pages preselect. */
+  active: boolean;
+}
+
+/** Who signed in, as membership decisions need it. */
+export interface SignedInUser {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  name?: string;
+}
+
+export interface MembershipOptions {
+  mode: "hosted" | "self-hosted";
+  adminEmails: string[];
+  allowedEmails?: string[];
+}
+
+/**
+ * The sign-up gate: whether the person may get a workspace of their own. With `allowedEmails` set, only
+ * listed verified emails (or `@domain` entries) and admin emails pass; without it, everyone.
+ */
+function passesSignUpGate(user: SignedInUser, options: MembershipOptions): boolean {
+  const allowed = options.allowedEmails ?? [];
+  if (allowed.length === 0) return true;
+  if (!user.emailVerified) return false;
+  const email = user.email.toLowerCase();
+  return allowed.includes(email) || allowed.includes(email.slice(email.lastIndexOf("@"))) || options.adminEmails.includes(email);
+}
+
 export interface MemberSummary {
   userId: string;
   name: string | null;
@@ -87,6 +121,11 @@ export function sniffIcon(bytes: Uint8Array): IconType | undefined {
 }
 
 const now = () => new Date().toISOString();
+
+/** A person's memberships, the active one first: the highest rank, else the one joined last. */
+const ACTIVE_FIRST = "m.active_rank DESC, m.created_at DESC";
+/** One more than the person's (`user`, a SQL parameter) highest rank: what makes a membership the active one. */
+const nextRank = (user: string) => `(SELECT COALESCE(MAX(active_rank), 0) + 1 FROM members WHERE user_id = ${user})`;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 const newSecret = (scope: Scope) => `gnu_${scope}_${randomBytes(24).toString("base64url")}`;
 
@@ -504,7 +543,10 @@ export class Store {
 
   // Members (people managing a workspace through the registry MCP)
 
-  /** Without a workspace: the one the person joined last, so an accepted invite wins over a personal workspace. */
+  /**
+   * Without a workspace: the person's active one, the one they joined or switched to last, so an accepted
+   * invite or a new workspace wins.
+   */
   async membership(userId: string, workspaceId?: string): Promise<Membership | undefined> {
     // A deleted active environment falls back to prod.
     const select = `SELECT m.workspace_id, m.role, e.name AS environment FROM members m
@@ -512,8 +554,50 @@ export class Store {
     type Row = { workspace_id: string; role: Role; environment: string | null };
     const row = workspaceId
       ? await this.db.get<Row>(`${select} AND m.workspace_id = ?`, userId, workspaceId)
-      : await this.db.get<Row>(`${select} ORDER BY m.created_at DESC LIMIT 1`, userId);
+      : await this.db.get<Row>(`${select} ORDER BY ${ACTIVE_FIRST} LIMIT 1`, userId);
     return row && { workspaceId: row.workspace_id, userId, role: row.role, environment: row.environment ?? DEFAULT_ENVIRONMENT };
+  }
+
+  /** A signed-in person's account, as better-auth keeps it. */
+  async user(userId: string): Promise<SignedInUser | undefined> {
+    const row = await this.db.get<{ id: string; email: string; emailVerified: number; name: string | null }>(
+      'SELECT id, email, "emailVerified", name FROM "user" WHERE id = ?',
+      userId,
+    );
+    return row && { id: row.id, email: row.email, emailVerified: Boolean(row.emailVerified), name: row.name ?? undefined };
+  }
+
+  /** Every workspace the person is in, the active one first. */
+  async listWorkspaces(userId: string): Promise<WorkspaceSummary[]> {
+    const rows = await this.db.all<{ id: string; name: string; role: Role }>(
+      `SELECT w.id, w.name, m.role FROM members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? ORDER BY ${ACTIVE_FIRST}`,
+      userId,
+    );
+    return rows.map((row, i) => ({ ...row, active: i === 0 }));
+  }
+
+  /** Makes one of the person's workspaces the active one. */
+  async switchWorkspace(userId: string, workspaceId: string): Promise<Membership> {
+    const { changes } = await this.db.run(
+      `UPDATE members SET active_rank = ${nextRank("?1")} WHERE workspace_id = ?2 AND user_id = ?1`,
+      userId,
+      workspaceId,
+    );
+    if (!changes) throw new RegistryError(404, "You aren't a member of that workspace.");
+    return (await this.membership(userId, workspaceId))!;
+  }
+
+  /**
+   * A new workspace the person makes for themselves, with them as its admin; it becomes their active one.
+   * Hosted only (a self-hosted registry has one workspace), and the sign-up gate decides who may.
+   */
+  async createOwnWorkspace(user: SignedInUser, name: string, options: MembershipOptions): Promise<Membership> {
+    if (options.mode !== "hosted") throw new RegistryError(403, "This registry has a single workspace.");
+    if (!passesSignUpGate(user, options))
+      throw new RegistryError(403, `${user.email} may not create workspaces here. Ask an admin to invite you to theirs.`);
+    const workspace = this.newWorkspace(name);
+    await this.db.batch([...workspace.statements, this.memberStatement(workspace.id, user.id, "admin")]);
+    return (await this.membership(user.id, workspace.id))!;
   }
 
   async setActiveEnvironment(workspaceId: string, userId: string, environment: string): Promise<void> {
@@ -521,9 +605,11 @@ export class Store {
     await this.db.run("UPDATE members SET environment = ? WHERE workspace_id = ? AND user_id = ?", environment, workspaceId, userId);
   }
 
+  /** Joins (or changes the role in) a workspace; a new membership becomes the active one. */
   private memberStatement(workspaceId: string, userId: string, role: Role): Statement {
     return statement(
-      "INSERT INTO members (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO UPDATE SET role = excluded.role",
+      `INSERT INTO members (workspace_id, user_id, role, created_at, active_rank) VALUES (?1, ?2, ?3, ?4, ${nextRank("?2")})
+       ON CONFLICT DO UPDATE SET role = excluded.role`,
       workspaceId,
       userId,
       role,
@@ -615,10 +701,7 @@ export class Store {
    * With `allowedEmails` set, only listed verified emails (or `@domain` entries) get past the gate; the rest get no
    * membership until someone invites them.
    */
-  async resolveMembership(
-    user: { id: string; email: string; emailVerified: boolean; name?: string },
-    options: { mode: "hosted" | "self-hosted"; adminEmails: string[]; allowedEmails?: string[] },
-  ): Promise<Membership | undefined> {
+  async resolveMembership(user: SignedInUser, options: MembershipOptions): Promise<Membership | undefined> {
     // Invites and admin emails grant access by email, so only a verified email (GitHub, Google,
     // company IdP) may claim them. Unverified password sign-ups never match.
     const email = user.emailVerified ? user.email.toLowerCase() : undefined;
@@ -629,12 +712,14 @@ export class Store {
         )
       : undefined;
     // An invite wins even for people who already have a workspace, e.g. one made at an earlier sign-in.
+    // That personal workspace goes if it was their only one and they never used it.
     if (invite && email) {
-      const previous = await this.membership(user.id);
+      const previous = await this.listWorkspaces(user.id);
+      const unused = previous.length === 1 && previous[0]!.id !== invite.workspace_id ? previous[0]!.id : undefined;
       await this.db.batch([
         this.memberStatement(invite.workspace_id, user.id, invite.role),
         statement("DELETE FROM invites WHERE workspace_id = ? AND email = ?", invite.workspace_id, email),
-        ...(previous && previous.workspaceId !== invite.workspace_id ? this.deleteIfUnused(previous.workspaceId) : []),
+        ...(unused ? this.deleteIfUnused(unused) : []),
       ]);
       return this.membership(user.id, invite.workspace_id);
     }
@@ -642,11 +727,7 @@ export class Store {
     const existing = await this.membership(user.id);
     if (existing) return existing;
 
-    const allowed = options.allowedEmails ?? [];
-    if (allowed.length > 0) {
-      const listed = email !== undefined && (allowed.includes(email) || allowed.includes(email.slice(email.lastIndexOf("@"))));
-      if (!listed && !(email !== undefined && options.adminEmails.includes(email))) return undefined;
-    }
+    if (!passesSignUpGate(user, options)) return undefined;
 
     if (options.mode === "self-hosted") {
       const workspace = await this.db.get<{ id: string }>("SELECT id FROM workspaces ORDER BY created_at LIMIT 1");

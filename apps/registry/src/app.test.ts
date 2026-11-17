@@ -276,6 +276,43 @@ describe("sign-up gate", () => {
     ).toBe(ann.workspaceId);
   });
 
+  it("lets people past the gate make more workspaces and switch between them", async () => {
+    const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+    const ann = (await store.resolveMembership(person("ann", "ann@acme.test"), hosted))!;
+    const demo = await store.createOwnWorkspace(person("ann", "ann@acme.test"), "demo", hosted);
+    expect(demo).toMatchObject({ role: "admin", environment: "prod" });
+    // The new one is active, and stays so at the next sign-in.
+    expect((await store.resolveMembership(person("ann", "ann@acme.test"), hosted))?.workspaceId).toBe(demo.workspaceId);
+    expect(await store.listWorkspaces("ann")).toEqual([
+      { id: demo.workspaceId, name: "demo", role: "admin", active: true },
+      { id: ann.workspaceId, name: "ann's workspace", role: "admin", active: false },
+    ]);
+    await store.switchWorkspace("ann", ann.workspaceId);
+    expect((await store.membership("ann"))?.workspaceId).toBe(ann.workspaceId);
+    expect((await store.listWorkspaces("ann"))[0]).toMatchObject({ id: ann.workspaceId, active: true });
+
+    // Only into their own workspaces.
+    const pat = (await store.resolveMembership(person("pat", "pat@partner.test"), hosted))!;
+    await expect(store.switchWorkspace("ann", pat.workspaceId)).rejects.toMatchObject({ status: 404 });
+
+    // The gate decides who may make one, not just the first: members who got in by invite may not.
+    await store.invite(ann.workspaceId, "bob@other.test", "member");
+    await store.resolveMembership(person("bob", "bob@other.test"), hosted);
+    await expect(store.createOwnWorkspace(person("bob", "bob@other.test"), "mine", hosted)).rejects.toMatchObject({ status: 403 });
+    await expect(store.createOwnWorkspace(person("fake", "ann@acme.test", false), "mine", hosted)).rejects.toMatchObject({
+      status: 403,
+    });
+    // A self-hosted registry has one workspace.
+    await expect(
+      store.createOwnWorkspace(person("ann", "ann@acme.test"), "more", { ...hosted, mode: "self-hosted" }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    // An invite to someone with several workspaces deletes none of them, even unused ones.
+    await store.invite(pat.workspaceId, "ann@acme.test", "member");
+    expect((await store.resolveMembership(person("ann", "ann@acme.test"), hosted))?.workspaceId).toBe(pat.workspaceId);
+    expect((await store.listWorkspaces("ann")).map((w) => w.name)).toEqual(["pat's workspace", "ann's workspace", "demo"]);
+  });
+
   it("lets listed admins into a self-hosted workspace; no list lets everyone in", async () => {
     const { store } = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
     await store.createWorkspace("default");

@@ -12,8 +12,12 @@
         <p>The <code>app-mcp</code> command on this computer wants to manage your workspace:</p>
         <ul>
           <li>Computer: <strong id="device"></strong></li>
-          <li>Workspace: <strong id="workspace">…</strong></li>
+          <li id="workspace-item">Workspace: <strong id="workspace">…</strong></li>
         </ul>
+        <label class="field" id="workspace-picker" hidden
+          >Workspace to connect
+          <select id="workspace-select"></select
+        ></label>
         <p>
           It gets an admin token, so it and any AI agent you run it from can publish components and change the theme, instructions and
           workflows. Only allow this if you just ran <code>app-mcp login</code>. You can revoke it under Tokens.

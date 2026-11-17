@@ -15,6 +15,8 @@ const ApproveBody = z.object({
   /** base64url SHA-256 of the CLI's verifier (PKCE S256). */
   challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   device: z.string().trim().min(1).max(60),
+  /** The workspace to connect, picked on the page when the person has several. Default: their active one. */
+  workspace: z.string().min(1).optional(),
 });
 const TokenBody = z.object({ code: z.string().min(1).max(2000), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/) });
 
@@ -84,8 +86,9 @@ export function enableCliLogin(
         },
         403,
       );
-    const workspace = await store.workspace(membership.workspaceId);
-    return c.json({ workspace: workspace?.name ?? membership.workspaceId, admin: membership.role === "admin" });
+    // Every workspace they're in, the active one first; the page picks among the ones they admin.
+    const workspaces = await store.listWorkspaces(signedIn.user.id);
+    return c.json({ workspaces: workspaces.map(({ id, name, role }) => ({ id, name, admin: role === "admin" })) });
   });
 
   // The person clicked Allow. Same-origin only, like the web console: the session cookie alone isn't enough.
@@ -93,13 +96,15 @@ export function enableCliLogin(
     if (c.req.header("origin") !== origin) return c.json({ error: "Cross-origin request" }, 403);
     const signedIn = await session(c.req.raw);
     if (!signedIn) return c.json({ error: "Sign in first." }, 401);
-    const membership = await resolveMembership(store, config, signedIn.user);
-    if (!membership) return c.json({ error: `${signedIn.user.email} isn't in an app-mcp workspace.` }, 403);
-    if (membership.role !== "admin")
-      return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
     const body = ApproveBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "This sign-in link is incomplete. Run app-mcp login again." }, 400);
-    const { port, state, challenge, device } = body.data;
+    const { port, state, challenge, device, workspace } = body.data;
+    const membership = workspace
+      ? await store.membership(signedIn.user.id, workspace)
+      : await resolveMembership(store, config, signedIn.user);
+    if (!membership) return c.json({ error: `${signedIn.user.email} isn't in that app-mcp workspace.` }, 403);
+    if (membership.role !== "admin")
+      return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
     const token = await store.addToken(membership.workspaceId, "admin", `CLI on ${device}`);
     const code = await sign({ token, workspace: membership.workspaceId, challenge, expires: Date.now() + CODE_SECONDS * 1000 });
     const callback = new URL(`http://127.0.0.1:${port}/callback`);

@@ -4,10 +4,21 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
 import { enableCliLogin, isCliPath } from "./cli-login.js";
-import { createAuth, resolveMembership, signInOptions, WORKSPACE_CLAIM, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
+import {
+  createAuth,
+  createWorkspace,
+  resolveMembership,
+  signInOptions,
+  WORKSPACE_CLAIM,
+  WORKSPACE_PAGE,
+  type Auth,
+  type AuthConfig,
+  type MetadataFetch,
+} from "./auth.js";
 import type { Database } from "./db.js";
-import { createRegistryMcp } from "./mcp.js";
-import type { Membership, Store } from "./store.js";
+import { z } from "zod";
+import { createRegistryMcp, type WorkspaceAccess } from "./mcp.js";
+import { RegistryError, type Membership, type Store } from "./store.js";
 import type { Assets } from "./views.js";
 
 /** What management needs from the runtime it runs on. */
@@ -72,6 +83,7 @@ export function enableManagement(
     return c.html(assets.pages["sign-in"]);
   });
   app.get("/consent", (c) => c.html(assets.pages.consent));
+  app.get(WORKSPACE_PAGE, (c) => c.html(assets.pages.consent));
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
 
   // `app-mcp login`: an admin allows the CLI from the browser and it gets a token, with no secret to copy.
@@ -81,18 +93,38 @@ export function enableManagement(
   // A switch of environment changes the preview tools: open listen streams re-list.
   // The handler answers a failure with a bare "Internal server error"; onerror is the only place the cause shows.
   const mcp = createMcpHandler(
-    (ctx) =>
-      createRegistryMcp(store, (ctx.authInfo!.extra as { member: Membership }).member, { baseURL: config.baseURL, assets }, () => {
+    (ctx) => {
+      const { member, workspaces } = ctx.authInfo!.extra as { member: Membership; workspaces: WorkspaceAccess };
+      return createRegistryMcp(store, member, { baseURL: config.baseURL, assets, workspaces }, () => {
         mcp.notify.toolsChanged();
         mcp.notify.resourcesChanged();
-      }),
+      });
+    },
     { onerror: (error) => console.error("[app-mcp] management MCP:", error) },
   );
+
+  /** The person's workspaces as the management MCP offers them. Only the console switches: a connector keeps its workspace. */
+  const workspaceAccess = (userId: string, { canSwitch }: { canSwitch: boolean }): WorkspaceAccess => ({
+    list: () => store.listWorkspaces(userId),
+    // A self-hosted registry has a single workspace.
+    ...(config.mode === "hosted"
+      ? {
+          create: async (name: string) => {
+            const user = await store.user(userId);
+            if (!user) throw new RegistryError(404, "Your account no longer exists.");
+            return createWorkspace(store, config, user, name);
+          },
+        }
+      : {}),
+    ...(canSwitch ? { switch: (workspaceId: string) => store.switchWorkspace(userId, workspaceId) } : {}),
+  });
 
   const protectedMcp = requireMcpAuth(
     auth,
     async (request, claims) => {
-      const member = claims.sub ? await store.membership(claims.sub, claims[WORKSPACE_CLAIM] as string | undefined) : undefined;
+      // The workspace picked when the connector was connected. A token without one names no workspace.
+      const workspaceId = claims[WORKSPACE_CLAIM] as string | undefined;
+      const member = claims.sub && workspaceId ? await store.membership(claims.sub, workspaceId) : undefined;
       if (!member)
         return Response.json(
           { error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." },
@@ -105,7 +137,7 @@ export function enableManagement(
           scopes: String(claims.scope ?? "")
             .split(" ")
             .filter(Boolean),
-          extra: { member },
+          extra: { member, workspaces: workspaceAccess(member.userId, { canSwitch: false }) },
         },
       });
     },
@@ -125,7 +157,30 @@ export function enableManagement(
     const member = await resolveMembership(store, config, signedIn.user);
     if (!member)
       return c.json({ error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." }, 403);
-    return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "app-mcp-web", scopes: [], extra: { member } } });
+    const workspaces = workspaceAccess(member.userId, { canSwitch: true });
+    return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "app-mcp-web", scopes: [], extra: { member, workspaces } } });
+  });
+
+  // The person's workspaces, for the pickers on the CLI and connector pages, and switching the active one.
+  app.get("/workspaces", async (c) => {
+    const signedIn = await session(c.req.raw);
+    if (!signedIn) return c.json({ error: "Sign in first." }, 401);
+    await resolveMembership(store, config, signedIn.user);
+    return c.json({ workspaces: await store.listWorkspaces(signedIn.user.id) });
+  });
+  app.post("/workspaces/active", async (c) => {
+    if (c.req.header("origin") !== origin) return c.json({ error: "Cross-origin request" }, 403);
+    const signedIn = await session(c.req.raw);
+    if (!signedIn) return c.json({ error: "Sign in first." }, 401);
+    const body = z.object({ workspace: z.string().min(1) }).safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Pick a workspace." }, 400);
+    try {
+      await store.switchWorkspace(signedIn.user.id, body.data.workspace);
+      return c.json({ workspaces: await store.listWorkspaces(signedIn.user.id) });
+    } catch (error) {
+      if (error instanceof RegistryError) return c.json({ error: error.message }, error.status as 404);
+      throw error;
+    }
   });
 
   return auth;

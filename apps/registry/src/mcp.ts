@@ -20,7 +20,7 @@ import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { endUserPath } from "./api.js";
 import { iconPath } from "./hosted.js";
-import { RegistryError, type Membership, type Store } from "./store.js";
+import { RegistryError, type Membership, type Store, type WorkspaceSummary } from "./store.js";
 import { builtInViews, MANAGEMENT_VIEWS, type Assets, type ManagementViewName } from "./views.js";
 
 type ManagementViews = Record<ManagementViewName, { html: string; uri: string }>;
@@ -50,6 +50,15 @@ function failed(error: unknown) {
   return { isError: true, content: [text(message)] };
 }
 
+/** The signed-in person's workspaces: theirs to list, create and (in the web console) switch between. */
+export interface WorkspaceAccess {
+  list(): Promise<WorkspaceSummary[]>;
+  /** A new workspace they admin, if the sign-up gate lets them have one. Hosted registries only. */
+  create?(name: string): Promise<Membership>;
+  /** The web console only: a connector stays on the workspace picked when it was connected. */
+  switch?(workspaceId: string): Promise<Membership>;
+}
+
 /**
  * The registry's own MCP server, built per request for the signed-in person.
  * Members can browse, preview and pick the environment they look at. Admins also change workspace
@@ -62,7 +71,7 @@ function failed(error: unknown) {
 export async function createRegistryMcp(
   store: Store,
   member: Membership,
-  { baseURL, assets }: { baseURL: string; assets: Assets },
+  { baseURL, assets, workspaces }: { baseURL: string; assets: Assets; workspaces?: WorkspaceAccess },
   toolsChanged: () => void = () => {},
 ): Promise<McpServer> {
   const server = new McpServer({ name: "app-mcp-registry", version: "0.1.0" });
@@ -385,6 +394,8 @@ export async function createRegistryMcp(
       },
     );
   }
+
+  if (workspaces) registerWorkspaceTools(server, workspaces, ws);
 
   if (!isAdmin) return server;
 
@@ -806,4 +817,74 @@ export async function createRegistryMcp(
   );
 
   return server;
+}
+
+/** Listing, creating and (in the web console) switching the person's workspaces. Members and admins alike. */
+function registerWorkspaceTools(server: McpServer, workspaces: WorkspaceAccess, current: string): void {
+  const describe = (list: WorkspaceSummary[]) =>
+    list
+      .map(
+        (w) =>
+          `- ${w.name} (${w.role}${w.id === current ? ", this one" : ""}${w.active && w.id !== current ? ", active in the console" : ""}): ${w.id}`,
+      )
+      .join("\n");
+  const state = async () => ({ current, canCreate: Boolean(workspaces.create), workspaces: await workspaces.list() });
+
+  server.registerTool(
+    "list_workspaces",
+    {
+      title: "Your workspaces",
+      description: 'List the workspaces you belong to, with your role in each. This connector manages one of them, marked "this one".',
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const result = await state();
+      return ok(`Your workspaces:\n${describe(result.workspaces)}`, result);
+    },
+  );
+
+  const { create, switch: switchTo } = workspaces;
+  if (create)
+    server.registerTool(
+      "create_workspace",
+      {
+        title: "Create workspace",
+        description:
+          "Create a new, empty workspace that you admin, e.g. to keep demos apart from a product. It has its own components, " +
+          "environments, people, tokens and end-user MCP." +
+          (workspaces.switch
+            ? " The console switches to it."
+            : " This connector keeps managing the current workspace; reconnect it and pick the new one to manage that."),
+        inputSchema: z.object({ name: z.string().trim().min(1).max(80) }),
+      },
+      async ({ name }) => {
+        try {
+          const created = await create(name);
+          const next = workspaces.switch
+            ? "It is now the active workspace."
+            : "To manage it from chat, reconnect this connector and pick it; the web console can switch to it too.";
+          return ok(`Created ${name} (${created.workspaceId}). ${next}`, await state());
+        } catch (error) {
+          return failed(error);
+        }
+      },
+    );
+
+  if (switchTo)
+    server.registerTool(
+      "switch_workspace",
+      {
+        title: "Switch workspace",
+        description: "Make another of your workspaces the active one in the web console.",
+        inputSchema: z.object({ workspace: z.string().min(1).describe("Workspace id, from list_workspaces.") }),
+      },
+      async ({ workspace }) => {
+        try {
+          await switchTo(workspace);
+          return ok("Switched workspace.", { current: workspace, workspaces: await workspaces.list() });
+        } catch (error) {
+          return failed(error);
+        }
+      },
+    );
 }

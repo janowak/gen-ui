@@ -7,14 +7,24 @@
   </head>
   <body>
     <main>
-      <h1>Allow access to app-mcp?</h1>
-      <p>This app wants to manage your app-mcp workspace on your behalf:</p>
+      <h1 id="title">Allow access to app-mcp?</h1>
+      <p id="intro">This app wants to manage your app-mcp workspace on your behalf:</p>
       <code id="client"></code>
-      <ul id="scopes"></ul>
-      <p>
-        It can list and preview components in each environment. If you are an admin, you can change themes, instructions and workflows from
-        it; those actions always need your click.
-      </p>
+      <div id="pick" hidden>
+        <label class="field"
+          >Which workspace should it manage?
+          <select id="workspace-select"></select
+        ></label>
+        <p>It stays on this workspace. To manage another one from it, connect it again.</p>
+      </div>
+      <div id="ask">
+        <ul id="scopes"></ul>
+        <p id="workspace-line" hidden>Workspace: <strong id="workspace"></strong></p>
+        <p>
+          It can list and preview components in each environment. If you are an admin, you can change themes, instructions and workflows
+          from it; those actions always need your click.
+        </p>
+      </div>
       <div class="row">
         <button id="deny" type="button">Deny</button>
         <button id="allow" class="primary" type="button">Allow</button>
