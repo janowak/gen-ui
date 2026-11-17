@@ -99,6 +99,8 @@ const values: Record<string, string> = {
   // The registry's port; the demo has its own variable so the two don't share it.
   PORT: String(ports.registry),
   APP_MCP_DEMO_PORT: String(ports.demo),
+  // Where the demo's share_roast links open: this worktree's site.
+  APP_MCP_SITE_URL: `http://localhost:${ports.site}`,
   // Replaces the main checkout's tunnel: the worktree's registry is only reached locally.
   APP_MCP_PUBLIC_URL: registryUrl,
   APP_MCP_URL: registryUrl,
@@ -132,7 +134,7 @@ const launch = {
     {
       name: "serve",
       runtimeExecutable: "node",
-      runtimeArgs: ["packages/cli/dist/cli.js", "serve", "examples/rating", "--port", String(ports.serve)],
+      runtimeArgs: ["packages/cli/dist/cli.js", "serve", "examples/rating", "examples/roast-my-github", "--port", String(ports.serve)],
       port: ports.serve,
     },
     { name: "demo", ...pnpm("@app-mcp/demo", "start"), port: ports.demo },

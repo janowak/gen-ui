@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roast my GitHub · app-mcp</title>
+    <meta name="description" content="A GitHub roast card, made in Claude with app-mcp." />
+    <meta property="og:title" content="Roast my GitHub" />
+    <meta property="og:description" content="A GitHub roast card, made in Claude with app-mcp." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      let theme = null;
+      try {
+        theme = localStorage.getItem("theme");
+      } catch {}
+      document.documentElement.classList.toggle("dark", theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
+    </script>
+    <script type="module" src="/src/roast.ts"></script>
+  </head>
+  <body class="flex min-h-dvh flex-col antialiased">
+    <main class="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-4 py-12 sm:py-20" id="main">
+      <div id="roast"></div>
+      <a class="roast-watermark mt-5 self-center text-sm text-muted-foreground hover:text-foreground" href="/">
+        <svg class="size-4" viewBox="0 0 24 24" aria-hidden="true">
+          <rect class="fill-foreground" x="2" y="3" width="20" height="18" rx="5" />
+          <rect class="fill-background" x="6" y="8" width="12" height="3" rx="1.5" />
+          <rect class="fill-background" x="6" y="13.5" width="7" height="3" rx="1.5" />
+        </svg>
+        Made in Claude with app-mcp
+      </a>
+    </main>
+  </body>
+</html>
