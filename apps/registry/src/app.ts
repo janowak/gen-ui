@@ -7,12 +7,14 @@ import type { Database } from "./db.js";
 import { enableHosting } from "./hosted.js";
 import { refreshServers, type Refresher } from "./refresh.js";
 import { Store } from "./store.js";
+import type { McpLogger } from "./mcp-log.js";
 import type { Assets } from "./views.js";
 
 export { Store, RegistryError, type Scope } from "./store.js";
 export type { Database } from "./db.js";
 export type { Refresher } from "./refresh.js";
 export type { Assets } from "./views.js";
+export type { McpLogger, McpLogLine } from "./mcp-log.js";
 
 export interface RegistryAppOptions {
   /** The views and pages the registry serves, loaded by the runtime it runs on. */
@@ -22,6 +24,8 @@ export interface RegistryAppOptions {
   allowPrivateWebhooks?: boolean;
   /** Public URL of the registry, for the absolute URLs hosts are given (the connector icon). Default: each request's origin. */
   baseURL?: string;
+  /** Where end-user MCP request lines go. Default: one JSON line per request on stdout (Workers Logs). */
+  mcpLog?: McpLogger;
 }
 
 /** The registry without management: the /v1 API and the end-user MCP. Runtime-neutral: Node and Workers share it. */
