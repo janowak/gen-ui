@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import { ALLOWED } from "./api.js";
 import type { RegistryAppOptions } from "./app.js";
 import type { Store } from "./store.js";
+import { consoleMcpLogger, describeMcpRequest, mcpOutcome, type McpLogLine } from "./mcp-log.js";
 import { builtInViews } from "./views.js";
 
 /**
@@ -160,10 +161,44 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
     return hosted;
   }
 
+  const log = options.mcpLog ?? consoleMcpLogger;
+
   const serve = async (c: Context) => {
-    const hosted = await resolve(c, String(c.req.param("workspace")), c.req.param("environment") ?? DEFAULT_ENVIRONMENT);
-    if (hosted instanceof Response) return hosted;
-    return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "", scopes: [], extra: hosted } });
+    const started = Date.now();
+    const workspace = String(c.req.param("workspace"));
+    const environment = c.req.param("environment") ?? DEFAULT_ENVIRONMENT;
+    const described = describeMcpRequest(c.req.raw);
+    const hosted = await resolve(c, workspace, environment);
+    const response =
+      hosted instanceof Response
+        ? hosted
+        : await mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "", scopes: [], extra: hosted } });
+    // A GET is the long-lived notification stream: its body never ends, so only its status is logged.
+    const outcome =
+      hosted instanceof Response
+        ? mcpOutcome(response).then(({ error }) => ({ outcome: "rejected" as const, ...(error ? { error } : {}) }))
+        : c.req.method === "POST"
+          ? mcpOutcome(response)
+          : Promise.resolve({ outcome: response.status >= 400 ? ("error" as const) : ("ok" as const) });
+    const line = Promise.all([described, outcome]).then(([request, result]) =>
+      log({
+        event: "mcp",
+        workspace,
+        environment,
+        caller: c.req.header("authorization") ? "server" : "public",
+        ...request,
+        status: response.status,
+        ...result,
+        ms: Date.now() - started,
+      } satisfies McpLogLine),
+    );
+    // Workers end the request when the response is sent; waitUntil lets the line finish. Node has no executionCtx.
+    try {
+      c.executionCtx.waitUntil(line);
+    } catch {
+      void line;
+    }
+    return response;
   };
   app.all("/w/:workspace/mcp", serve);
   app.all("/w/:workspace/:environment/mcp", serve);

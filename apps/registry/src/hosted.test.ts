@@ -2,7 +2,7 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createRegistryApp, type Store } from "./app.js";
+import { createRegistryApp, type McpLogLine, type Store } from "./app.js";
 import { loadAssets, testDatabase } from "./testing.js";
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
@@ -20,6 +20,7 @@ let store: Store;
 let acme: string;
 let other: string;
 let admin: string;
+const logged: McpLogLine[] = [];
 
 const addItem = {
   name: "add_item",
@@ -47,7 +48,7 @@ async function resourceText(client: Client, tool: string): Promise<string | unde
 }
 
 beforeAll(async () => {
-  const created = createRegistryApp(await testDatabase(), { assets: await loadAssets() });
+  const created = createRegistryApp(await testDatabase(), { assets: await loadAssets(), mcpLog: (line) => logged.push(line) });
   store = created.store;
   acme = await store.createWorkspace("Acme");
   await store.createEnvironment(acme, "staging");
@@ -307,5 +308,59 @@ describe("branding and instructions", () => {
     const staging = await mcpClient(`/w/${acme}/staging/mcp`);
     expect(staging.getInstructions()).not.toContain(instructions);
     expect(await (await call("GET", "/instructions?environment=staging")).json()).toEqual({ environment: "staging", instructions: null });
+  });
+});
+
+describe("request logs", () => {
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it("log one line per request with names, outcome and timing, never the arguments", async () => {
+    logged.length = 0;
+    const client = await mcpClient(`/w/${acme}/mcp`);
+    await client.callTool({ name: "render_rating", arguments: { question: "secret question" } });
+    await client.callTool({ name: "render_rating", arguments: {} });
+    await client.close();
+    await settled();
+
+    expect(logged.find((line) => line.method === "initialize")).toMatchObject({
+      event: "mcp",
+      workspace: acme,
+      environment: "prod",
+      caller: "public",
+      client: "test-host 1.0.0",
+      status: 200,
+      outcome: "ok",
+    });
+    const calls = logged.filter((line) => line.method === "tools/call");
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toMatchObject({ tool: "render_rating", outcome: "ok", argBytes: 30 });
+    expect(calls[0]!.ms).toBeGreaterThanOrEqual(0);
+    expect(calls[1]).toMatchObject({ tool: "render_rating", outcome: "tool_error", error: expect.any(String) });
+    expect(JSON.stringify(logged)).not.toContain("secret question");
+  });
+
+  it("log requests that never reach the MCP as rejected", async () => {
+    logged.length = 0;
+    const post = (path: string, headers: Record<string, string> = {}) =>
+      fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}" });
+    await post(`/w/${acme}/nope/mcp`);
+    await post(`/w/${acme}/mcp`, { authorization: "Bearer bad" });
+    await settled();
+    expect(logged).toEqual([
+      expect.objectContaining({
+        environment: "nope",
+        caller: "public",
+        status: 404,
+        outcome: "rejected",
+        error: expect.stringContaining("nope"),
+      }),
+      expect.objectContaining({
+        environment: "prod",
+        caller: "server",
+        status: 401,
+        outcome: "rejected",
+        error: expect.stringContaining("Invalid token"),
+      }),
+    ]);
   });
 });
