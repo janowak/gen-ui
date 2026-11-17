@@ -229,9 +229,9 @@ describe("upstream for a company's own server (server token)", () => {
     expect(await resourceText(await mcpClient(`/w/acme/prod/mcp`, bearer(token)), "render_rating")).toBe(html("rating v1"));
     expect(await resourceText(await mcpClient(`/w/acme/staging/mcp`, bearer(token)), "render_rating_staging")).toBe(html("rating v1.1"));
     // The old channel header does nothing.
-    expect(
-      await resourceText(await mcpClient(`/w/acme/mcp`, { ...bearer(token), "x-app-mcp-channel": "staging" }), "render_rating"),
-    ).toBe(html("rating v1"));
+    expect(await resourceText(await mcpClient(`/w/acme/mcp`, { ...bearer(token), "x-app-mcp-channel": "staging" }), "render_rating")).toBe(
+      html("rating v1"),
+    );
   });
 
   it("keeps every component version readable for old messages", async () => {

@@ -4,17 +4,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
 import { enableCliLogin, isCliPath } from "./cli-login.js";
-import {
-  createAuth,
-  createWorkspace,
-  resolveMembership,
-  signInOptions,
-  WORKSPACE_CLAIM,
-  WORKSPACE_PAGE,
-  type Auth,
-  type AuthConfig,
-  type MetadataFetch,
-} from "./auth.js";
+import { createAuth, createWorkspace, resolveMembership, signInOptions, type Auth, type AuthConfig, type MetadataFetch } from "./auth.js";
 import type { Database } from "./db.js";
 import { z } from "zod";
 import { createRegistryMcp, type WorkspaceAccess } from "./mcp.js";
@@ -83,7 +73,6 @@ export function enableManagement(
     return c.html(assets.pages["sign-in"]);
   });
   app.get("/consent", (c) => c.html(assets.pages.consent));
-  app.get(WORKSPACE_PAGE, (c) => c.html(assets.pages.consent));
   app.get("/auth/options", (c) => c.json(signInOptions(config)));
 
   // `app-mcp login`: an admin allows the CLI from the browser and it gets a token, with no secret to copy.
@@ -103,8 +92,8 @@ export function enableManagement(
     { onerror: (error) => console.error("[app-mcp] management MCP:", error) },
   );
 
-  /** The person's workspaces as the management MCP offers them. Only the console switches: a connector keeps its workspace. */
-  const workspaceAccess = (userId: string, { canSwitch }: { canSwitch: boolean }): WorkspaceAccess => ({
+  /** The person's workspaces as the management MCP offers them, in the console and in connectors alike. */
+  const workspaceAccess = (userId: string): WorkspaceAccess => ({
     list: () => store.listWorkspaces(userId),
     // A self-hosted registry has a single workspace.
     ...(config.mode === "hosted"
@@ -116,15 +105,14 @@ export function enableManagement(
           },
         }
       : {}),
-    ...(canSwitch ? { switch: (workspaceId: string) => store.switchWorkspace(userId, workspaceId) } : {}),
+    switch: (workspaceId: string) => store.switchWorkspace(userId, workspaceId),
   });
 
   const protectedMcp = requireMcpAuth(
     auth,
     async (request, claims) => {
-      // The workspace picked when the connector was connected. A token without one names no workspace.
-      const workspaceId = claims[WORKSPACE_CLAIM] as string | undefined;
-      const member = claims.sub && workspaceId ? await store.membership(claims.sub, workspaceId) : undefined;
+      // The token names the person; they manage their active workspace, as in the console, and switch_workspace moves it.
+      const member = claims.sub ? await store.membership(claims.sub) : undefined;
       if (!member)
         return Response.json(
           { error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." },
@@ -137,7 +125,7 @@ export function enableManagement(
           scopes: String(claims.scope ?? "")
             .split(" ")
             .filter(Boolean),
-          extra: { member, workspaces: workspaceAccess(member.userId, { canSwitch: false }) },
+          extra: { member, workspaces: workspaceAccess(member.userId) },
         },
       });
     },
@@ -157,11 +145,11 @@ export function enableManagement(
     const member = await resolveMembership(store, config, signedIn.user);
     if (!member)
       return c.json({ error: "You are not a member of any app-mcp workspace. Ask a workspace admin to invite your email." }, 403);
-    const workspaces = workspaceAccess(member.userId, { canSwitch: true });
+    const workspaces = workspaceAccess(member.userId);
     return mcp.fetch(c.req.raw, { authInfo: { token: "", clientId: "app-mcp-web", scopes: [], extra: { member, workspaces } } });
   });
 
-  // The person's workspaces, for the pickers on the CLI and connector pages, and switching the active one.
+  // The person's workspaces, for the console's picker, and switching the active one.
   app.get("/workspaces", async (c) => {
     const signedIn = await session(c.req.raw);
     if (!signedIn) return c.json({ error: "Sign in first." }, 401);

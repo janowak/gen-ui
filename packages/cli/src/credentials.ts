@@ -2,10 +2,15 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** What `app-mcp login` keeps for a registry: the token it was given and the workspace it reaches. */
+/**
+ * What `app-mcp login` keeps for a registry: a token for the person, who it signs in, and the workspace
+ * commands use unless --workspace names another (`app-mcp use` changes it). Kept here, not on the
+ * registry, so switching workspace in the browser never moves where this machine publishes.
+ */
 export interface Credential {
   token: string;
-  workspace: { id: string; name: string };
+  email?: string;
+  workspace?: { id: string; name: string };
 }
 
 /** One file for every registry this machine is signed in to, keyed by registry URL. Only the user can read it. */

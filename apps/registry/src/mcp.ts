@@ -57,8 +57,8 @@ export interface WorkspaceAccess {
   list(): Promise<WorkspaceSummary[]>;
   /** A new workspace they admin, if the sign-up gate lets them have one. Hosted registries only. */
   create?(name: string): Promise<Membership>;
-  /** The web console only: a connector stays on the workspace picked when it was connected. */
-  switch?(workspaceId: string): Promise<Membership>;
+  /** Makes another of theirs the active one, which the console and their connectors manage. */
+  switch(workspaceId: string): Promise<Membership>;
 }
 
 /**
@@ -401,7 +401,7 @@ export async function createRegistryMcp(
     );
   }
 
-  if (workspaces) registerWorkspaceTools(server, workspaces, ws);
+  if (workspaces) registerWorkspaceTools(server, workspaces, ws, toolsChanged);
 
   if (!isAdmin) return server;
 
@@ -486,7 +486,10 @@ export async function createRegistryMcp(
       if (!name && !next) throw new RegistryError(400, "Give a new name, a new slug, or both.");
       if (next) await store.setWorkspaceSlug(ws, next);
       if (name) await store.renameWorkspace(ws, name);
-      const done = [name && `Renamed the workspace to "${name}".`, next && `Its end-user MCP is now at ${baseURL}${endUserPath(next, DEFAULT_ENVIRONMENT)}; update connectors and APP_MCP_MCP_URL.`];
+      const done = [
+        name && `Renamed the workspace to "${name}".`,
+        next && `Its end-user MCP is now at ${baseURL}${endUserPath(next, DEFAULT_ENVIRONMENT)}; update connectors and APP_MCP_MCP_URL.`,
+      ];
       return ok(done.filter(Boolean).join(" "), await workspaceState());
     }),
   );
@@ -832,22 +835,21 @@ export async function createRegistryMcp(
   return server;
 }
 
-/** Listing, creating and (in the web console) switching the person's workspaces. Members and admins alike. */
-function registerWorkspaceTools(server: McpServer, workspaces: WorkspaceAccess, current: string): void {
+/**
+ * Listing, creating and switching the person's workspaces. Members and admins alike. The console and
+ * every connector the person added show their active workspace, so a switch in one shows in the others.
+ */
+function registerWorkspaceTools(server: McpServer, workspaces: WorkspaceAccess, current: string, toolsChanged: () => void): void {
   const describe = (list: WorkspaceSummary[]) =>
-    list
-      .map(
-        (w) =>
-          `- ${w.name} (${w.role}${w.id === current ? ", this one" : ""}${w.active && w.id !== current ? ", active in the console" : ""}): ${w.id}`,
-      )
-      .join("\n");
+    list.map((w) => `- ${w.name} (${w.role}${w.id === current ? ", current" : ""}): ${w.id}`).join("\n");
   const state = async () => ({ current, canCreate: Boolean(workspaces.create), workspaces: await workspaces.list() });
 
   server.registerTool(
     "list_workspaces",
     {
       title: "Your workspaces",
-      description: 'List the workspaces you belong to, with your role in each. This connector manages one of them, marked "this one".',
+      description:
+        'List the workspaces you belong to, with your role in each. The tools here manage the one marked "current"; switch_workspace changes it.',
       inputSchema: z.object({}),
     },
     async () => {
@@ -856,7 +858,7 @@ function registerWorkspaceTools(server: McpServer, workspaces: WorkspaceAccess, 
     },
   );
 
-  const { create, switch: switchTo } = workspaces;
+  const { create } = workspaces;
   if (create)
     server.registerTool(
       "create_workspace",
@@ -864,40 +866,41 @@ function registerWorkspaceTools(server: McpServer, workspaces: WorkspaceAccess, 
         title: "Create workspace",
         description:
           "Create a new, empty workspace that you admin, e.g. to keep demos apart from a product. It has its own components, " +
-          "environments, people, tokens and end-user MCP." +
-          (workspaces.switch
-            ? " The console switches to it."
-            : " This connector keeps managing the current workspace; reconnect it and pick the new one to manage that."),
+          "environments, people, tokens and end-user MCP. It becomes your current workspace.",
         inputSchema: z.object({ name: z.string().trim().min(1).max(80) }),
       },
       async ({ name }) => {
         try {
           const created = await create(name);
-          const next = workspaces.switch
-            ? "It is now the active workspace."
-            : "To manage it from chat, reconnect this connector and pick it; the web console can switch to it too.";
-          return ok(`Created ${name} (${created.workspaceId}). ${next}`, await state());
+          toolsChanged();
+          return ok(`Created ${name} (${created.workspaceId}). It is now your current workspace.`, {
+            ...(await state()),
+            current: created.workspaceId,
+          });
         } catch (error) {
           return failed(error);
         }
       },
     );
 
-  if (switchTo)
-    server.registerTool(
-      "switch_workspace",
-      {
-        title: "Switch workspace",
-        description: "Make another of your workspaces the active one in the web console.",
-        inputSchema: z.object({ workspace: z.string().min(1).describe("Workspace id, from list_workspaces.") }),
-      },
-      async ({ workspace }) => {
-        try {
-          await switchTo(workspace);
-          return ok("Switched workspace.", { current: workspace, workspaces: await workspaces.list() });
-        } catch (error) {
-          return failed(error);
-        }
-      },
-    );
+  server.registerTool(
+    "switch_workspace",
+    {
+      title: "Switch workspace",
+      description:
+        "Manage another of your workspaces: the tools here, the web console and your other app-mcp connectors all move to it. " +
+        "If the preview tools still show the old workspace, start a new chat.",
+      inputSchema: z.object({ workspace: z.string().min(1).describe("Workspace id, from list_workspaces.") }),
+    },
+    async ({ workspace }) => {
+      try {
+        const { role } = await workspaces.switch(workspace);
+        if (workspace !== current) toolsChanged();
+        const name = (await workspaces.list()).find((w) => w.id === workspace)?.name ?? workspace;
+        return ok(`Now managing ${name} (${role}).`, { current: workspace, workspaces: await workspaces.list() });
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  );
 }

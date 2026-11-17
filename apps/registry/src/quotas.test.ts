@@ -13,7 +13,12 @@ const QUOTAS: Quotas = {
 };
 
 const html = (label: string) => `<!doctype html><html><body>${label}</body></html>`;
-const manifest = (name: string, version: string) => ({ name, version, description: "A test component.", props: { type: "object", properties: {} } });
+const manifest = (name: string, version: string) => ({
+  name,
+  version,
+  description: "A test component.",
+  props: { type: "object", properties: {} },
+});
 const workflow = (name: string) => ({ name, description: "Does a thing.", instructions: "Do it.", params: [] });
 const hosted = { mode: "hosted" as const, adminEmails: [] };
 
@@ -62,7 +67,8 @@ describe("hosted quotas", () => {
 
   it("caps component names and new versions a day; re-running a publish is free", async () => {
     const { call } = await setup();
-    const publish = (name: string, version: string) => call("POST", "/v1/components", { manifest: manifest(name, version), html: html(version) });
+    const publish = (name: string, version: string) =>
+      call("POST", "/v1/components", { manifest: manifest(name, version), html: html(version) });
 
     expect((await publish("rating", "1.0.0")).status).toBe(201);
     expect((await publish("rating", "1.0.0")).status).toBe(200);

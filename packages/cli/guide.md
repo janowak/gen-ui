@@ -27,6 +27,8 @@ npx @app-mcp/cli login
 
 This opens the browser and waits up to five minutes. Tell the person: "Click Allow in the browser tab that just opened." They may need to sign in or create an account there first. Never ask them to paste a token into the chat. If the browser can't open (a remote machine), give them the URL the command prints.
 
+Login signs the person in, not a workspace: the CLI reaches every workspace they're in. If `whoami` lists several and says none is picked, or the person wants another, ask which one and run `npx @app-mcp/cli use <workspace>` (its address, e.g. `acme`, from `npx @app-mcp/cli workspaces`). Publishing and changing settings need the person to be an admin of that workspace.
+
 `whoami` and `login` both print two addresses. Keep them for the last step:
 
 - **Manage it**: where admins manage the workspace, in a browser or as a connector.

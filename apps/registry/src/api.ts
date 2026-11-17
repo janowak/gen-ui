@@ -17,7 +17,7 @@ import {
 import { Hono, type Context, type Next } from "hono";
 import { z } from "zod";
 import type { RegistryAppOptions } from "./app.js";
-import { RegistryError, type EnvironmentInfo, type Scope, type Store, type TokenInfo } from "./store.js";
+import { RegistryError, type EnvironmentInfo, type Scope, type Store, type TokenInfo, type WorkspaceSummary } from "./store.js";
 import { refreshUrlError } from "./url.js";
 
 /** Which token scopes may call what. Admin can do everything. */
@@ -49,21 +49,88 @@ const TokenBody = z.object({
 const HostingBody = z.object({ enabled: z.boolean() });
 const InstructionsBody = z.object({ instructions: z.string().max(MAX_ENVIRONMENT_INSTRUCTIONS).nullable() });
 
-type Env = { Variables: { caller: TokenInfo } };
+/** How a request made with a person token (`app-mcp login`) names its workspace: its id, address (slug) or name. */
+export const WORKSPACE_HEADER = "x-app-mcp-workspace";
 
-/** Token-authenticated REST API used by CI (publish) and the CLI (admin). Server tokens use the end-user MCP. */
+/**
+ * Who is calling, in one workspace. A workspace token (CI, servers) is bound to its workspace. A person
+ * token reaches every workspace the person is in, with their role there read on every request: admins
+ * get admin, members read-only.
+ */
+type Caller = TokenInfo & { person?: { userId: string; workspaceName: string } };
+type Env = { Variables: { caller: Caller } };
+
+const bearer = (c: Context) => c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
+
+/** Token-authenticated REST API used by CI (publish) and the CLI. Server tokens use the end-user MCP. */
 export function createApi(
   store: Store,
   options: Pick<RegistryAppOptions, "allowPrivateWebhooks" | "staticHosting" | "rateLimits"> = {},
 ): Hono<Env> {
   const api = new Hono<Env>();
 
+  /**
+   * The person's workspace a request names, or their only one. Never the console's active workspace: a
+   * switch in the browser mustn't move where a terminal publishes.
+   */
+  async function personWorkspace(userId: string, named: string | undefined): Promise<WorkspaceSummary> {
+    const workspaces = await store.listWorkspaces(userId);
+    if (!workspaces.length) throw new RegistryError(403, "You aren't in any app-mcp workspace. Ask an admin to invite your email.");
+    if (named) {
+      const byId = workspaces.find((w) => w.id === named || w.slug === named);
+      const byName = workspaces.filter((w) => w.name.toLowerCase() === named.toLowerCase());
+      if (byId) return byId;
+      if (byName.length === 1) return byName[0]!;
+      if (byName.length > 1)
+        throw new RegistryError(400, `You're in several workspaces called "${named}". Name one by id: app-mcp workspaces`);
+      throw new RegistryError(404, `You aren't in a workspace called "${named}". app-mcp workspaces lists yours.`);
+    }
+    if (workspaces.length === 1) return workspaces[0]!;
+    throw new RegistryError(
+      400,
+      `You're in ${workspaces.length} workspaces (${workspaces.map((w) => w.name).join(", ")}). ` +
+        "Pick one with app-mcp use <workspace>, or pass --workspace.",
+    );
+  }
+
+  async function resolveCaller(c: Context<Env>): Promise<Caller | undefined> {
+    const token = bearer(c);
+    if (!token) return undefined;
+    const named = c.req.header(WORKSPACE_HEADER) || undefined;
+    const person = await store.resolvePersonToken(token);
+    if (person) {
+      const workspace = await personWorkspace(person.userId, named);
+      return {
+        id: person.id,
+        workspaceId: workspace.id,
+        scope: workspace.role === "admin" ? "admin" : "server",
+        environments: null,
+        person: { userId: person.userId, workspaceName: workspace.name },
+      };
+    }
+    const resolved = await store.resolveToken(token);
+    // A workspace token only reaches its own workspace, whatever the request names.
+    if (resolved && named && named !== resolved.workspaceId) {
+      const workspace = await store.workspace(resolved.workspaceId);
+      if (named !== workspace?.slug && named.toLowerCase() !== workspace?.name.toLowerCase())
+        throw new RegistryError(403, `This token is for the ${workspace?.name ?? resolved.workspaceId} workspace, not ${named}.`);
+    }
+    return resolved;
+  }
+
   function auth(required: Scope, scopes = ALLOWED[required]) {
     return async (c: Context<Env>, next: Next) => {
-      const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
-      const resolved = token ? await store.resolveToken(token) : undefined;
+      const resolved = await resolveCaller(c);
       if (!resolved) return c.json({ error: "Invalid or missing token" }, 401);
-      if (!scopes.includes(resolved.scope)) return c.json({ error: denied(required, resolved.scope) }, 403);
+      if (!scopes.includes(resolved.scope))
+        return c.json(
+          {
+            error: resolved.person
+              ? `Only admins of ${resolved.person.workspaceName} can do this; you're a member there.`
+              : denied(required, resolved.scope),
+          },
+          403,
+        );
       c.set("caller", resolved);
       const writes = options.rateLimits?.writes;
       if (c.req.method !== "GET" && writes && !(await writes.limit({ key: resolved.workspaceId })).success)
@@ -94,15 +161,41 @@ export function createApi(
       throw new RegistryError(403, `This token can't publish to ${environment} (allowed: ${allowed.join(", ")})`);
   }
 
-  // Who a token is: `app-mcp whoami`, and how an agent checks it is signed in before it starts.
-  api.get("/whoami", anyToken(), async (c) => {
-    const { workspaceId, scope, environments } = c.get("caller");
+  // A person token's own routes: they work without naming a workspace.
+  async function person(c: Context<Env>) {
+    const token = bearer(c);
+    return token ? store.resolvePersonToken(token) : undefined;
+  }
+
+  // The person's workspaces: `app-mcp workspaces`, and what `app-mcp use` picks from.
+  api.get("/workspaces", async (c) => {
+    const signedIn = await person(c);
+    if (!signedIn) return c.json({ error: "Requires the token from app-mcp login" }, 401);
+    return c.json({
+      workspaces: (await store.listWorkspaces(signedIn.userId)).map(({ id, name, slug, role }) => ({ id, name, slug, role })),
+    });
+  });
+
+  // Who a token is: `app-mcp whoami`, and how an agent checks it is signed in before it starts. A person
+  // in several workspaces who named none gets them all, and no workspace.
+  api.get("/whoami", async (c) => {
+    const signedIn = await person(c);
+    const user = signedIn && (await store.user(signedIn.userId));
+    const me = user ? { person: { email: user.email, name: user.name ?? null } } : {};
+    const workspaces =
+      signedIn && (await store.listWorkspaces(signedIn.userId)).map(({ id, name, slug, role }) => ({ id, name, slug, role }));
+    if (signedIn && !c.req.header(WORKSPACE_HEADER) && workspaces!.length !== 1) return c.json({ ...me, workspaces });
+    const caller = await resolveCaller(c);
+    if (!caller) return c.json({ error: "Invalid or missing token" }, 401);
+    const { workspaceId, scope, environments } = caller;
     const workspace = (await store.workspace(workspaceId))!;
     return c.json({
+      ...me,
       workspace,
       scope,
       ...(environments ? { environments } : {}),
       path: endUserPath(workspace.slug, DEFAULT_ENVIRONMENT),
+      ...(workspaces ? { workspaces } : {}),
     });
   });
 
@@ -270,6 +363,12 @@ export function createApi(
   });
 
   // `app-mcp logout`: a token ends itself, so a signed-out machine leaves nothing that still works.
+  api.delete("/tokens/current", async (c, next) => {
+    const signedIn = await person(c);
+    if (!signedIn) return next();
+    await store.revokePersonToken(signedIn.id);
+    return c.json({ revoked: true });
+  });
   api.delete("/tokens/current", anyToken(), async (c) => {
     await store.revokeToken(ws(c), c.get("caller").id);
     return c.json({ revoked: true });
