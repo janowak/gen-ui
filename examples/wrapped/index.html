@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Wrapped</title>
+    <meta name="description" content="A year with AI, in six cards. Made in a chat with app-mcp." />
+    <meta property="og:title" content="AI Wrapped" />
+    <meta property="og:description" content="A year with AI, in six cards. Made in a chat with app-mcp." />
+    <meta property="og:image" content="https://app-mcp.com/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <main class="stage">
+      <div class="card" id="card"></div>
+      <div class="controls" id="controls" hidden>
+        <button class="step" id="prev" type="button" aria-label="Previous card" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <span class="counter" id="counter"></span>
+        <button class="step" id="next" type="button" aria-label="Next card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+        </button>
+        <button class="share" id="share" type="button">Share</button>
+      </div>
+      <div class="panel" id="panel" hidden>
+        <p class="status" id="status" role="status"></p>
+        <div class="link">
+          <input id="url" type="text" readonly aria-label="Share link" />
+          <button id="open" type="button">Open</button>
+        </div>
+      </div>
+      <a class="cta" id="cta" hidden>Make your own with app-mcp</a>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

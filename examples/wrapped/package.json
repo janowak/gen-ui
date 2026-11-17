@@ -1,0 +1,22 @@
+{
+  "name": "@app-mcp/example-wrapped",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "app-mcp dev .",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "app-mcp:publish": "app-mcp publish ."
+  },
+  "dependencies": {
+    "@app-mcp/kit": "workspace:*",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0"
+  },
+  "devDependencies": {
+    "@app-mcp/cli": "workspace:*",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

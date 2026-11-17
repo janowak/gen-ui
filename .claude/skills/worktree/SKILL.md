@@ -10,7 +10,7 @@ Each worktree runs its own stack: the registry on its own SQLite file, `app-mcp 
 ## Set it up
 
 1. **Get into a worktree.** Already in one (under `.claude/worktrees/`)? Skip ahead. Otherwise use `EnterWorktree` with a short name for the task. For parallel agents, give each `isolation: "worktree"` and have it run step 2 itself.
-2. **Run `pnpm dev:setup` from the worktree root.** It installs, builds, picks a free port slot, writes `.env.worktree` (ports, local URLs, tokens), points `.claude/launch.json` at those ports and seeds the registry: a workspace, a password user who manages it, and `examples/rating` with its workflows in prod. It prints the URLs. Re-running it is safe and keeps the slot and tokens.
+2. **Run `pnpm dev:setup` from the worktree root.** It installs, builds, picks a free port slot, writes `.env.worktree` (ports, local URLs, tokens), points `.claude/launch.json` at those ports and seeds the registry: a workspace, a password user who manages it, and `examples/rating` and `examples/wrapped` with their workflows in prod. It prints the URLs. Re-running it is safe and keeps the slot and tokens.
 
 `.env.local` is the main checkout's copy (Claude Code copies it in, via `.worktreeinclude`). Don't edit it; `.env.worktree` is loaded after it and wins.
 
