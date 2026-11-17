@@ -15,7 +15,10 @@ const deny = $<HTMLButtonElement>("deny");
 const error = $<HTMLDivElement>("error");
 $<HTMLElement>("device").textContent = request.device;
 
-const context = (await fetch("/cli/workspace").then((r) => r.json())) as { workspace?: string; admin?: boolean; error?: string };
+const response = await fetch("/cli/workspace");
+// Not signed in: sign in first, then come back here (sign-in.ts follows ?next=/cli?…).
+if (response.status === 401) location.replace(`/sign-in?next=${encodeURIComponent(location.pathname + location.search)}`);
+const context = (await response.json()) as { workspace?: string; admin?: boolean; error?: string };
 $<HTMLElement>("workspace").textContent = context.workspace ?? "";
 if (context.admin) allow.disabled = false;
 else {
