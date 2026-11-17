@@ -19,6 +19,7 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `apps/site` | Landing page (static, Vite + Tailwind on the views' shadcn theme from `@app-mcp/ui/styles.css`): `pnpm --filter @app-mcp/site dev` on http://localhost:5180 |
 | `packages/kit` | `@app-mcp/kit`: build custom components. `defineComponent` + `mount` runtime, and the `appMcp()` Vite plugin |
 | `examples/rating` | Custom component (vanilla TS on `@app-mcp/kit`) published through the registry, with workflows next to it in `workflows/` |
+| `examples/wrapped` | AI Wrapped demo: `render_wrapped` shows a Wrapped-style card deck about the user's year with AI. Share links carry the cards in the URL fragment and open on the site's static `/wrapped/` page (the same bundle), so nothing is stored |
 
 Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/compat` (about 57 KB gzipped less per view), while code, types and shadcn components stay React. [`runtime/preact.ts`](packages/ui/src/runtime/preact.ts) passes `ref` to function components as a prop, like React 19, so components from `shadcn add` work unchanged. Avoid React 19-only APIs (`use`, `useActionState`, `useOptimistic`, `<Activity>`) and fragments as direct children of Recharts charts.
 

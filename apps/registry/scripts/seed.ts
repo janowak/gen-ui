@@ -1,5 +1,5 @@
 // A dev registry's starting data, for `pnpm dev:setup` in a worktree: the workspace, an admin token (the CLI),
-// a server token (the demo), a password user who manages it, and examples/rating with its workflows in prod.
+// a server token (the demo), a password user who manages it, and examples/rating and examples/wrapped with their workflows in prod.
 // Safe to re-run: tokens from the environment that still work are kept, and publishing the same bundle again
 // is a no-op. Prints the values for .env.worktree as JSON on stdout; everything else goes to stderr.
 import { DEFAULT_ENVIRONMENT } from "@app-mcp/format";
@@ -29,14 +29,20 @@ const auth = createAuth(db, store, config, fetch);
 const userId = user?.id ?? (await auth.api.signUpEmail({ body: { email, password, name: email } })).user.id;
 await store.addMember(workspace, userId, "admin");
 
-const example = new URL("../../../examples/rating/", import.meta.url).pathname;
-const { manifest, html } = await readComponentDir(example);
-const published = await store.publish(workspace, manifest, html, DEFAULT_ENVIRONMENT);
-const workflows = await readWorkflowDir(example);
-for (const { workflow } of workflows) await store.saveWorkflow(workspace, DEFAULT_ENVIRONMENT, workflow);
+const served: string[] = [];
+let workflowCount = 0;
+for (const name of ["rating", "wrapped"]) {
+  const example = new URL(`../../../examples/${name}/`, import.meta.url).pathname;
+  const { manifest, html } = await readComponentDir(example);
+  const published = await store.publish(workspace, manifest, html, DEFAULT_ENVIRONMENT);
+  served.push(`${manifest.name}@${published.version}`);
+  const workflows = await readWorkflowDir(example);
+  for (const { workflow } of workflows) await store.saveWorkflow(workspace, DEFAULT_ENVIRONMENT, workflow);
+  workflowCount += workflows.length;
+}
 
 console.error(
-  `Seeded workspace ${workspace}: ${email} manages it; ${DEFAULT_ENVIRONMENT} serves ${manifest.name}@${published.version} and ${workflows.length} workflows.`,
+  `Seeded workspace ${workspace}: ${email} manages it; ${DEFAULT_ENVIRONMENT} serves ${served.join(", ")} and ${workflowCount} workflows.`,
 );
 console.log(
   JSON.stringify({

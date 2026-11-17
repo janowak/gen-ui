@@ -170,6 +170,9 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
     devDependencies:
+      '@app-mcp/example-wrapped':
+        specifier: workspace:*
+        version: link:../../examples/wrapped
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -232,6 +235,25 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  examples/wrapped:
+    dependencies:
+      '@app-mcp/kit':
+        specifier: workspace:*
+        version: link:../../packages/kit
+      '@fontsource-variable/bricolage-grotesque':
+        specifier: ^5.3.0
+        version: 5.3.0
+    devDependencies:
+      '@app-mcp/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/cli:
     dependencies:
@@ -992,6 +1014,9 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@fontsource-variable/bricolage-grotesque@5.3.0':
+    resolution: {integrity: sha512-TLi9Q4hJjS2UvoTMRSS2nHu6c4R56lAw60NR9QYtVRCHn0XtsFpiEhNffZ8Glsoxu6wEEwLKBP8lb94J52PNBA==}
 
   '@fontsource-variable/geist-mono@5.3.0':
     resolution: {integrity: sha512-vBbuwDEo9AkrqADMXOrlAR3DFcJi4/JxeuU43FoiQERnNwsfXNnvxvReZG02cQKmyk4DZkZdBZX3oTDvy2zBAw==}
@@ -4394,6 +4419,8 @@ snapshots:
       react-dom: '@preact/compat@18.3.2(preact@10.29.8)'
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@fontsource-variable/bricolage-grotesque@5.3.0': {}
 
   '@fontsource-variable/geist-mono@5.3.0': {}
 
