@@ -3,7 +3,6 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { hostname } from "node:os";
-import type { Credential } from "./credentials.js";
 
 /** How long the person has to click Allow in the browser. */
 const WAIT_MS = 5 * 60 * 1000;
@@ -28,15 +27,26 @@ function openBrowser(url: string) {
     .unref();
 }
 
-export interface LoginResult extends Credential {
-  /** The workspace's end-user MCP in prod: what customers add as a connector. */
+/** A workspace the person is in, with its end-user MCP in prod: what customers add as a connector. */
+export interface LoginWorkspace {
+  id: string;
+  name: string;
+  role: "admin" | "member";
   mcp: string;
 }
 
+export interface LoginResult {
+  token: string;
+  email: string;
+  /** Every workspace the person is in, the one they used last first. */
+  workspaces: LoginWorkspace[];
+}
+
 /**
- * Signs in through the browser: the registry's /cli page asks the signed-in admin to allow this
+ * Signs in through the browser: the registry's /cli page asks the signed-in person to allow this
  * computer, then sends a one-time code to a port only this process listens on. The code is traded,
- * with a verifier that never left this process, for an admin token.
+ * with a verifier that never left this process, for a token that acts as that person in every
+ * workspace they're in.
  */
 export async function login(url: string, options: { browser: boolean; log(line: string): void }): Promise<LoginResult> {
   const verifier = randomBytes(32).toString("base64url");
@@ -86,6 +96,6 @@ export async function login(url: string, options: { browser: boolean; log(line: 
     body: JSON.stringify({ code, verifier }),
   });
   const body = (await res.json().catch(() => ({}))) as Partial<LoginResult> & { error?: string };
-  if (!res.ok || !body.token || !body.workspace || !body.mcp) throw new Error(body.error ?? `the registry answered ${res.status}`);
-  return { token: body.token, workspace: body.workspace, mcp: body.mcp };
+  if (!res.ok || !body.token || !body.email || !body.workspaces) throw new Error(body.error ?? `the registry answered ${res.status}`);
+  return { token: body.token, email: body.email, workspaces: body.workspaces };
 }

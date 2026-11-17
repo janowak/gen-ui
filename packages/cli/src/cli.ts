@@ -18,9 +18,11 @@ const USAGE = `app-mcp <command> [options]
 
 Commands:
   guide                             How to set app-mcp up in a project, written for AI coding agents
-  login [--no-browser]              Sign in through the browser: pick the workspace and click Allow, no token to copy
+  login [--no-browser]              Sign in through the browser and click Allow, no token to copy
   logout                            Sign out and revoke the token login was given
-  whoami                            The workspace you are signed in to, its admin link and end-user MCP
+  whoami                            Who you are signed in as, the workspace commands use, its links
+  workspaces                        The workspaces you are in, and which one commands use
+  use <workspace>                   Make commands use another of your workspaces (id or name)
   init [dir] [--name n]             Start a new component in dir (default .), ready for dev and publish
   dev [dir] [--port n]              Develop the component in dir (default .) in a local host; no registry needed
   serve [dirs...]                   A local app-mcp MCP with these components and their workflows (default .
@@ -45,12 +47,14 @@ Commands:
 Options:
   --url <url>      Registry URL     (env APP_MCP_URL, default ${DEFAULT_URL})
   --token <token>  Registry token   (env APP_MCP_TOKEN; default: the one from app-mcp login)
+  --workspace <w>  Workspace id or name, for this command (env APP_MCP_WORKSPACE; default: app-mcp use)
   --env <name>     Environment for publish, theme, workflow and instructions (env APP_MCP_ENV, default prod)
   --json           Print the registry's response as JSON (publish, list, env list, whoami)
 
-Sign in with app-mcp login on your own machine; it keeps an admin token in ~/.config/app-mcp. CI and
-servers use tokens instead: server reads (SDK); publish publishes to any environment, or with --env
-only to those (CI); admin does everything.
+Sign in with app-mcp login on your own machine: it keeps a token for you in ~/.config/app-mcp that
+reaches every workspace you're in, with your role in each (admins do everything, members read). CI
+and servers use workspace tokens instead: server reads (SDK); publish publishes to any environment,
+or with --env only to those (CI); admin does everything.
 
 An environment serves exactly what was last published to it, so publishing an older version
 moves it back. Re-publishing the same version with the same bundle is a no-op, so CI jobs can be
@@ -81,6 +85,7 @@ const { values, positionals } = parseArgs({
   options: {
     url: { type: "string" },
     token: { type: "string" },
+    workspace: { type: "string" },
     env: { type: "string" },
     clear: { type: "boolean" },
     "refresh-url": { type: "string" },
@@ -113,15 +118,16 @@ if (!command || values.help) {
 const registryUrl = () => (values.url ?? (process.env.APP_MCP_URL || DEFAULT_URL)).replace(/\/$/, "");
 
 // Only registry commands need these: `app-mcp dev` runs without a registry.
-// --token, then APP_MCP_TOKEN (CI), then what `app-mcp login` saved for this registry.
+// --token, then APP_MCP_TOKEN (CI), then what `app-mcp login` saved for this registry. The workspace:
+// --workspace, then APP_MCP_WORKSPACE, then the one `app-mcp use` picked. A workspace token needs none.
 function registry() {
   const url = registryUrl();
+  const explicit = values.token ?? (process.env.APP_MCP_TOKEN || undefined);
+  const saved = explicit ? undefined : readCredential(url);
   const token =
-    values.token ??
-    (process.env.APP_MCP_TOKEN ||
-      readCredential(url)?.token ||
-      fail(`not signed in to ${url}. Run: app-mcp login   (in CI, set APP_MCP_TOKEN to a publish token)`));
-  return { url, token };
+    explicit ?? saved?.token ?? fail(`not signed in to ${url}. Run: app-mcp login   (in CI, set APP_MCP_TOKEN to a publish token)`);
+  const workspace = values.workspace ?? (process.env.APP_MCP_WORKSPACE || saved?.workspace?.id);
+  return { url, token, workspace };
 }
 
 /** The two addresses a workspace is reached at: where its admins manage it, and what its end users add. */
@@ -130,11 +136,12 @@ const links = (url: string, mcp: string) =>
   `  Your users add (connector): ${mcp}`;
 
 async function api<T = Record<string, unknown>>(method: string, path: string, body?: unknown): Promise<T> {
-  const { url, token } = registry();
+  const { url, token, workspace } = registry();
   const res = await fetch(`${url}${path}`, {
     method,
     headers: {
       authorization: `Bearer ${token}`,
+      ...(workspace ? { "x-app-mcp-workspace": workspace } : {}),
       "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json",
     },
     body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
@@ -143,6 +150,14 @@ async function api<T = Record<string, unknown>>(method: string, path: string, bo
   if (!res.ok) fail(`${res.status} ${json.error ?? res.statusText}${json.issues ? `\n${JSON.stringify(json.issues, null, 2)}` : ""}`);
   return json;
 }
+
+type Workspace = { id: string; name: string; role: string };
+
+/** The person's workspaces, one per line, marking the one commands use. */
+const describeWorkspaces = (workspaces: Workspace[], current?: string) =>
+  workspaces.length
+    ? `Your workspaces:\n${workspaces.map((w) => `  ${w.id === current ? "*" : " "} ${w.name} (${w.role})  ${w.id}`).join("\n")}\n`
+    : "You aren't in any workspace yet.\n";
 
 /** Prints the registry's response with --json, else the human-readable text. */
 function print(result: unknown, text: string) {
@@ -343,18 +358,31 @@ switch (command) {
     break;
   case "login": {
     const url = registryUrl();
-    const { mcp, ...credential } = await login(url, { browser: !values["no-browser"], log: (line) => console.error(line) }).catch(
-      (error: Error) => fail(`sign-in failed: ${(error.cause as Error | undefined)?.message || error.message}`),
+    const signedIn = await login(url, { browser: !values["no-browser"], log: (line) => console.error(line) }).catch((error: Error) =>
+      fail(`sign-in failed: ${(error.cause as Error | undefined)?.message || error.message}`),
     );
-    saveCredential(url, credential);
+    // Commands use the workspace the person used last until `app-mcp use` picks another.
+    const first = signedIn.workspaces[0];
+    saveCredential(url, {
+      token: signedIn.token,
+      email: signedIn.email,
+      ...(first ? { workspace: { id: first.id, name: first.name } } : {}),
+    });
+    const others =
+      signedIn.workspaces.length > 1
+        ? `\n\n${describeWorkspaces(signedIn.workspaces, first?.id)}\nSwitch with: app-mcp use <workspace>`
+        : "";
     console.log(
-      `Signed in to the ${credential.workspace.name} workspace as an admin. The token is saved in ${credentialsFile()}.\n\n${links(url, mcp)}`,
+      `Signed in as ${signedIn.email}. The token is saved in ${credentialsFile()}.` +
+        (first ? ` Commands use the ${first.name} workspace (${first.role}).\n\n${links(url, first.mcp)}` : "") +
+        others,
     );
     break;
   }
   case "logout": {
     const url = registryUrl();
     const saved = readCredential(url) ?? fail(`not signed in to ${url}`);
+    const who = saved.email ?? saved.workspace?.name ?? url;
     // Revoke first, so a signed-out machine leaves no working token behind. An already revoked one answers 401.
     const res = await fetch(`${url}/v1/tokens/current`, { method: "DELETE", headers: { authorization: `Bearer ${saved.token}` } }).catch(
       () => undefined,
@@ -362,22 +390,65 @@ switch (command) {
     removeCredential(url);
     console.log(
       res?.ok || res?.status === 401
-        ? `Signed out of ${saved.workspace.name} and revoked its token.`
-        : `Signed out of ${saved.workspace.name}. The registry couldn't be reached to revoke the token: revoke it under Tokens at ${url}/manage.`,
+        ? `Signed out ${who} and revoked the token.`
+        : `Signed out ${who} on this machine, but the registry couldn't be reached to revoke the token.`,
     );
     break;
   }
   case "whoami": {
     const { url } = registry();
-    const me = await api<{ workspace: { id: string; name: string }; scope: string; environments?: string[]; path: string }>(
-      "GET",
-      "/v1/whoami",
-    );
+    type Me = {
+      person?: { email: string };
+      workspace?: { id: string; name: string };
+      scope?: string;
+      environments?: string[];
+      path?: string;
+      workspaces?: Workspace[];
+    };
+    const me = await api<Me>("GET", "/v1/whoami");
+    const as = me.person ? `as ${me.person.email} ` : "";
+    if (!me.workspace) {
+      print(
+        { ...me, url },
+        `Signed in ${as}at ${url}, with no workspace picked.\n\n${describeWorkspaces(me.workspaces ?? [])}\nPick one with: app-mcp use <workspace>`,
+      );
+      break;
+    }
     const limited = me.environments ? `, limited to ${me.environments.join(", ")}` : "";
+    const access = me.person
+      ? me.scope === "admin"
+        ? "as an admin"
+        : "as a member (read-only)"
+      : `with ${me.scope === "admin" ? "an" : "a"} ${me.scope} token${limited}`;
     print(
       { ...me, url, manage: `${url}/manage`, connector: `${url}/mcp`, mcp: `${url}${me.path}` },
-      `Signed in to the ${me.workspace.name} workspace at ${url} with ${me.scope === "admin" ? "an" : "a"} ${me.scope} token${limited}.\n\n${links(url, `${url}${me.path}`)}`,
+      `Signed in ${as}to the ${me.workspace.name} workspace at ${url} ${access}.\n\n${links(url, `${url}${me.path}`)}`,
     );
+    break;
+  }
+  case "workspaces": {
+    const { workspace } = registry();
+    const { workspaces } = await api<{ workspaces: Workspace[] }>("GET", "/v1/workspaces");
+    print({ workspaces, current: workspace ?? null }, `${describeWorkspaces(workspaces, workspace)}\nSwitch with: app-mcp use <workspace>`);
+    break;
+  }
+  case "use": {
+    const named = args.join(" ").trim() || fail("usage: app-mcp use <workspace id or name>   (app-mcp workspaces lists them)");
+    const url = registryUrl();
+    const saved = readCredential(url) ?? fail(`not signed in to ${url}. Run: app-mcp login`);
+    const { workspaces } = await api<{ workspaces: Workspace[] }>("GET", "/v1/workspaces");
+    const byName = workspaces.filter((w) => w.name.toLowerCase() === named.toLowerCase());
+    const picked =
+      workspaces.find((w) => w.id === named) ??
+      (byName.length === 1
+        ? byName[0]
+        : fail(
+            byName.length
+              ? `several workspaces are called "${named}"; use its id.\n\n${describeWorkspaces(byName)}`
+              : `you aren't in a workspace called "${named}".\n\n${describeWorkspaces(workspaces)}`,
+          ))!;
+    saveCredential(url, { ...saved, workspace: { id: picked.id, name: picked.name } });
+    console.log(`Commands now use the ${picked.name} workspace (${picked.role}).`);
     break;
   }
   case "init": {

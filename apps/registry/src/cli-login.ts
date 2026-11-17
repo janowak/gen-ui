@@ -15,12 +15,10 @@ const ApproveBody = z.object({
   /** base64url SHA-256 of the CLI's verifier (PKCE S256). */
   challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   device: z.string().trim().min(1).max(60),
-  /** The workspace to connect, picked on the page when the person has several. Default: their active one. */
-  workspace: z.string().min(1).optional(),
 });
 const TokenBody = z.object({ code: z.string().min(1).max(2000), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/) });
 
-type Code = { token: string; workspace: string; challenge: string; expires: number };
+type Code = { token: string; challenge: string; expires: number };
 
 const encoder = new TextEncoder();
 const base64url = (bytes: ArrayBuffer | Uint8Array) =>
@@ -34,8 +32,9 @@ const fromBase64url = (text: string) => Uint8Array.from(atob(text.replaceAll("-"
 export const isCliPath = (path: string | undefined | null): path is string => Boolean(path?.startsWith("/cli?"));
 
 /**
- * `app-mcp login`: the CLI opens /cli in the browser, the signed-in admin clicks Allow, and the CLI gets
- * an admin token for the workspace without anyone copying a secret.
+ * `app-mcp login`: the CLI opens /cli in the browser, the signed-in person clicks Allow, and the CLI gets
+ * a token for that person without anyone copying a secret. It reaches every workspace they're in, with
+ * their role in each; the CLI names the workspace on each request.
  *
  * The browser only ever carries a short-lived code, sent to the CLI's loopback port. The code is signed
  * with the registry's secret (no table for it) and names a token that has no secret yet. The CLI trades
@@ -86,9 +85,7 @@ export function enableCliLogin(
         },
         403,
       );
-    // Every workspace they're in, the active one first; the page picks among the ones they admin.
-    const workspaces = await store.listWorkspaces(signedIn.user.id);
-    return c.json({ workspaces: workspaces.map(({ id, name, role }) => ({ id, name, admin: role === "admin" })) });
+    return c.json({ email: signedIn.user.email });
   });
 
   // The person clicked Allow. Same-origin only, like the web console: the session cookie alone isn't enough.
@@ -98,15 +95,11 @@ export function enableCliLogin(
     if (!signedIn) return c.json({ error: "Sign in first." }, 401);
     const body = ApproveBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "This sign-in link is incomplete. Run app-mcp login again." }, 400);
-    const { port, state, challenge, device, workspace } = body.data;
-    const membership = workspace
-      ? await store.membership(signedIn.user.id, workspace)
-      : await resolveMembership(store, config, signedIn.user);
-    if (!membership) return c.json({ error: `${signedIn.user.email} isn't in that app-mcp workspace.` }, 403);
-    if (membership.role !== "admin")
-      return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
-    const token = await store.addToken(membership.workspaceId, "admin", `CLI on ${device}`);
-    const code = await sign({ token, workspace: membership.workspaceId, challenge, expires: Date.now() + CODE_SECONDS * 1000 });
+    const { port, state, challenge, device } = body.data;
+    if (!(await resolveMembership(store, config, signedIn.user)))
+      return c.json({ error: `${signedIn.user.email} isn't in an app-mcp workspace.` }, 403);
+    const token = await store.addPersonToken(signedIn.user.id, `CLI on ${device}`);
+    const code = await sign({ token, challenge, expires: Date.now() + CODE_SECONDS * 1000 });
     const callback = new URL(`http://127.0.0.1:${port}/callback`);
     callback.searchParams.set("code", code);
     callback.searchParams.set("state", state);
@@ -122,12 +115,19 @@ export function enableCliLogin(
     const challenge = base64url(await crypto.subtle.digest("SHA-256", encoder.encode(body.data.verifier)));
     if (challenge !== code.challenge) return c.json({ error: "This sign-in was started by another app-mcp login." }, 400);
     try {
-      const token = await store.revealToken(code.workspace, code.token);
-      const workspace = await store.workspace(code.workspace);
+      const token = await store.revealPersonToken(code.token);
+      const { userId } = (await store.resolvePersonToken(token))!;
+      const workspaces = await store.listWorkspaces(userId);
       return c.json({
         token,
-        workspace: { id: code.workspace, name: workspace?.name ?? code.workspace },
-        mcp: `${config.baseURL}${endUserPath(code.workspace, DEFAULT_ENVIRONMENT)}`,
+        email: (await store.user(userId))?.email,
+        // The active one first: the CLI's default until `app-mcp use` picks another.
+        workspaces: workspaces.map(({ id, name, role }) => ({
+          id,
+          name,
+          role,
+          mcp: `${config.baseURL}${endUserPath(id, DEFAULT_ENVIRONMENT)}`,
+        })),
       });
     } catch (error) {
       if (error instanceof RegistryError) return c.json({ error: "This sign-in was already used. Run app-mcp login again." }, 400);

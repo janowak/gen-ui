@@ -581,7 +581,7 @@ describe("app-mcp login", () => {
     expect((await fetch(`${base}/cli?port=51234`, { headers: { cookie: ownerCookie } })).status).toBe(200);
   });
 
-  it("gives the CLI an admin token once an admin allows it", async () => {
+  it("gives the CLI a token for the person once they allow it", async () => {
     const approved = await approve(ownerCookie);
     expect(approved.status).toBe(200);
     const { url } = (await approved.clone().json()) as { url: string };
@@ -590,19 +590,25 @@ describe("app-mcp login", () => {
     expect(callback.searchParams.get("state")).toBe(request.state);
     const code = await codeFrom(approved);
 
-    // Until the CLI trades the code, the token authenticates nothing.
-    expect((await store.listTokens(workspaceId)).find((t) => t.name === "CLI on test-laptop")).toMatchObject({
-      scope: "admin",
-      revealed: false,
-    });
+    // A person's token, not one of the workspace's.
+    expect((await store.listTokens(workspaceId)).find((t) => t.name === "CLI on test-laptop")).toBeUndefined();
 
     const traded = await post("/cli/token", { code, verifier });
     expect(traded.status).toBe(200);
-    const body = (await traded.json()) as { token: string; workspace: { id: string; name: string }; mcp: string };
-    expect(body).toMatchObject({ workspace: { id: workspaceId, name: "acme" }, mcp: `${base}/w/${workspaceId}/mcp` });
+    const body = (await traded.json()) as { token: string };
+    expect(body).toMatchObject({
+      email: "owner@acme.test",
+      workspaces: [{ id: workspaceId, name: "acme", role: "admin", mcp: `${base}/w/${workspaceId}/mcp` }],
+    });
 
+    // One workspace: requests needn't name it.
     const whoami = await fetch(`${base}/v1/whoami`, { headers: { authorization: `Bearer ${body.token}` } });
-    expect(await whoami.json()).toEqual({ workspace: { id: workspaceId, name: "acme" }, scope: "admin", path: `/w/${workspaceId}/mcp` });
+    expect(await whoami.json()).toMatchObject({
+      person: { email: "owner@acme.test" },
+      workspace: { id: workspaceId, name: "acme" },
+      scope: "admin",
+      path: `/w/${workspaceId}/mcp`,
+    });
 
     // A code works once.
     expect((await post("/cli/token", { code, verifier })).status).toBe(400);
@@ -621,15 +627,30 @@ describe("app-mcp login", () => {
     expect((await post("/cli/token", { code, verifier })).status).toBe(200);
   });
 
-  it("only lets a signed-in admin allow it, from the registry's own page", async () => {
+  it("only lets a signed-in person allow it, from the registry's own page", async () => {
     expect((await post("/cli/approve", request, { origin: base })).status).toBe(401);
     expect((await post("/cli/approve", request, { cookie: ownerCookie, origin: "https://evil.test" })).status).toBe(403);
-    expect((await approve(await signUp("kim@acme.test"))).status).toBe(403);
     expect((await approve(ownerCookie, { ...request, port: 80 })).status).toBe(400);
     expect((await approve(ownerCookie, { ...request, challenge: "short" })).status).toBe(400);
     const context = await fetch(`${base}/cli/workspace`, { headers: { cookie: ownerCookie } });
-    expect(await context.json()).toEqual({ workspaces: [{ id: workspaceId, name: "acme", admin: true }] });
+    expect(await context.json()).toEqual({ email: "owner@acme.test" });
     // Signed out is the only case that asks to sign in, so the page's redirect to sign-in can't loop.
     expect((await fetch(`${base}/cli/workspace`)).status).toBe(401);
+  });
+
+  it("gives a member's CLI read-only access, with their role read on every request", async () => {
+    const kim = await signUp("kim@acme.test");
+    const code = await codeFrom(await approve(kim));
+    const { token } = (await (await post("/cli/token", { code, verifier })).json()) as { token: string };
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    expect((await fetch(`${base}/v1/components`, { headers })).status).toBe(200);
+    const write = () => fetch(`${base}/v1/theme`, { method: "PUT", headers, body: JSON.stringify({ theme: null }) });
+    const denied = await write();
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { error: string }).error).toMatch(/Only admins of acme/);
+    // Made an admin: the same token can now.
+    await store.setRole(workspaceId, (await store.memberByEmail(workspaceId, "kim@acme.test")).userId, "admin");
+    expect((await write()).status).toBe(200);
+    await store.setRole(workspaceId, (await store.memberByEmail(workspaceId, "kim@acme.test")).userId, "member");
   });
 });

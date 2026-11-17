@@ -9,18 +9,15 @@
     <main>
       <h1 id="title">Connect the app-mcp CLI?</h1>
       <div id="ask">
-        <p>The <code>app-mcp</code> command on this computer wants to manage your workspace:</p>
+        <p>The <code>app-mcp</code> command on this computer wants to act as you:</p>
         <ul>
           <li>Computer: <strong id="device"></strong></li>
-          <li id="workspace-item">Workspace: <strong id="workspace">…</strong></li>
+          <li>Signed in as: <strong id="email">…</strong></li>
         </ul>
-        <label class="field" id="workspace-picker" hidden
-          >Workspace to connect
-          <select id="workspace-select"></select
-        ></label>
         <p>
-          It gets an admin token, so it and any AI agent you run it from can publish components and change the theme, instructions and
-          workflows. Only allow this if you just ran <code>app-mcp login</code>. You can revoke it under Tokens.
+          It reaches every workspace you're in, with your role in each: where you're an admin, it and any AI agent you run it from can
+          publish components and change the theme, instructions and workflows. Only allow this if you just ran
+          <code>app-mcp login</code>. <code>app-mcp logout</code> revokes it.
         </p>
         <div class="row">
           <button id="deny" type="button">Deny</button>

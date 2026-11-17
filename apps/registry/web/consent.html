@@ -8,21 +8,16 @@
   <body>
     <main>
       <h1 id="title">Allow access to app-mcp?</h1>
-      <p id="intro">This app wants to manage your app-mcp workspace on your behalf:</p>
+      <p id="intro">This app wants to manage your app-mcp workspaces on your behalf:</p>
       <code id="client"></code>
-      <div id="pick" hidden>
-        <label class="field"
-          >Which workspace should it manage?
-          <select id="workspace-select"></select
-        ></label>
-        <p>It stays on this workspace. To manage another one from it, connect it again.</p>
-      </div>
       <div id="ask">
         <ul id="scopes"></ul>
-        <p id="workspace-line" hidden>Workspace: <strong id="workspace"></strong></p>
         <p>
-          It can list and preview components in each environment. If you are an admin, you can change themes, instructions and workflows
-          from it; those actions always need your click.
+          It can list and preview components in each environment of the workspaces you're in. Where you are an admin, you can change themes,
+          instructions and workflows from it; those actions always need your click.
+        </p>
+        <p id="workspace-line" hidden>
+          It starts on <strong id="workspace"></strong>, the workspace you used last; ask it to switch workspace to manage another.
         </p>
       </div>
       <div class="row">

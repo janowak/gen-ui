@@ -6,9 +6,6 @@ import { genericOAuth, jwt } from "better-auth/plugins";
 import type { Database } from "./db.js";
 import type { Store } from "./store.js";
 
-/** Claims the access token carries; the role is re-read from the database on every MCP request. */
-export const WORKSPACE_CLAIM = "app-mcp/workspace";
-
 export interface AuthConfig {
   /** Public URL of the registry, e.g. https://registry.example.com. The MCP resource is `${baseURL}/mcp`. */
   baseURL: string;
@@ -42,9 +39,6 @@ export interface AuthConfig {
 }
 
 export const SSO_PROVIDER_ID = "sso";
-
-/** Where a person in several workspaces picks the one an MCP connector manages, before consent. */
-export const WORKSPACE_PAGE = "/consent/workspace";
 
 /**
  * Fetches Client ID Metadata Documents without reaching private networks: `@better-auth/cimd/node` on
@@ -121,23 +115,11 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
         resource: `${config.baseURL}/mcp`,
         allowDynamicClientRegistration: Boolean(config.dynamicRegistration),
         allowUnauthenticatedClientRegistration: Boolean(config.dynamicRegistration),
-        // A person in several workspaces picks one before consent. The pick is the consent's reference:
-        // better-auth keeps it on the grant and its refresh tokens, so a connector stays on the workspace
-        // it was connected to, whatever the person switches to later.
-        postLogin: {
-          page: WORKSPACE_PAGE,
-          shouldRedirect: async ({ user, isContinuation }) => {
-            if (isContinuation) return false;
-            await resolveMembership(store, config, user);
-            return (await store.listWorkspaces(user.id)).length > 1;
-          },
-          // The picker makes the chosen workspace the active one; one workspace is active already.
-          consentReferenceId: async ({ user }) => (await resolveMembership(store, config, user))?.workspaceId,
-        },
-        customAccessTokenClaims: async ({ user, referenceId }) => {
-          if (!user) return {};
-          const workspaceId = referenceId ?? (await resolveMembership(store, config, user))?.workspaceId;
-          return workspaceId ? { [WORKSPACE_CLAIM]: workspaceId } : {};
+        // The access token names the person, not a workspace: /mcp manages their active one, as the
+        // console does, and reads their role there on every request. A first sign-in joins or makes one here.
+        customAccessTokenClaims: async ({ user }) => {
+          if (user) await resolveMembership(store, config, user);
+          return {};
         },
       }),
       cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" }),

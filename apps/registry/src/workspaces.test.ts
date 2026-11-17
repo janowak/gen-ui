@@ -8,8 +8,8 @@ import { createRegistryApp, type Store } from "./app.js";
 import { enableManagement } from "./management.js";
 import { loadAssets, testDatabase } from "./testing.js";
 
-// One login, several workspaces, on a hosted registry: the console switches, the CLI page and the
-// OAuth consent pick one.
+// One login, several workspaces, on a hosted registry: the console and connectors manage the active
+// one and switch it; the CLI's token is for the person and each request names its workspace.
 
 let server: ServerType;
 let base: string;
@@ -109,14 +109,8 @@ describe("several workspaces per login", () => {
     await expect(call(client, "switch_workspace", { workspace: "nope" })).rejects.toThrow(/aren't a member/);
   });
 
-  it("lets the CLI page pick which workspace the token is for", async () => {
-    const workspaces = await fetch(`${base}/cli/workspace`, { headers: { cookie } }).then((r) => r.json());
-    expect(workspaces).toEqual({
-      workspaces: [
-        { id: personal, name: "ann's workspace", admin: true },
-        { id: demo, name: "demo", admin: true },
-      ],
-    });
+  it("signs the CLI in as the person, and each request names its workspace", async () => {
+    expect(await fetch(`${base}/cli/workspace`, { headers: { cookie } }).then((r) => r.json())).toEqual({ email: "ann@acme.test" });
 
     const verifier = randomBytes(32).toString("base64url");
     const request = {
@@ -125,22 +119,66 @@ describe("several workspaces per login", () => {
       challenge: createHash("sha256").update(verifier).digest("base64url"),
       device: "test-laptop",
     };
-    const approved = await post("/cli/approve", { ...request, workspace: demo });
+    const approved = await post("/cli/approve", request);
     const code = new URL(((await approved.json()) as { url: string }).url).searchParams.get("code");
-    const traded = (await (await post("/cli/token", { code, verifier })).json()) as { token: string; workspace: { name: string } };
-    expect(traded.workspace.name).toBe("demo");
-    const whoami = await fetch(`${base}/v1/whoami`, { headers: { authorization: `Bearer ${traded.token}` } });
-    expect(((await whoami.json()) as { workspace: { id: string } }).workspace.id).toBe(demo);
+    const traded = (await (await post("/cli/token", { code, verifier })).json()) as {
+      token: string;
+      email: string;
+      workspaces: { id: string; name: string; role: string; mcp: string }[];
+    };
+    expect(traded.email).toBe("ann@acme.test");
+    // The one used last first: the CLI's default until `app-mcp use`.
+    expect(traded.workspaces.map((w) => [w.name, w.role])).toEqual([
+      ["ann's workspace", "admin"],
+      ["demo", "admin"],
+    ]);
+    expect(traded.workspaces[1]!.mcp).toBe(`${base}/w/${demo}/mcp`);
+
+    const as = (workspace?: string) => ({
+      authorization: `Bearer ${traded.token}`,
+      ...(workspace ? { "x-app-mcp-workspace": workspace } : {}),
+    });
+    const whoami = (workspace?: string) => fetch(`${base}/v1/whoami`, { headers: as(workspace) }).then((r) => r.json());
+
+    // Naming none, with two: who they are and their workspaces, but no workspace.
+    expect(await whoami()).toMatchObject({ person: { email: "ann@acme.test" }, workspaces: [{ id: personal }, { id: demo }] });
+    expect(await whoami()).not.toHaveProperty("workspace");
+    expect(await whoami(demo)).toMatchObject({ workspace: { id: demo, name: "demo" }, scope: "admin", path: `/w/${demo}/mcp` });
+    expect(await whoami("Demo")).toMatchObject({ workspace: { id: demo } });
+    const list = await fetch(`${base}/v1/workspaces`, { headers: as() }).then((r) => r.json());
+    expect(list).toEqual({
+      workspaces: [
+        { id: personal, name: "ann's workspace", role: "admin" },
+        { id: demo, name: "demo", role: "admin" },
+      ],
+    });
+
+    // Anything else needs a workspace: never the console's active one.
+    const unnamed = await fetch(`${base}/v1/components`, { headers: as() });
+    expect(unnamed.status).toBe(400);
+    expect(((await unnamed.json()) as { error: string }).error).toMatch(/2 workspaces.*app-mcp use/);
+    expect((await fetch(`${base}/v1/components`, { headers: as(demo) })).status).toBe(200);
+    await call(await console_(), "switch_workspace", { workspace: demo });
+    expect(((await whoami(personal)) as { workspace: { id: string } }).workspace.id).toBe(personal);
+    await call(await console_(), "switch_workspace", { workspace: personal });
 
     // Not someone else's workspace.
     const bob = await signUp("bob@other.test");
-    const others = await fetch(`${base}/cli/workspace`, { headers: { cookie: bob } }).then(
-      (r) => r.json() as Promise<{ workspaces: { id: string }[] }>,
-    );
-    expect((await post("/cli/approve", { ...request, workspace: others.workspaces[0]!.id })).status).toBe(403);
+    const bobs = (await (await fetch(`${base}/workspaces`, { headers: { cookie: bob } })).json()) as { workspaces: { id: string }[] };
+    expect((await fetch(`${base}/v1/components`, { headers: as(bobs.workspaces[0]!.id) })).status).toBe(404);
+
+    // A workspace token stays on its workspace, whatever the request names.
+    const ci = await store.createToken(demo, "publish", "ci");
+    const ciAs = (workspace: string) => ({ authorization: `Bearer ${ci}`, "x-app-mcp-workspace": workspace });
+    expect((await fetch(`${base}/v1/components`, { headers: ciAs("demo") })).status).toBe(200);
+    expect((await fetch(`${base}/v1/components`, { headers: ciAs(personal) })).status).toBe(403);
+
+    // Logout ends the person's token everywhere.
+    expect((await fetch(`${base}/v1/tokens/current`, { method: "DELETE", headers: as() })).status).toBe(200);
+    expect((await fetch(`${base}/v1/components`, { headers: as(demo) })).status).toBe(401);
   });
 
-  it("asks which workspace an MCP connector manages, and keeps it there", async () => {
+  it("lets an MCP connector act as the person and switch workspace like the console", async () => {
     const verifier = randomBytes(32).toString("base64url");
     const authorize = new URL(`${base}/api/auth/oauth2/authorize`);
     for (const [k, v] of Object.entries({
@@ -155,17 +193,9 @@ describe("several workspaces per login", () => {
     }))
       authorize.searchParams.set(k, v);
 
-    // Two workspaces: the picker comes before consent.
-    const toPicker = await fetch(authorize, { headers: { cookie }, redirect: "manual" });
-    const pickerUrl = new URL(toPicker.headers.get("location") ?? ((await toPicker.json()) as { url: string }).url, base);
-    expect(pickerUrl.pathname).toBe("/consent/workspace");
-    expect((await fetch(pickerUrl, { headers: { cookie } })).status).toBe(200);
-
-    // The page makes the pick the active workspace, then resumes the flow (what consent.ts does).
-    expect((await post("/workspaces/active", { workspace: demo })).status).toBe(200);
-    expect((await post("/workspaces/active", { workspace: demo }, { origin: "https://evil.test" })).status).toBe(403);
-    const resumed = await post("/api/auth/oauth2/continue", { postLogin: true, oauth_query: pickerUrl.search.slice(1) });
-    const consentUrl = new URL(((await resumed.json()) as { url: string }).url, base);
+    // Two workspaces, and still no picker: straight to consent.
+    const toConsent = await fetch(authorize, { headers: { cookie }, redirect: "manual" });
+    const consentUrl = new URL(toConsent.headers.get("location") ?? ((await toConsent.json()) as { url: string }).url, base);
     expect(consentUrl.pathname).toBe("/consent");
 
     const consent = await post("/api/auth/oauth2/consent", { accept: true, oauth_query: consentUrl.search.slice(1) });
@@ -183,14 +213,17 @@ describe("several workspaces per login", () => {
       }),
     }).then((r) => r.json() as Promise<{ access_token: string; refresh_token: string }>);
     const client = await connector(tokens.access_token);
-    expect(await workspaceName(client)).toBe("demo");
-    // A connector lists and creates workspaces, but doesn't switch: it stays on the one picked.
+    expect(await workspaceName(client)).toBe("ann's workspace");
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["list_workspaces", "create_workspace"]));
-    expect(tools.map((t) => t.name)).not.toContain("switch_workspace");
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["list_workspaces", "create_workspace", "switch_workspace"]));
 
-    // Switching in the console later doesn't move the connector, not even after a token refresh.
+    // The connector switches itself, and the console follows; the same token reaches both workspaces.
+    await call(client, "switch_workspace", { workspace: demo });
+    expect(await workspaceName(await connector(tokens.access_token))).toBe("demo");
+    expect(await workspaceName(await console_())).toBe("demo");
     await call(await console_(), "switch_workspace", { workspace: personal });
+    expect(await workspaceName(await connector(tokens.access_token))).toBe("ann's workspace");
+
     const refreshed = await fetch(`${base}/api/auth/oauth2/token`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -201,7 +234,6 @@ describe("several workspaces per login", () => {
         resource: `${base}/mcp`,
       }),
     }).then((r) => r.json() as Promise<{ access_token: string }>);
-    expect(await workspaceName(await connector(refreshed.access_token))).toBe("demo");
-    expect(await workspaceName(await console_())).toBe("ann's workspace");
+    expect(await workspaceName(await connector(refreshed.access_token))).toBe("ann's workspace");
   });
 });

@@ -447,6 +447,33 @@ export class Store {
     );
   }
 
+  // Person tokens: `app-mcp login`. They name a person, not a workspace; each request names the workspace.
+
+  /** A person token with no secret yet: the CLI's one-time code names it, and revealPersonToken makes its secret. */
+  async addPersonToken(userId: string, name: string): Promise<string> {
+    const id = randomUUID();
+    await this.db.run("INSERT INTO person_tokens (id, user_id, name, created_at) VALUES (?, ?, ?, ?)", id, userId, name, now());
+    return id;
+  }
+
+  /** Makes a person token's secret and returns it, once. */
+  async revealPersonToken(id: string): Promise<string> {
+    const token = `gnu_person_${randomBytes(24).toString("base64url")}`;
+    const { changes } = await this.db.run("UPDATE person_tokens SET hash = ? WHERE id = ? AND hash IS NULL", sha256(token), id);
+    if (!changes) throw new RegistryError(409, "This sign-in was already used.");
+    return token;
+  }
+
+  async revokePersonToken(id: string): Promise<void> {
+    await this.db.run("DELETE FROM person_tokens WHERE id = ?", id);
+  }
+
+  /** Who a person token signs in, if it is one. */
+  async resolvePersonToken(token: string): Promise<{ id: string; userId: string } | undefined> {
+    const row = await this.db.get<{ id: string; user_id: string }>("SELECT id, user_id FROM person_tokens WHERE hash = ?", sha256(token));
+    return row && { id: row.id, userId: row.user_id };
+  }
+
   // Environments
 
   /** The workspace's environments, prod first. */
