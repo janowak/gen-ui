@@ -127,7 +127,7 @@ description: The user asks where an order is.
 2. Show it with render_order_status.
 ```
 
-Without `params` a workflow is part of the instructions the model always has; keep those short, since instructions and such workflows share an 8000 character limit. With `params` it becomes a slash command the user starts:
+Without `params` a workflow is part of the instructions the model always has; keep those short, since instructions and such workflows share a 50000 character limit. With `params` it becomes a slash command the user starts:
 
 ```md
 params:

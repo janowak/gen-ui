@@ -43,7 +43,7 @@ export const isCommand = (workflow: Pick<Workflow, "params">) => workflow.params
 export const MAX_ENVIRONMENT_INSTRUCTIONS = 4000;
 
 /** Hosts put server instructions in the model's context on every turn: the overview plus the workflows without params. */
-export const MAX_INSTRUCTIONS = 8000;
+export const MAX_INSTRUCTIONS = 50000;
 
 const heading = (w: Pick<Workflow, "name" | "title">) => (w.title ? `${w.title} (${w.name})` : w.name);
 

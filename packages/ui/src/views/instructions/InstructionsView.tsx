@@ -31,7 +31,7 @@ function parseState(value: unknown): State | undefined {
     environment: v.environment ?? "prod",
     instructions: typeof v.instructions === "string" ? v.instructions : null,
     served: typeof v.served === "string" ? v.served : null,
-    limit: typeof v.limit === "number" ? v.limit : 8000,
+    limit: typeof v.limit === "number" ? v.limit : 50000,
     saved: v.saved,
   };
 }

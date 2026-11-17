@@ -338,11 +338,11 @@ describe("workflows", () => {
     });
     expect((await call("GET", "/v1/instructions", reader)).body.instructions).toBe("Acme returns.");
 
-    const long = { description: "Long.", instructions: "x".repeat(4000) };
+    const long = { description: "Long.", instructions: "x".repeat(47000) };
     expect((await call("PUT", "/v1/workflows/one", publisher, long)).status).toBe(201);
     const over = await call("PUT", "/v1/workflows/two", publisher, long);
     expect(over.status).toBe(400);
-    expect(over.body.error).toMatch(/at most 8000.*one \(4000\)/);
+    expect(over.body.error).toMatch(/at most 50000.*one \(47000\)/);
     // As a command it isn't in the instructions, so it fits.
     expect((await call("PUT", "/v1/workflows/two", publisher, { ...long, params: [{ name: "x", description: "X" }] })).status).toBe(201);
     expect((await call("PUT", "/v1/instructions", admin, { instructions: "y".repeat(4000) })).status).toBe(400);

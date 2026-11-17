@@ -61,9 +61,8 @@
         <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Sections">
           <a class="btn btn-ghost text-muted-foreground" href="#how">How it works</a>
           <a class="btn btn-ghost text-muted-foreground" href="#start">Get started</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#features">What you can build</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#data">Your data</a>
-          <a class="btn btn-ghost text-muted-foreground" href="#self-host">Self-host</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#features">Features</a>
+          <a class="btn btn-ghost text-muted-foreground" href="#hosting">Hosting</a>
         </nav>
         <div class="ml-auto flex items-center gap-2 md:ml-0">
           <button class="btn btn-ghost w-8 px-0" type="button" aria-label="Switch to dark theme" data-theme-toggle>
@@ -115,14 +114,13 @@
             Your UX, inside Claude and ChatGPT.
           </h1>
           <p class="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-            Build the components your customers' flows need, write the flows in your own words, and publish them to app-mcp. Your customers
-            get your UX right inside Claude, ChatGPT and other MCP Apps hosts, not a generic chat reply. No MCP server needed to start.
+            Publish the components your customers' flows need, and they get your UX inside Claude, ChatGPT and other MCP Apps hosts instead
+            of a wall of text. No MCP server needed to start.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a class="btn btn-lg" href="#start">Get started</a>
             <a class="btn btn-lg btn-outline" href="#how">See how it works</a>
           </div>
-          <p class="mt-6 text-sm text-muted-foreground">Built on the MCP Apps standard and the official MCP TypeScript SDK.</p>
         </div>
 
         <div class="min-w-0" id="demos">
@@ -262,8 +260,7 @@
                 <li class="text-sm" data-reveal>Order 4821 is placed: 400 medium mailer boxes, arriving by Friday, October 30.</li>
               </ol>
               <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                A component Packwell built for reorders. The model opens it and fills in what it knows; the customer checks it and places
-                the order.
+                Packwell's reorder form. The model fills in what it knows; the customer checks it and places the order.
               </figcaption>
             </figure>
 
@@ -343,8 +340,7 @@
                 <li class="text-sm" data-reveal>3,760 boxes so far this year. October is your biggest month yet, at 640.</li>
               </ol>
               <figcaption class="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                A chart Packwell built for order history. The model opens it with the customer's numbers, so the answer is a picture, not a
-                table of text.
+                Packwell's order history chart, opened with the customer's own numbers.
               </figcaption>
             </figure>
           </div>
@@ -357,11 +353,8 @@
       <section class="scroll-mt-14 border-t" id="how" aria-labelledby="how-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="how-title">How it works</h2>
-          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            From sign-up to your customers using your components, without running a server of your own. Your coding agent can do the first
-            three steps <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#start">from one prompt</a>.
-          </p>
-          <ol class="mt-12 grid list-none gap-12 md:grid-cols-2 md:gap-x-6 md:gap-y-12 lg:grid-cols-4 lg:gap-y-4">
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">No server of your own to run.</p>
+          <ol class="mt-12 grid list-none gap-12 md:grid-cols-3 md:gap-x-6">
             <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
               <h3 class="flex items-center gap-3 font-medium">
                 <span
@@ -369,26 +362,11 @@
                   aria-hidden="true"
                   >1</span
                 >
-                Register
+                Build your components
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Sign in with GitHub, Google or your company's login. You get a workspace and an MCP address your customers can connect to.
-              </p>
-              <pre class="code"><code><span class="s">https://api.app-mcp.com</span>
-  /w/&lt;workspace&gt;/mcp</code></pre>
-            </li>
-            <li class="flex flex-col gap-4 md:row-span-3 md:grid md:grid-rows-subgrid">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
-                  aria-hidden="true"
-                  >2</span
-                >
-                Add your components
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Write them with <code class="font-mono text-[0.9em] text-foreground">@app-mcp/kit</code> in TypeScript or the framework you
-                use, with workflows in Markdown next to them. Props are a Zod schema; the build is one HTML file.
+                TypeScript with <code class="font-mono text-[0.9em] text-foreground">@app-mcp/kit</code>, in any framework. Workflows are
+                Markdown next to them.
               </p>
               <pre class="code"><code><span class="k">defineComponent</span>({
   name: <span class="s">"rating"</span>,
@@ -400,13 +378,12 @@
                 <span
                   class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
                   aria-hidden="true"
-                  >3</span
+                  >2</span
                 >
-                Test them
+                Publish
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Publish, add your address as a connector in Claude or ChatGPT, and try the flow as your customers will. Change it and
-                publish again.
+                One command puts them in your workspace. Add its address in Claude or ChatGPT to try the flow yourself.
               </p>
               <pre class="code"><code>$ <span class="k">app-mcp publish</span>
 # serves rating 1.3.0</code></pre>
@@ -416,14 +393,12 @@
                 <span
                   class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
                   aria-hidden="true"
-                  >4</span
+                  >3</span
                 >
-                Your customers use it
+                Customers connect
               </h3>
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Share the address. Customers add it as a connector, and new versions reach running chats without a restart. Need it to act
-                on your systems?
-                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="#data">Connect your data.</a>
+                They add the same address as a connector. New versions reach running chats without a restart.
               </p>
               <pre class="code"><code>Settings → Connectors → Add
 <span class="s">https://api.app-mcp.com</span>
@@ -437,8 +412,8 @@
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="start-title">Get started with one prompt</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Paste this into Claude Code, Cursor, Codex or any coding agent that can run commands, in your project. It sets everything up and
-            hands you two links: one to manage your workspace, one for your users.
+            Paste this into Claude Code, Cursor, Codex or any coding agent in your project. You click Allow once; it builds and publishes
+            your first component and hands you two links.
           </p>
           <div class="mt-8 rounded-xl bg-muted/40 ring-1 ring-foreground/10">
             <div class="flex items-center gap-3 border-b px-4 py-2.5">
@@ -457,275 +432,177 @@
 sign in, build my first component (ask me what it should show), check it and publish it.
 Finish with my admin link and the link my users add.</code></pre>
           </div>
-          <ol class="mt-12 grid list-none gap-12 md:grid-cols-3 md:gap-x-10">
-            <li class="flex flex-col gap-4">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
-                  aria-hidden="true"
-                  >1</span
-                >
-                You click Allow
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Your agent runs <code class="font-mono text-[0.9em] text-foreground">app-mcp login</code> and a browser tab opens. Sign in
-                with Google or GitHub and click Allow. You get a workspace, and there is no token to copy or paste into a chat.
-              </p>
-            </li>
-            <li class="flex flex-col gap-4">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
-                  aria-hidden="true"
-                  >2</span
-                >
-                Your agent builds and publishes
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                It follows the
-                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="/llms.txt">setup guide</a> that ships with
-                the CLI: creates the component, checks the build and publishes it. If you already run an MCP server, it connects that too,
-                so views can call your tools.
-              </p>
-            </li>
-            <li class="flex flex-col gap-4">
-              <h3 class="flex items-center gap-3 font-medium">
-                <span
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
-                  aria-hidden="true"
-                  >3</span
-                >
-                You get two links
-              </h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                An admin link, where you change the theme, instructions, workflows and people. And the link your users add as a connector in
-                Claude or ChatGPT. Add it yourself to try the flow as they will.
-              </p>
-            </li>
-          </ol>
-
-          <div class="mt-16 grid gap-10 border-t pt-12 md:grid-cols-2">
-            <div class="flex flex-col gap-4">
-              <h3 class="font-medium">Prefer to do it by hand?</h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                The same steps as commands. Components are TypeScript with
-                <code class="font-mono text-[0.9em] whitespace-nowrap text-foreground">@app-mcp/kit</code>; use any framework you like.
-              </p>
-              <pre class="code"><code>$ <span class="k">npx @app-mcp/cli login</span>
-$ <span class="k">npx @app-mcp/cli init</span> my_poll
-$ cd my_poll &amp;&amp; npm install
-$ <span class="k">npm run dev</span>              # try it locally
-$ <span class="k">npm run app-mcp:publish</span>  # live in your workspace</code></pre>
-            </div>
-            <div class="flex flex-col gap-4">
-              <h3 class="font-medium">No code yet? Try the built-in forms and charts</h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Add app-mcp's connector in Claude (Settings → Connectors → Add custom connector), sign in, and ask it to open your
-                workspace. It shows your workspace's own address: add that as a second connector and ask for a form or a chart. Custom
-                connectors need a paid Claude plan or ChatGPT's developer mode.
-              </p>
-              <div class="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 p-3">
-                <code class="font-mono text-[13px] text-foreground">https://api.app-mcp.com/mcp</code>
-                <button class="btn btn-outline ml-auto" type="button" data-copy="https://api.app-mcp.com/mcp">Copy</button>
-              </div>
-            </div>
-          </div>
+          <p class="mt-6 text-sm text-muted-foreground">
+            Prefer to do it by hand? Run
+            <code class="font-mono text-[0.9em] text-foreground">npx @app-mcp/cli login</code>, then
+            <code class="font-mono text-[0.9em] text-foreground">init</code> and
+            <code class="font-mono text-[0.9em] text-foreground">publish</code>. The
+            <a class="font-medium text-foreground underline-offset-4 hover:underline" href="/llms.txt">setup guide</a> has the details.
+          </p>
         </div>
       </section>
 
       <section class="scroll-mt-14 border-t" id="features" aria-labelledby="features-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">What you can build</h2>
-          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Whatever your customers' flows need. app-mcp handles the plumbing around it, so your team writes the component.
-          </p>
-          <dl class="mt-12 divide-y border-y">
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Inside your own app</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Embed an AI assistant with the same MCP tools, interactive views and workflows your customers use in external assistants.
-                Choose your model and keep your authentication and data.
-              </dd>
-              <dd><code class="badge badge-outline font-mono">@app-mcp/host</code></dd>
-            </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="features-title">Features</h2>
+          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">You write the component. app-mcp handles everything around it.</p>
+          <dl class="mt-12 grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path class="duo" d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2" />
+                  <rect class="duo" x="14" y="2" width="8" height="8" rx="1" />
+                </svg>
+              </span>
               <dt class="font-medium">Your components</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                A seat picker, a quote builder, a rating: anything your flow needs. Plain TypeScript or the framework you use, with props as
-                a Zod schema.
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                A seat picker, a quote builder, a rating: whatever your flow needs. Any framework, props as a Zod schema.
               </dd>
-              <dd><code class="badge badge-outline font-mono">defineComponent({ … })</code></dd>
             </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect class="duo" width="18" height="18" x="3" y="3" rx="2" />
+                  <line x1="9" x2="15" y1="15" y2="9" />
+                </svg>
+              </span>
               <dt class="font-medium">Workflows</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Playbooks in your own words, kept next to your components and published with them. A workflow with params is a slash
-                command; one without is guidance the model always has.
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                Playbooks in your own words, published with your components. Ones with params become slash commands.
               </dd>
-              <dd><code class="badge badge-outline font-mono">/create_order</code></dd>
             </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                  <path d="M18 17V9" />
+                  <path d="M13 17V5" />
+                  <path d="M8 17v-3" />
+                </svg>
+              </span>
               <dt class="font-medium">Forms and charts, built in</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                For everything you haven't built yet. Text, numbers, dates, switches and selects; line, bar, area and pie charts.
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                For everything you haven't built yet: inputs, dates, selects; line, bar, area and pie charts.
               </dd>
-              <dd><code class="badge badge-outline font-mono">render_form, render_chart</code></dd>
             </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    class="duo"
+                    d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+                  />
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+                  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+                  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+                </svg>
+              </span>
               <dt class="font-medium">Your theme</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Views follow the host's colors, fonts and dark mode. Set your primary color, accent, corner radius and chart colors for each
-                environment, with a live preview in the chat.
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                Views follow the host's fonts and dark mode, with your colors, radius and chart palette on top.
               </dd>
-              <dd><code class="badge badge-outline font-mono">--app-mcp-primary</code></dd>
             </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    class="duo"
+                    d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+                  />
+                  <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+                  <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+                </svg>
+              </span>
               <dt class="font-medium">Environments</dt>
-              <dd class="max-w-xl text-muted-foreground">
-                Add staging or any other environment when you want one. Each has its own address, versions, theme and workflows, so testers
-                can keep it next to prod in the same chat. Publish a tested version to prod without rebuilding it.
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                Staging next to prod in the same chat, each with its own address, versions and theme. Ship a tested version without
+                rebuilding.
               </dd>
-              <dd><code class="badge badge-outline font-mono">app-mcp publish --env staging</code></dd>
             </div>
-            <div class="grid gap-2 py-6 md:grid-cols-[180px_minmax(0,1fr)_220px] md:gap-8">
-              <dt class="font-medium">Loading states</dt>
-              <dd class="max-w-xl text-muted-foreground">
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                  <path d="M8 16H3v5" />
+                </svg>
+              </span>
+              <dt class="font-medium">Live updates</dt>
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                New versions reach running chats without a restart, and old messages keep the exact version they were made with.
+              </dd>
+            </div>
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </span>
+              <dt class="font-medium">Streaming states</dt>
+              <dd class="text-sm leading-relaxed text-muted-foreground">
                 Fields appear while the model is still writing. Submits can't fire twice, and failures tell the model what went wrong.
               </dd>
-              <dd><code class="badge badge-outline font-mono">streaming → ready</code></dd>
+            </div>
+            <div class="flex flex-col gap-3">
+              <span class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect class="duo" x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M10 4v4" />
+                  <path d="M2 8h20" />
+                  <path d="M6 4v4" />
+                </svg>
+              </span>
+              <dt class="font-medium">Inside your own app</dt>
+              <dd class="text-sm leading-relaxed text-muted-foreground">
+                Embed an assistant with the same views and workflows, on your model and your sign-in, with
+                <code class="font-mono text-[0.9em] text-foreground">@app-mcp/host</code>.
+              </dd>
             </div>
           </dl>
         </div>
       </section>
 
-      <section class="scroll-mt-14 border-t" id="further" aria-labelledby="further-title">
+      <section class="scroll-mt-14 border-t" id="hosting" aria-labelledby="hosting-title">
         <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="further-title">Going further</h2>
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="hosting-title">Start hosted, grow from there</h2>
           <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Start hosted. Add your own data when a flow needs it, and run app-mcp yourself when nothing may leave your network.
+            Add your own data when a flow needs it, and run app-mcp yourself when nothing may leave your network.
           </p>
           <ol class="mt-12 grid list-none gap-4 md:grid-cols-3">
             <li class="card px-5 ring-2 ring-primary">
               <div class="flex items-center justify-between gap-2">
-                <p class="font-medium">Hosted</p>
+                <h3 class="font-medium">Hosted</h3>
                 <span class="badge badge-default">Start here</span>
               </div>
               <p class="text-muted-foreground">
-                Register, publish your components and share the address. Components, workflows, forms and charts.
+                Publish your components and share your workspace address. Components, workflows, forms and charts, with no server to run.
               </p>
-              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#how">How it works</a>
+              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#start">Get started</a>
             </li>
-            <li class="card px-5">
-              <p class="font-medium">With your data</p>
+            <li class="card px-5" id="data">
+              <h3 class="font-medium">With your data</h3>
               <p class="text-muted-foreground">
-                Plus your MCP server with the app-mcp SDK. Views search, load and submit through your tools; app-mcp never sees the results.
-              </p>
-              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#data">Connect your data</a>
-            </li>
-            <li class="card px-5">
-              <p class="font-medium">Self-hosted</p>
-              <p class="text-muted-foreground">Plus app-mcp inside your network, with your own database and your company's sign-in.</p>
-              <a class="mt-auto font-medium underline-offset-4 hover:underline" href="#self-host">Self-host</a>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="scroll-mt-14 border-t" id="data" aria-labelledby="data-title">
-        <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl" id="data-title">
-            Need your own data? Connect your MCP server
-          </h2>
-          <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
-            When a flow needs your customers, orders or prices, mount app-mcp in the MCP server you already run. Your data stays on your
-            server.
-          </p>
-
-          <div class="mt-12 grid gap-12 md:grid-cols-2 md:gap-x-6">
-            <div class="flex flex-col gap-4">
-              <h3 class="font-medium">One call in your server</h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Your components, forms and charts become tools on your server, next to the ones you have, and your workflows become its
-                slash commands.
-              </p>
-              <pre class="code"><code><span class="k">await</span> mountAppMcp(server, {
-  appMcp: connectAppMcp({
-    url: <span class="s">"…/w/&lt;workspace&gt;/mcp"</span>,
-    token,
-  }),
-});</code></pre>
-            </div>
-            <div class="flex flex-col gap-4">
-              <h3 class="font-medium">Views that use your tools</h3>
-              <p class="text-sm leading-relaxed text-muted-foreground">
-                Selects search your tools as people type, charts load rows from your tools so private data stays out of the model's context,
-                and submit errors from your tool show next to the field.
-              </p>
-              <pre class="code"><code>{
-  <span class="s">"name"</span>: <span class="s">"customer"</span>,
-  <span class="s">"type"</span>: <span class="s">"resource_select"</span>,
-  <span class="s">"source"</span>: {
-    <span class="s">"toolName"</span>: <span class="s">"search_customers"</span>
-  }
-}</code></pre>
-            </div>
-          </div>
-
-          <div class="flow mt-16 text-sm">
-            <div class="node-host rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-              <p class="font-medium">AI client</p>
-              <p class="mt-1 text-muted-foreground">Claude, ChatGPT or another MCP Apps host renders the view.</p>
-            </div>
-            <div class="link link-a"><span>Tool calls and results</span></div>
-            <div class="node-server rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-              <p class="font-medium">Your MCP server</p>
-              <p class="mt-1 text-muted-foreground">With the app-mcp SDK inside, forwarding app-mcp's tools to app-mcp.</p>
-            </div>
-            <div class="link link-b"><span>Your code, as today</span></div>
-            <div class="node-tools rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-              <p class="font-medium">Your tools and APIs</p>
-              <p class="mt-1 text-muted-foreground">Customers, orders, billing: whatever your tools already reach.</p>
-            </div>
-            <div class="link link-c"><span>Calls to app-mcp's tools</span></div>
-            <div class="node-registry rounded-xl border border-dashed border-foreground/25 p-4">
-              <p class="font-medium">app-mcp</p>
-              <p class="mt-1 text-muted-foreground">
-                Serves forms, charts, workflows and your components. It sees calls to its own tools, never your tools' calls or their
+                Mount app-mcp in the MCP server you already run. Views search, load and submit through your tools; app-mcp never sees the
                 results.
               </p>
-            </div>
-          </div>
-
-          <ul class="mt-16 grid list-none gap-8 md:grid-cols-2">
-            <li>
-              <h3 class="font-medium">Versions that never change</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                A published version is immutable and its bundle is kept, so old messages keep rendering the exact version they were made
-                with.
-              </p>
+              <pre class="code mt-auto"><code><span class="k">await</span> mountAppMcp(server, {
+  appMcp: connectAppMcp({ url, token }),
+});</code></pre>
             </li>
-            <li>
-              <h3 class="font-medium">People confirm, not the model</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Saving the theme, instructions or workflows is hidden from the model. It runs only from a click in the view.
+            <li class="card px-5" id="self-host">
+              <h3 class="font-medium">Self-hosted</h3>
+              <p class="text-muted-foreground">
+                One container with a SQLite file inside your network, with your company's sign-in. Everything else works the same.
               </p>
+              <a
+                class="mt-auto font-medium underline-offset-4 hover:underline"
+                href="mailto:hello@app-mcp.com?subject=app-mcp%20self-hosting"
+                >Talk to us</a
+              >
             </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="scroll-mt-14 border-t" id="self-host" aria-labelledby="self-host-title">
-        <div class="mx-auto grid max-w-6xl gap-6 px-4 py-16 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:py-20">
-          <div class="max-w-2xl">
-            <h2 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl" id="self-host-title">
-              Nothing may leave your network? Run app-mcp yourself
-            </h2>
-            <p class="mt-3 text-muted-foreground">
-              The same registry as one container with a SQLite file, inside your network. People sign in with GitHub, Google or your
-              company's OIDC provider, and everything above works the same.
-            </p>
-          </div>
-          <a class="btn btn-lg btn-outline w-fit" href="mailto:hello@app-mcp.com?subject=app-mcp%20self-hosting">Talk to us</a>
+          </ol>
         </div>
       </section>
 
@@ -736,25 +613,35 @@ $ <span class="k">npm run app-mcp:publish</span>  # live in your workspace</code
             <p class="mt-3 max-w-2xl text-lg text-muted-foreground">
               Tell us the flow you want your customers to finish in the chat, and we'll help you ship the first component.
             </p>
-            <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div class="mt-8 flex flex-wrap items-center gap-3">
               <a class="btn btn-lg" href="#start">Get started</a>
               <a class="btn btn-lg btn-outline" href="mailto:hello@app-mcp.com?subject=app-mcp%20first%20flow">Talk to us</a>
-              <span class="text-sm text-muted-foreground">
-                or write to
-                <a class="font-medium text-foreground underline-offset-4 hover:underline" href="mailto:hello@app-mcp.com"
-                  >hello@app-mcp.com</a
-                >
-              </span>
             </div>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="border-t">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-8 text-sm text-muted-foreground sm:px-6">
-        <span class="font-semibold tracking-tight text-foreground">app-mcp</span>
-        <span>Your components, in every AI chat.</span>
+    <footer class="bg-zinc-950 text-sm text-zinc-400">
+      <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div class="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+          <div>
+            <span class="text-xl font-semibold tracking-tight text-white">app-mcp</span>
+            <p class="mt-1">Your components, in every AI chat.</p>
+          </div>
+          <nav class="flex flex-wrap items-center gap-6" aria-label="Footer">
+            <a class="transition-colors hover:text-white" href="#how">How it works</a>
+            <a class="transition-colors hover:text-white" href="#start">Get started</a>
+            <a class="transition-colors hover:text-white" href="#hosting">Hosting</a>
+            <a class="transition-colors hover:text-white" href="/llms.txt">Setup guide</a>
+            <a class="transition-colors hover:text-white" href="mailto:hello@app-mcp.com">Contact</a>
+            <a class="transition-colors hover:text-white" href="https://api.app-mcp.com/sign-in">Sign in</a>
+          </nav>
+        </div>
+        <div class="mt-8 flex flex-col items-center justify-between gap-4 border-t border-zinc-800 pt-8 sm:flex-row">
+          <span>© <span data-year>2026</span> app-mcp</span>
+          <span>Built on the MCP Apps standard</span>
+        </div>
       </div>
     </footer>
 

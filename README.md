@@ -168,7 +168,7 @@ params:                       # with params: the slash command /create_order tak
 2. Show the order form with render_form … submit to create_order.
 ```
 
-A workflow without params isn't a command: hosts get it in the MCP server instructions, after the environment's own instructions (`app-mcp instructions <file.md>`). Those instructions go into every conversation, so together they're capped at 8000 characters.
+A workflow without params isn't a command: hosts get it in the MCP server instructions, after the environment's own instructions (`app-mcp instructions <file.md>`). Those instructions go into every conversation, so together they're capped at 50000 characters.
 
 **Each environment is its own connector.** Its end-user MCP lives at `/w/<workspace>/<environment>/mcp` (prod at `/w/<workspace>/mcp`). Outside prod, tool and prompt names end in the environment's name (`render_form_staging`, `render_rating_staging`, `/create_order_staging`), so a staging connector can sit next to prod's in the same chat and testers see which one ran.
 

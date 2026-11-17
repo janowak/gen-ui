@@ -8,3 +8,4 @@ import { setupThemeToggle } from "./theme";
 setupThemeToggle(document.querySelector("[data-theme-toggle]")!);
 setupDemo(document.getElementById("demos")!);
 setupCopy(document);
+for (const el of document.querySelectorAll("[data-year]")) el.textContent = String(new Date().getFullYear());
