@@ -13,6 +13,8 @@ import {
   VIEW_ID_META_KEY,
   Workflow,
   MAX_ICON_BYTES,
+  DEFAULT_ENVIRONMENT,
+  WorkspaceSlug,
 } from "@app-mcp/format";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { contentHash, mountAppMcp } from "@app-mcp/runtime";
@@ -221,13 +223,17 @@ export async function createRegistryMcp(
   );
 
   // How the end-user MCP presents itself in hosts' connector lists.
+  // The slug in end-user MCP addresses; admins can change it, so it's read each time.
+  const slug = async () => (await store.workspace(ws))!.slug;
   const brandingState = async () => {
-    const { icon, ...branding } = await store.branding(ws);
-    return { ...branding, iconUrl: icon ? `${baseURL}${iconPath(ws)}?v=${icon.hash}` : null };
+    const [{ icon, ...branding }, at] = await Promise.all([store.branding(ws), slug()]);
+    return { ...branding, iconUrl: icon ? `${baseURL}${iconPath(at)}?v=${icon.hash}` : null };
   };
   // Each environment's end-user MCP address: what hosts add as a connector, and APP_MCP_MCP_URL for @app-mcp/sdk.
-  const addresses = async () =>
-    (await store.listEnvironments(ws)).map((environment) => ({ environment, url: `${baseURL}${endUserPath(ws, environment)}` }));
+  const addresses = async () => {
+    const at = await slug();
+    return (await store.listEnvironments(ws)).map((environment) => ({ environment, url: `${baseURL}${endUserPath(at, environment)}` }));
+  };
   const access = (isPublic: boolean) =>
     isPublic
       ? "The end-user MCP is public: anyone with its address can add it as a connector, and servers use it with a server token."
@@ -266,7 +272,7 @@ export async function createRegistryMcp(
     const counts = [`${members} member${members === 1 ? "" : "s"}`, `${invites} pending invite${invites === 1 ? "" : "s"}`];
     counts.push(`${components} component${components === 1 ? "" : "s"}`);
     if (tokens !== undefined) counts.push(`${tokens} token${tokens === 1 ? "" : "s"}`);
-    return `${state.workspace.name} (shown in hosts as "${state.title}"): ${counts.join(", ")}. ${access(state.public)}\nEnd-user MCP addresses:\n${listAddresses(state.connectors)}`;
+    return `${state.workspace.name} (address /w/${state.workspace.slug}, shown in hosts as "${state.title}"): ${counts.join(", ")}. ${access(state.public)}\nEnd-user MCP addresses:\n${listAddresses(state.connectors)}`;
   };
 
   registerAppTool(
@@ -469,12 +475,19 @@ export async function createRegistryMcp(
     "workspace_rename",
     {
       title: "Rename workspace",
-      description: "Rename the workspace. Hosts show the connector title instead when one is set (connector_set).",
-      inputSchema: z.object({ name: z.string().trim().min(1).max(80) }),
+      description:
+        "Rename the workspace and/or change its address, the slug in its end-user MCP URLs (/w/<slug>/mcp). Hosts show the connector title instead of the name when one is set (connector_set). A new address breaks connectors and servers on the old one: confirm with the user first.",
+      inputSchema: z.object({
+        name: z.string().trim().min(1).max(80).optional(),
+        slug: WorkspaceSlug.optional().describe('New address, e.g. "acme" for /w/acme/mcp.'),
+      }),
     },
-    guarded(async ({ name }) => {
-      await store.renameWorkspace(ws, name);
-      return ok(`Renamed the workspace to "${name}".`, await workspaceState());
+    guarded(async ({ name, slug: next }) => {
+      if (!name && !next) throw new RegistryError(400, "Give a new name, a new slug, or both.");
+      if (next) await store.setWorkspaceSlug(ws, next);
+      if (name) await store.renameWorkspace(ws, name);
+      const done = [name && `Renamed the workspace to "${name}".`, next && `Its end-user MCP is now at ${baseURL}${endUserPath(next, DEFAULT_ENVIRONMENT)}; update connectors and APP_MCP_MCP_URL.`];
+      return ok(done.filter(Boolean).join(" "), await workspaceState());
     }),
   );
 
@@ -501,7 +514,7 @@ export async function createRegistryMcp(
     },
     guarded(async ({ name }) => {
       await store.createEnvironment(ws, name);
-      return ok(`Created ${name}. Its end-user MCP: ${baseURL}${endUserPath(ws, name)}`, await workspaceState());
+      return ok(`Created ${name}. Its end-user MCP: ${baseURL}${endUserPath(await slug(), name)}`, await workspaceState());
     }),
   );
 

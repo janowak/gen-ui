@@ -49,7 +49,7 @@ What `serve` does:
 Flags: `--theme`, `--instructions`, `--port`, `--host`, `--stdio`, `--suffix`, `--refresh-url`, `--no-build` (`app-mcp --help`). Plan and status: [DEV-SERVE-PLAN.md](DEV-SERVE-PLAN.md).
 
 **With the registry** (workspaces, environments, publishing): start it with `pnpm --filter @app-mcp/registry start` (http://localhost:4000; first start prints an admin token). Create a server token with `app-mcp token server demo`. Then point the demo at it in `.env.local` (gitignored):
-- `APP_MCP_MCP_URL`: `http://localhost:4000/w/<workspace id>/mcp` for prod, `…/w/<workspace id>/<environment>/mcp` for another environment.
+- `APP_MCP_MCP_URL`: `http://localhost:4000/w/<workspace slug>/mcp` for prod, `…/w/<workspace slug>/<environment>/mcp` for another environment.
 - `APP_MCP_MCP_TOKEN`: the server token.
 
 **In a worktree** (several agents, or you, running the stack side by side): run `pnpm dev:setup` in it.
@@ -89,6 +89,7 @@ Also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `GITHUB_CLIENT_ID`/`GITHU
 - **Google:** a Google Cloud OAuth client of type "Web application", redirect URI `https://api.app-mcp.com/api/auth/callback/google`.
 - **GitHub:** an OAuth App with callback URL `https://api.app-mcp.com/api/auth/callback/github`.
 - **Sign-up gate (optional):** `APP_MCP_ALLOWED_EMAILS`, as a secret or a var, limits who gets a workspace (see [Management](#management-in-claude--chatgpt)).
+- **Quotas:** with `APP_MCP_MODE=hosted`, `HOSTED_QUOTAS` in `apps/registry/src/quotas.ts` caps what each person and workspace can make (workspaces, environments, components, new versions a day, workflows, tokens, invites). Request rates per workspace come from Cloudflare rate limiting bindings in `wrangler.jsonc` (`WRITE_LIMITER` for `/v1` changes, `END_USER_MCP_LIMITER` for the end-user MCP). Self-hosted registries have neither.
 
 Create the static asset bucket once with `wrangler r2 bucket create app-mcp-assets`.
 A separate edge Worker (`wrangler.assets.jsonc`) serves `assets.app-mcp.com` without database placement, auth setup, API or MCP routes. The registry Worker remains near D1; static requests stay at the edge.

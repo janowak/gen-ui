@@ -4,7 +4,7 @@ import consent from "../dist-web/consent.html";
 import signIn from "../dist-web/sign-in.html";
 import manage from "../dist-web/manage.html";
 import cli from "../dist-web/cli.html";
-import { createRegistryApp, type Refresher } from "./app.js";
+import { createRegistryApp, HOSTED_QUOTAS, type RateLimiter, type Refresher } from "./app.js";
 import { authConfigFromEnv, type MetadataFetch } from "./auth.js";
 import { d1Database, type D1Binding } from "./db-d1.js";
 import { enableManagement } from "./management.js";
@@ -19,6 +19,9 @@ interface Env {
     put(key: string, body: Uint8Array, options: { httpMetadata: { contentType: string } }): Promise<unknown>;
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; httpMetadata?: { contentType?: string } } | null>;
   };
+  // Rate limiting bindings (wrangler.jsonc "ratelimits")
+  WRITE_LIMITER?: RateLimiter;
+  END_USER_MCP_LIMITER?: RateLimiter;
 }
 
 const assets: Assets = {
@@ -69,7 +72,13 @@ async function create(env: Env): Promise<Registry> {
       .replaceAll("https://app-mcp-assets.invalid", assetBase.origin),
   ) as Pick<Assets, "views" | "viewMetadata">;
   const hostedAssets: Assets = { ...assets, ...hosted };
-  const { app, store, refresher } = createRegistryApp(db, { assets: hostedAssets, staticHosting, baseURL: config.baseURL });
+  const { app, store, refresher } = createRegistryApp(db, {
+    assets: hostedAssets,
+    staticHosting,
+    baseURL: config.baseURL,
+    quotas: config.mode === "hosted" ? HOSTED_QUOTAS : undefined,
+    rateLimits: { writes: env.WRITE_LIMITER, endUserMcp: env.END_USER_MCP_LIMITER },
+  });
   const auth = enableManagement(app, db, store, config, { assets: hostedAssets, fetchClientMetadataResource });
   return { app, refresher, ready: auth.$context.then((context) => context.checkSchema?.()) };
 }

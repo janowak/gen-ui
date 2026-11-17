@@ -116,7 +116,7 @@ describe("static publishing and MCP resources", () => {
     const oldHash = catalog.components[0]!.hash;
     expect((await publish("1.1.0", "<html><script>window.newVersion = true;</script></html>")).status).toBe(201);
     const client = new Client({ name: "host", version: "1" });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/w/${workspace}/mcp`)));
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/w/static/mcp`)));
     try {
       const tools = (await client.listTools()).tools;
       const uris = ["render_form", "render_chart", "render_static_test"].map(

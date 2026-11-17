@@ -96,6 +96,8 @@ describe("several workspaces per login", () => {
     expect(first.workspaces).toHaveLength(1);
     personal = first.current;
     expect(await workspaceName(client)).toBe("ann's workspace");
+    // A personal workspace's address reads as the person, not as "ann-s-workspace".
+    expect(first.workspaces[0]).toMatchObject({ slug: "ann" });
 
     const made = await call<{ workspaces: { id: string; name: string; active: boolean }[] }>(client, "create_workspace", { name: "demo" });
     demo = made.workspaces.find((w) => w.name === "demo")!.id;

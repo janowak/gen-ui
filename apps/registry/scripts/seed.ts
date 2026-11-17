@@ -47,7 +47,7 @@ console.error(
 console.log(
   JSON.stringify({
     APP_MCP_TOKEN: await token("admin", env.APP_MCP_TOKEN),
-    APP_MCP_MCP_URL: `${config.baseURL}/w/${workspace}/mcp`,
+    APP_MCP_MCP_URL: `${config.baseURL}/w/${(await store.workspace(workspace))!.slug}/mcp`,
     APP_MCP_MCP_TOKEN: await token("server", env.APP_MCP_MCP_TOKEN),
   }),
 );

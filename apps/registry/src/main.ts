@@ -2,7 +2,7 @@ import { fileAssetStore } from "./static-assets-node.js";
 import { hostViews } from "./views.js";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { serve } from "@hono/node-server";
-import { createRegistryApp } from "./app.js";
+import { createRegistryApp, HOSTED_QUOTAS } from "./app.js";
 import { loadAssets } from "./assets-node.js";
 import { authConfigFromEnv } from "./auth.js";
 import { openDatabase } from "./db-node.js";
@@ -24,6 +24,8 @@ const { app, store } = createRegistryApp(db, {
   staticHosting,
   allowPrivateWebhooks: process.env.APP_MCP_ALLOW_PRIVATE_WEBHOOKS === "1",
   baseURL: config.baseURL,
+  // Self-hosted: no caps. APP_MCP_MODE=hosted (local development of the cloud) gets the cloud's.
+  quotas: config.mode === "hosted" ? HOSTED_QUOTAS : undefined,
 });
 
 // Self-host bootstrap: first start creates the workspace and prints an admin token once.
@@ -33,7 +35,7 @@ if (config.mode === "self-hosted" && (await store.countWorkspaces()) === 0) {
   const token = await store.createToken(workspace, "admin", "bootstrap");
   console.log(
     `Created workspace. Admin token (shown once, store it now):\n  ${token}\n` +
-      `End-user MCP for @app-mcp/sdk (with a server token: app-mcp token server <name>):\n  ${config.baseURL}/w/${workspace}/mcp\n`,
+      `End-user MCP for @app-mcp/sdk (with a server token: app-mcp token server <name>):\n  ${config.baseURL}/w/${(await store.workspace(workspace))!.slug}/mcp\n`,
   );
 }
 
@@ -43,6 +45,6 @@ enableManagement(app, db, store, config, { assets, fetchClientMetadataResource }
 serve({ fetch: app.fetch, port: PORT }, () =>
   console.log(
     `app-mcp registry on ${config.baseURL} (db: ${DATABASE})\n  MCP for Claude / ChatGPT: ${config.baseURL}/mcp\n` +
-      `  End-user MCP (public unless an admin turns it off; server token for data tools): ${config.baseURL}/w/<workspace id>/mcp`,
+      `  End-user MCP (public unless an admin turns it off; server token for data tools): ${config.baseURL}/w/<workspace slug>/mcp`,
   ),
 );

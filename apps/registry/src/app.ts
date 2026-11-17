@@ -8,6 +8,7 @@ import { enableHosting } from "./hosted.js";
 import { refreshServers, type Refresher } from "./refresh.js";
 import { Store } from "./store.js";
 import type { McpLogger } from "./mcp-log.js";
+import type { Quotas, RateLimits } from "./quotas.js";
 import type { Assets } from "./views.js";
 
 export { Store, RegistryError, type Scope } from "./store.js";
@@ -15,6 +16,7 @@ export type { Database } from "./db.js";
 export type { Refresher } from "./refresh.js";
 export type { Assets } from "./views.js";
 export type { McpLogger, McpLogLine } from "./mcp-log.js";
+export { HOSTED_QUOTAS, type Quotas, type RateLimiter, type RateLimits } from "./quotas.js";
 
 export interface RegistryAppOptions {
   /** The views and pages the registry serves, loaded by the runtime it runs on. */
@@ -26,11 +28,15 @@ export interface RegistryAppOptions {
   baseURL?: string;
   /** Where end-user MCP request lines go. Default: one JSON line per request on stdout (Workers Logs). */
   mcpLog?: McpLogger;
+  /** Caps on what a workspace can make (hosted). Default: none. */
+  quotas?: Quotas;
+  /** Request rate limits per workspace (Cloudflare bindings). Default: none. */
+  rateLimits?: RateLimits;
 }
 
 /** The registry without management: the /v1 API and the end-user MCP. Runtime-neutral: Node and Workers share it. */
 export function createRegistryApp(db: Database, options: RegistryAppOptions): { app: Hono; store: Store; refresher: Refresher } {
-  const store = new Store(db);
+  const store = new Store(db, options.quotas);
   const app = new Hono();
   app.use(bodyLimit({ maxSize: MAX_PUBLISH_BYTES * 2 }));
   if (options.staticHosting) {

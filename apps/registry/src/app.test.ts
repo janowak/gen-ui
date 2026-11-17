@@ -155,10 +155,10 @@ describe("publishing to environments", () => {
 describe("environments", () => {
   it("lists them, prod first, with their end-user MCP paths and refresh settings", async () => {
     expect((await call("GET", "/v1/environments", reader)).body.environments).toEqual([
-      { name: "prod", path: `/w/${workspace}/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
+      { name: "prod", path: `/w/acme/mcp`, revision: expect.any(Number), refreshUrl: null, lastRefresh: null, builtIns: true },
       {
         name: "staging",
-        path: `/w/${workspace}/staging/mcp`,
+        path: `/w/acme/staging/mcp`,
         revision: expect.any(Number),
         refreshUrl: null,
         lastRefresh: null,
@@ -197,7 +197,7 @@ describe("environments", () => {
   it("lets admins create and delete them; prod stays", async () => {
     expect((await call("POST", "/v1/environments", publisher, { name: "dev" })).status).toBe(403);
     expect((await call("POST", "/v1/environments", admin, { name: "Dev!" })).status).toBe(400);
-    expect((await call("POST", "/v1/environments", admin, { name: "dev" })).body).toEqual({ name: "dev", path: `/w/${workspace}/dev/mcp` });
+    expect((await call("POST", "/v1/environments", admin, { name: "dev" })).body).toEqual({ name: "dev", path: `/w/acme/dev/mcp` });
     expect((await call("POST", "/v1/environments", admin, { name: "dev" })).status).toBe(409);
 
     expect((await publish(publisher, "1.3.0", "v1.3", "dev")).status).toBe(200);
@@ -284,8 +284,8 @@ describe("sign-up gate", () => {
     // The new one is active, and stays so at the next sign-in.
     expect((await store.resolveMembership(person("ann", "ann@acme.test"), hosted))?.workspaceId).toBe(demo.workspaceId);
     expect(await store.listWorkspaces("ann")).toEqual([
-      { id: demo.workspaceId, name: "demo", role: "admin", active: true },
-      { id: ann.workspaceId, name: "ann's workspace", role: "admin", active: false },
+      { id: demo.workspaceId, name: "demo", slug: "demo", role: "admin", active: true },
+      { id: ann.workspaceId, name: "ann's workspace", slug: expect.any(String), role: "admin", active: false },
     ]);
     await store.switchWorkspace("ann", ann.workspaceId);
     expect((await store.membership("ann"))?.workspaceId).toBe(ann.workspaceId);

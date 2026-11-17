@@ -13,9 +13,12 @@ import {
   type Workflow,
   MAX_INSTRUCTIONS,
   serverInstructions,
+  slugify,
+  WorkspaceSlug,
 } from "@app-mcp/format";
 import { breakingChanges, compareSemver, parseSemver } from "./compat.js";
 import { statement, type Database, type Statement } from "./db.js";
+import type { Quotas } from "./quotas.js";
 
 const bundleHash = (html: string, resourceMeta?: Record<string, unknown>) =>
   sha256(resourceMeta ? JSON.stringify({ html, _meta: resourceMeta }) : html).slice(0, 16);
@@ -41,9 +44,17 @@ export interface TokenSummary {
   revealed: boolean;
 }
 
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  /** Its end-user MCP lives at /w/<slug>/mcp. */
+  slug: string;
+}
+
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  slug: string;
   role: Role;
   /** The one the web console shows and the CLI and connector pages preselect. */
   active: boolean;
@@ -225,7 +236,19 @@ const isUniqueViolation = (error: unknown) => error instanceof Error && /UNIQUE 
 export class Store {
   private readonly listeners = new Set<(change: EnvironmentChange) => void>();
 
-  constructor(private readonly db: Database) {}
+  /** Without `quotas` (self-hosted), nothing is capped. */
+  constructor(
+    private readonly db: Database,
+    private readonly quotas?: Quotas,
+  ) {}
+
+  /** Refuses one more once the count from `sql` has reached the quota; `refusal` says why, given the limit. */
+  private async withinQuota(quota: keyof Quotas, refusal: (max: number) => string, sql: string, ...params: unknown[]): Promise<void> {
+    const max = this.quotas?.[quota];
+    if (max === undefined) return;
+    const count = Number((await this.db.get<{ n: number }>(sql, ...params))?.n ?? 0);
+    if (count >= max) throw new RegistryError(403, `Quota reached: ${refusal(max)}`);
+  }
 
   /** Calls `listener` after every committed change to what an environment serves. Returns an unsubscribe function. */
   onChange(listener: (change: EnvironmentChange) => void): () => void {
@@ -254,20 +277,34 @@ export class Store {
   // Workspaces and tokens
 
   /** A new workspace with its prod environment. Its public end-user MCP is on until an admin turns it off. */
-  private newWorkspace(name: string): { id: string; statements: Statement[] } {
+  private async newWorkspace(name: string, slugFrom = name): Promise<{ id: string; statements: Statement[] }> {
     const id = randomUUID();
     const createdAt = now();
+    const slug = await this.freeSlug(slugify(slugFrom) || "workspace");
     return {
       id,
       statements: [
-        statement("INSERT INTO workspaces (id, name, hosted, created_at) VALUES (?, ?, 1, ?)", id, name, createdAt),
+        statement("INSERT INTO workspaces (id, name, slug, hosted, created_at) VALUES (?, ?, ?, 1, ?)", id, name, slug, createdAt),
         statement("INSERT INTO environments (workspace_id, name, created_at) VALUES (?, ?, ?)", id, DEFAULT_ENVIRONMENT, createdAt),
       ],
     };
   }
 
+  /** The slug, or the first of slug-2, slug-3… nobody has. */
+  private async freeSlug(base: string): Promise<string> {
+    const taken = new Set(
+      (await this.db.all<{ slug: string }>("SELECT slug FROM workspaces WHERE slug = ?1 OR slug LIKE ?1 || '-%'", base)).map((r) => r.slug),
+    );
+    if (!taken.has(base)) return base;
+    for (let n = 2; ; n++) {
+      const suffix = `-${n}`;
+      const candidate = base.slice(0, 40 - suffix.length).replace(/-+$/, "") + suffix;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
   async createWorkspace(name: string): Promise<string> {
-    const { id, statements } = this.newWorkspace(name);
+    const { id, statements } = await this.newWorkspace(name);
     await this.db.batch(statements);
     return id;
   }
@@ -276,13 +313,19 @@ export class Store {
     return Number((await this.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM workspaces"))!.n);
   }
 
-  workspace(workspaceId: string): Promise<{ id: string; name: string } | undefined> {
-    return this.db.get("SELECT id, name FROM workspaces WHERE id = ?", workspaceId);
+  workspace(workspaceId: string): Promise<WorkspaceInfo | undefined> {
+    return this.db.get("SELECT id, name, slug FROM workspaces WHERE id = ?", workspaceId);
+  }
+
+  /** The workspace whose end-user MCP is at /w/<slug>/…, and whether the registry serves it publicly. */
+  async workspaceBySlug(slug: string): Promise<(WorkspaceInfo & { hosted: boolean }) | undefined> {
+    const row = await this.db.get<WorkspaceInfo & { hosted: number }>("SELECT id, name, slug, hosted FROM workspaces WHERE slug = ?", slug);
+    return row && { ...row, hosted: Boolean(row.hosted) };
   }
 
   /** The workspace, if the registry hosts its end-user MCP. */
-  hostedWorkspace(workspaceId: string): Promise<{ id: string; name: string } | undefined> {
-    return this.db.get("SELECT id, name FROM workspaces WHERE id = ? AND hosted = 1", workspaceId);
+  hostedWorkspace(workspaceId: string): Promise<WorkspaceInfo | undefined> {
+    return this.db.get("SELECT id, name, slug FROM workspaces WHERE id = ? AND hosted = 1", workspaceId);
   }
 
   async isHosted(workspaceId: string): Promise<boolean> {
@@ -291,6 +334,18 @@ export class Store {
 
   async renameWorkspace(workspaceId: string, name: string): Promise<void> {
     await this.db.run("UPDATE workspaces SET name = ? WHERE id = ?", name, workspaceId);
+  }
+
+  /** Moves the end-user MCP to /w/<slug>/…: connectors and servers on the old address stop working. */
+  async setWorkspaceSlug(workspaceId: string, slug: string): Promise<void> {
+    const valid = WorkspaceSlug.safeParse(slug);
+    if (!valid.success) throw new RegistryError(400, `Invalid address "${slug}": ${valid.error.issues[0]!.message}.`);
+    try {
+      await this.db.run("UPDATE workspaces SET slug = ? WHERE id = ?", slug, workspaceId);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new RegistryError(409, `Another workspace already uses "${slug}".`);
+      throw error;
+    }
   }
 
   async setHosted(workspaceId: string, hosted: boolean): Promise<void> {
@@ -359,6 +414,12 @@ export class Store {
   /** A token row; without `token` it has no secret yet (see revealToken). */
   private async insertToken(workspaceId: string, scope: Scope, name: string, environments?: string[], token?: string): Promise<string> {
     for (const environment of environments ?? []) await this.requireEnvironment(workspaceId, environment);
+    await this.withinQuota(
+      "tokens",
+      (max) => `a workspace has at most ${max} tokens. Revoke unused ones first.`,
+      "SELECT COUNT(*) AS n FROM tokens WHERE workspace_id = ?",
+      workspaceId,
+    );
     const id = randomUUID();
     await this.db.run(
       "INSERT INTO tokens (id, workspace_id, name, scope, environments, hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -470,6 +531,12 @@ export class Store {
   }
 
   async createEnvironment(workspaceId: string, name: string): Promise<void> {
+    await this.withinQuota(
+      "environments",
+      (max) => `a workspace has at most ${max} environments. Delete one first.`,
+      "SELECT COUNT(*) AS n FROM environments WHERE workspace_id = ?",
+      workspaceId,
+    );
     const { changes } = await this.db.run(
       "INSERT INTO environments (workspace_id, name, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
       workspaceId,
@@ -569,8 +636,8 @@ export class Store {
 
   /** Every workspace the person is in, the active one first. */
   async listWorkspaces(userId: string): Promise<WorkspaceSummary[]> {
-    const rows = await this.db.all<{ id: string; name: string; role: Role }>(
-      `SELECT w.id, w.name, m.role FROM members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? ORDER BY ${ACTIVE_FIRST}`,
+    const rows = await this.db.all<{ id: string; name: string; slug: string; role: Role }>(
+      `SELECT w.id, w.name, w.slug, m.role FROM members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? ORDER BY ${ACTIVE_FIRST}`,
       userId,
     );
     return rows.map((row, i) => ({ ...row, active: i === 0 }));
@@ -595,7 +662,13 @@ export class Store {
     if (options.mode !== "hosted") throw new RegistryError(403, "This registry has a single workspace.");
     if (!passesSignUpGate(user, options))
       throw new RegistryError(403, `${user.email} may not create workspaces here. Ask an admin to invite you to theirs.`);
-    const workspace = this.newWorkspace(name);
+    await this.withinQuota(
+      "workspacesPerPerson",
+      (max) => `you can admin at most ${max} workspaces.`,
+      "SELECT COUNT(*) AS n FROM members WHERE user_id = ? AND role = 'admin'",
+      user.id,
+    );
+    const workspace = await this.newWorkspace(name);
     await this.db.batch([...workspace.statements, this.memberStatement(workspace.id, user.id, "admin")]);
     return (await this.membership(user.id, workspace.id))!;
   }
@@ -676,6 +749,13 @@ export class Store {
   }
 
   async invite(workspaceId: string, email: string, role: Role): Promise<void> {
+    await this.withinQuota(
+      "pendingInvites",
+      (max) => `a workspace has at most ${max} pending invites. Cancel some first.`,
+      "SELECT COUNT(*) AS n FROM invites WHERE workspace_id = ? AND email != ?",
+      workspaceId,
+      email.toLowerCase(),
+    );
     await this.db.run(
       "INSERT INTO invites (workspace_id, email, role, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO UPDATE SET role = excluded.role",
       workspaceId,
@@ -742,7 +822,8 @@ export class Store {
       return this.membership(user.id, workspace.id);
     }
 
-    const workspace = this.newWorkspace(`${user.name || user.email}'s workspace`);
+    // The address reads as the person: /w/jakub/mcp rather than /w/jakubs-workspace/mcp.
+    const workspace = await this.newWorkspace(`${user.name || user.email}'s workspace`, user.name || user.email.split("@")[0]!);
     await this.db.batch([...workspace.statements, this.memberStatement(workspace.id, user.id, "admin")]);
     return this.membership(user.id, workspace.id);
   }
@@ -776,6 +857,8 @@ export class Store {
       this.getInstructions(workspaceId, environment),
     ]);
     const existed = workflows.some((w) => w.name === workflow.name);
+    if (!existed && this.quotas && workflows.length >= this.quotas.workflows)
+      throw new RegistryError(403, `Quota reached: an environment has at most ${this.quotas.workflows} workflows. Delete some first.`);
     checkInstructions(instructions, [...workflows.filter((w) => w.name !== workflow.name), workflow]);
     await this.change(workspaceId, environment, [
       statement(
@@ -990,6 +1073,21 @@ export class Store {
         { version: manifest.version, hash: same.hash, created: false },
       );
     }
+
+    await this.withinQuota(
+      "versionsPerDay",
+      (max) => `a workspace publishes at most ${max} new versions in 24 hours. Try again later.`,
+      "SELECT COUNT(*) AS n FROM versions v JOIN components co ON co.id = v.component_id WHERE co.workspace_id = ? AND v.created_at > ?",
+      workspaceId,
+      new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    );
+    await this.withinQuota(
+      "components",
+      (max) => `a workspace has at most ${max} components.`,
+      "SELECT COUNT(*) AS n FROM components WHERE workspace_id = ? AND name != ?",
+      workspaceId,
+      manifest.name,
+    );
 
     const versionId = randomUUID();
     const createdAt = now();

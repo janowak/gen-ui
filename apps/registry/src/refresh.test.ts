@@ -93,19 +93,19 @@ describe("revisions", () => {
   });
 
   it("are served next to the MCP, with an ETag", async () => {
-    const res = await call("GET", `/w/${acme}/revision`, reader);
+    const res = await call("GET", `/w/acme/revision`, reader);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ revision: await revision() });
     const etag = res.headers.get("etag")!;
-    expect((await call("GET", `/w/${acme}/revision`, reader, undefined, { "if-none-match": etag })).status).toBe(304);
-    expect(await (await call("GET", `/w/${acme}/staging/revision`, reader)).json()).toEqual({ revision: await revision("staging") });
+    expect((await call("GET", `/w/acme/revision`, reader, undefined, { "if-none-match": etag })).status).toBe(304);
+    expect(await (await call("GET", `/w/acme/staging/revision`, reader)).json()).toEqual({ revision: await revision("staging") });
 
-    expect((await call("GET", `/w/${acme}/revision`, otherReader)).status).toBe(403);
-    expect((await call("GET", `/w/${acme}/nope/revision`, reader)).status).toBe(404);
+    expect((await call("GET", `/w/acme/revision`, otherReader)).status).toBe(403);
+    expect((await call("GET", `/w/acme/nope/revision`, reader)).status).toBe(404);
     // Without a token only public workspaces answer, like their MCP.
-    expect((await call("GET", `/w/${acme}/revision`)).status).toBe(200);
+    expect((await call("GET", `/w/acme/revision`)).status).toBe(200);
     await store.setHosted(acme, false);
-    expect((await call("GET", `/w/${acme}/revision`)).status).toBe(404);
+    expect((await call("GET", `/w/acme/revision`)).status).toBe(404);
     await store.setHosted(acme, true);
   });
 });
@@ -114,7 +114,7 @@ describe("refresh URLs", () => {
   it("are called after every change to their environment, with its revision", async () => {
     const set = await call("PUT", "/v1/environments/prod", admin, { refreshUrl });
     expect(set.status).toBe(200);
-    expect(await set.json()).toMatchObject({ name: "prod", refreshUrl, lastRefresh: null, path: `/w/${acme}/mcp` });
+    expect(await set.json()).toMatchObject({ name: "prod", refreshUrl, lastRefresh: null, path: `/w/acme/mcp` });
 
     const published = await call("POST", "/v1/components", admin, { manifest: rating("1.1.0"), html: html("v1.1") });
     expect(published.status).toBe(201);

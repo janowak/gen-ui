@@ -68,7 +68,7 @@ beforeAll(async () => {
   await store.publish(acme, rating("1.1.0"), html("rating v1.1"), "prod");
   await store.deployVersion(acme, "rating", "1.0.0", "prod");
   registry = await listen(created.app.fetch);
-  url = `http://localhost:${port(registry)}/w/${acme}/mcp`;
+  url = `http://localhost:${port(registry)}/w/acme/mcp`;
 });
 
 afterAll(() => {

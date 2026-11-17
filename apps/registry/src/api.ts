@@ -28,8 +28,8 @@ export const ALLOWED: Record<Scope, Scope[]> = {
 };
 
 /** Where an environment's end-user MCP lives: prod at the workspace's root path. */
-export const endUserPath = (workspaceId: string, environment: string) =>
-  environment === DEFAULT_ENVIRONMENT ? `/w/${workspaceId}/mcp` : `/w/${workspaceId}/${environment}/mcp`;
+export const endUserPath = (slug: string, environment: string) =>
+  environment === DEFAULT_ENVIRONMENT ? `/w/${slug}/mcp` : `/w/${slug}/${environment}/mcp`;
 
 const denied = (required: Scope, got: Scope) => `Requires ${required === "admin" ? "an" : "a"} ${required} token (got ${got})`;
 
@@ -52,7 +52,10 @@ const InstructionsBody = z.object({ instructions: z.string().max(MAX_ENVIRONMENT
 type Env = { Variables: { caller: TokenInfo } };
 
 /** Token-authenticated REST API used by CI (publish) and the CLI (admin). Server tokens use the end-user MCP. */
-export function createApi(store: Store, options: Pick<RegistryAppOptions, "allowPrivateWebhooks" | "staticHosting"> = {}): Hono<Env> {
+export function createApi(
+  store: Store,
+  options: Pick<RegistryAppOptions, "allowPrivateWebhooks" | "staticHosting" | "rateLimits"> = {},
+): Hono<Env> {
   const api = new Hono<Env>();
 
   function auth(required: Scope, scopes = ALLOWED[required]) {
@@ -62,6 +65,9 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
       if (!resolved) return c.json({ error: "Invalid or missing token" }, 401);
       if (!scopes.includes(resolved.scope)) return c.json({ error: denied(required, resolved.scope) }, 403);
       c.set("caller", resolved);
+      const writes = options.rateLimits?.writes;
+      if (c.req.method !== "GET" && writes && !(await writes.limit({ key: resolved.workspaceId })).success)
+        return c.json({ error: "Too many changes to this workspace; wait a minute and try again." }, 429);
       await next();
     };
   }
@@ -71,6 +77,8 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
 
   const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
   const ws = (c: Context<Env>) => c.get("caller").workspaceId;
+  /** The caller's workspace slug, for end-user MCP paths. */
+  const slug = async (c: Context<Env>) => (await store.workspace(ws(c)))!.slug;
 
   /** The environment a workflow, theme or instructions request targets: `?environment=`, default prod. */
   async function environment(c: Context<Env>): Promise<string> {
@@ -89,12 +97,12 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   // Who a token is: `app-mcp whoami`, and how an agent checks it is signed in before it starts.
   api.get("/whoami", anyToken(), async (c) => {
     const { workspaceId, scope, environments } = c.get("caller");
-    const workspace = await store.workspace(workspaceId);
+    const workspace = (await store.workspace(workspaceId))!;
     return c.json({
-      workspace: { id: workspaceId, name: workspace?.name ?? workspaceId },
+      workspace,
       scope,
       ...(environments ? { environments } : {}),
-      path: endUserPath(workspaceId, DEFAULT_ENVIRONMENT),
+      path: endUserPath(workspace.slug, DEFAULT_ENVIRONMENT),
     });
   });
 
@@ -141,11 +149,12 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   });
 
   // Environments: each serves what was last published or saved to it, at its own end-user MCP.
-  const describe = (workspaceId: string, info: EnvironmentInfo) => ({ ...info, path: endUserPath(workspaceId, info.name) });
+  const describe = (slug: string, info: EnvironmentInfo) => ({ ...info, path: endUserPath(slug, info.name) });
 
-  api.get("/environments", anyToken(), async (c) =>
-    c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(ws(c), info)) }),
-  );
+  api.get("/environments", anyToken(), async (c) => {
+    const at = await slug(c);
+    return c.json({ environments: (await store.listEnvironmentInfo(ws(c))).map((info) => describe(at, info)) });
+  });
 
   // Admin: the company server's refresh endpoint (@app-mcp/sdk), called after every change to what the environment
   // serves, and whether the built-in render_form and render_chart are on. Settings left out stay as they are.
@@ -157,13 +166,13 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
     if (refreshUrl !== undefined) await store.setRefreshUrl(ws(c), name, refreshUrl);
     if (builtIns !== undefined) await store.setBuiltIns(ws(c), name, builtIns);
     await store.requireEnvironment(ws(c), name);
-    return c.json(describe(ws(c), (await store.environment(ws(c), name))!));
+    return c.json(describe(await slug(c), (await store.environment(ws(c), name))!));
   });
 
   api.post("/environments", auth("admin"), async (c) => {
     const { name } = EnvironmentBody.parse(await body(c));
     await store.createEnvironment(ws(c), name);
-    return c.json({ name, path: endUserPath(ws(c), name) }, 201);
+    return c.json({ name, path: endUserPath(await slug(c), name) }, 201);
   });
 
   api.delete("/environments/:name", auth("admin"), async (c) => {
@@ -235,10 +244,13 @@ export function createApi(store: Store, options: Pick<RegistryAppOptions, "allow
   });
 
   // Admin: serve the workspace's end-user MCP from the registry, for companies without their own MCP server.
-  const hosting = async (workspaceId: string) => ({
-    hosted: await store.isHosted(workspaceId),
-    paths: Object.fromEntries((await store.listEnvironments(workspaceId)).map((name) => [name, endUserPath(workspaceId, name)])),
-  });
+  const hosting = async (workspaceId: string) => {
+    const { slug } = (await store.workspace(workspaceId))!;
+    return {
+      hosted: await store.isHosted(workspaceId),
+      paths: Object.fromEntries((await store.listEnvironments(workspaceId)).map((name) => [name, endUserPath(slug, name)])),
+    };
+  };
 
   api.get("/hosting", auth("admin"), async (c) => c.json(await hosting(ws(c))));
 

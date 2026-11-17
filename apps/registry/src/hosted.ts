@@ -5,7 +5,7 @@ import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { ALLOWED } from "./api.js";
 import type { RegistryAppOptions } from "./app.js";
-import type { Store } from "./store.js";
+import type { Store, WorkspaceInfo } from "./store.js";
 import { consoleMcpLogger, describeMcpRequest, mcpOutcome, type McpLogLine } from "./mcp-log.js";
 import { builtInViews } from "./views.js";
 
@@ -14,7 +14,7 @@ import { builtInViews } from "./views.js";
  * with no data tools. Upstream: a company's own MCP server, forwarding app-mcp's tools through
  * @app-mcp/sdk with a server token; views call the company's data tools on that server.
  */
-type Hosted = { workspace: { id: string; name: string }; environment: string; dataTools: boolean; origin: string };
+type Hosted = { workspace: WorkspaceInfo; environment: string; dataTools: boolean; origin: string };
 type BundleLookup = (hash: string) => Promise<UiBundle | undefined>;
 
 /**
@@ -63,7 +63,7 @@ export function storeCatalog(store: Store, workspaceId: string, bundle: BundleLo
 }
 
 /** Where the workspace's connector icon is served; the hash in the query lets hosts cache it for good. */
-export const iconPath = (workspaceId: string) => `/w/${workspaceId}/icon`;
+export const iconPath = (slug: string) => `/w/${slug}/icon`;
 
 /**
  * One environment's end-user MCP: app-mcp's forms, charts and components, presented with the workspace's
@@ -93,7 +93,7 @@ export async function createHostedMcp(
         ? {
             icons: [
               {
-                src: `${origin}${iconPath(workspace.id)}?v=${branding.icon.hash}`,
+                src: `${origin}${iconPath(workspace.slug)}?v=${branding.icon.hash}`,
                 mimeType: branding.icon.type,
                 ...(branding.icon.type === "image/svg+xml" ? { sizes: ["any"] } : {}),
               },
@@ -141,22 +141,21 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
   // Icons and serverInfo carry absolute URLs: the configured public URL, else the request's own origin.
   const origin = (c: Context) => options.baseURL ?? new URL(c.req.url).origin;
 
-  async function resolve(c: Context, workspaceId: string, environment: string): Promise<Hosted | Response> {
+  async function resolve(c: Context, slug: string, environment: string): Promise<Hosted | Response> {
     const header = c.req.header("authorization");
+    const found = await store.workspaceBySlug(slug);
     let hosted: Hosted;
     if (header) {
       const caller = await store.resolveToken(header.replace(/^Bearer\s+/i, ""));
       if (!caller) return c.json({ error: "Invalid token" }, 401);
-      const workspace = caller.workspaceId === workspaceId ? await store.workspace(workspaceId) : undefined;
-      if (!workspace || !ALLOWED.server.includes(caller.scope))
+      if (!found || caller.workspaceId !== found.id || !ALLOWED.server.includes(caller.scope))
         return c.json({ error: "This token can't use this workspace's app-mcp MCP." }, 403);
-      hosted = { workspace, environment, dataTools: true, origin: origin(c) };
+      hosted = { workspace: found, environment, dataTools: true, origin: origin(c) };
     } else {
-      const workspace = await store.hostedWorkspace(workspaceId);
-      if (!workspace) return c.json({ error: "No hosted app-mcp MCP at this address." }, 404);
-      hosted = { workspace, environment, dataTools: false, origin: origin(c) };
+      if (!found?.hosted) return c.json({ error: "No hosted app-mcp MCP at this address." }, 404);
+      hosted = { workspace: found, environment, dataTools: false, origin: origin(c) };
     }
-    if (!(await store.hasEnvironment(workspaceId, environment)))
+    if (!(await store.hasEnvironment(hosted.workspace.id, environment)))
       return c.json({ error: `No environment "${environment}" in this workspace.` }, 404);
     return hosted;
   }
@@ -168,7 +167,11 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
     const workspace = String(c.req.param("workspace"));
     const environment = c.req.param("environment") ?? DEFAULT_ENVIRONMENT;
     const described = describeMcpRequest(c.req.raw);
-    const hosted = await resolve(c, workspace, environment);
+    const limiter = options.rateLimits?.endUserMcp;
+    const hosted =
+      limiter && !(await limiter.limit({ key: workspace })).success
+        ? c.json({ error: "Too many requests to this app-mcp MCP; try again in a minute." }, 429)
+        : await resolve(c, workspace, environment);
     const response =
       hosted instanceof Response
         ? hosted
@@ -205,7 +208,8 @@ export function enableHosting(app: Hono, store: Store, options: RegistryAppOptio
 
   // The connector icon hosts show. Public even for private workspaces: hosts fetch it without the server token.
   app.get(iconPath(":workspace"), async (c) => {
-    const icon = await store.icon(String(c.req.param("workspace")));
+    const workspace = await store.workspaceBySlug(String(c.req.param("workspace")));
+    const icon = workspace && (await store.icon(workspace.id));
     if (!icon) return c.json({ error: "No icon" }, 404);
     c.header("content-type", icon.type);
     c.header("x-content-type-options", "nosniff");

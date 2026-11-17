@@ -331,12 +331,24 @@ describe("management MCP", () => {
 
     const shown = await admin.callTool({ name: "show_workspace", arguments: {} });
     expect(shown.structuredContent).toMatchObject({ role: "admin", public: true, workspace: { name: "acme" } });
-    expect((shown.structuredContent as { connectors: { url: string }[] }).connectors[0]?.url).toBe(`${base}/w/${workspaceId}/mcp`);
-    expect(JSON.stringify(shown.content)).toContain(`prod: ${base}/w/${workspaceId}/mcp`);
+    expect((shown.structuredContent as { connectors: { url: string }[] }).connectors[0]?.url).toBe(`${base}/w/acme/mcp`);
+    expect(JSON.stringify(shown.content)).toContain(`prod: ${base}/w/acme/mcp`);
 
     await admin.callTool({ name: "workspace_rename", arguments: { name: "Acme Inc" } });
     expect((await store.workspace(workspaceId))?.name).toBe("Acme Inc");
     await admin.callTool({ name: "workspace_rename", arguments: { name: "acme" } });
+
+    // The address is the slug; moving it frees the old one and refuses one that's taken or invalid.
+    const other = await store.createWorkspace("Taken");
+    expect((await store.workspace(other))?.slug).toBe("taken");
+    const clash = await admin.callTool({ name: "workspace_rename", arguments: { slug: "taken" } });
+    expect(clash.isError).toBe(true);
+    expect((await admin.callTool({ name: "workspace_rename", arguments: { slug: "Not Valid" } })).isError).toBe(true);
+    const moved = await admin.callTool({ name: "workspace_rename", arguments: { slug: "acme-co" } });
+    expect(JSON.stringify(moved.content)).toContain(`${base}/w/acme-co/mcp`);
+    expect((await fetch(`${base}/w/acme/revision`)).status).toBe(404);
+    expect((await fetch(`${base}/w/acme-co/revision`)).status).toBe(200);
+    await admin.callTool({ name: "workspace_rename", arguments: { slug: "acme" } });
 
     await admin.callTool({ name: "member_invite", arguments: { email: "gina@acme.test", role: "admin" } });
     expect((await store.listMembers(workspaceId)).invites).toContainEqual({ email: "gina@acme.test", role: "admin" });
@@ -356,15 +368,15 @@ describe("management MCP", () => {
 
     expect((await admin.callTool({ name: "environment_create", arguments: { name: "QA" } })).isError).toBe(true);
     const created = await admin.callTool({ name: "environment_create", arguments: { name: "preview" } });
-    expect(JSON.stringify(created.content)).toContain(`${base}/w/${workspaceId}/preview/mcp`);
+    expect(JSON.stringify(created.content)).toContain(`${base}/w/acme/preview/mcp`);
     expect(await store.listEnvironments(workspaceId)).toContain("preview");
     expect((await admin.callTool({ name: "environment_create", arguments: { name: "preview" } })).isError).toBe(true);
     await store.deleteEnvironment(workspaceId, "preview");
 
     await admin.callTool({ name: "public_set", arguments: { enabled: false } });
-    expect((await fetch(`${base}/w/${workspaceId}/revision`)).status).toBe(404);
+    expect((await fetch(`${base}/w/acme/revision`)).status).toBe(404);
     await admin.callTool({ name: "public_set", arguments: { enabled: true } });
-    expect((await fetch(`${base}/w/${workspaceId}/revision`)).status).toBe(200);
+    expect((await fetch(`${base}/w/acme/revision`)).status).toBe(200);
 
     // Members see the summary and the people, not tokens.
     const member = await mcpClient(await accessToken(await signUp("ida@acme.test")));
@@ -421,7 +433,7 @@ describe("management MCP", () => {
 
     // A private MCP still serves the token until it's revoked.
     await admin.callTool({ name: "public_set", arguments: { enabled: false } });
-    const revision = (token: string) => fetch(`${base}/w/${workspaceId}/revision`, { headers: { authorization: `Bearer ${token}` } });
+    const revision = (token: string) => fetch(`${base}/w/acme/revision`, { headers: { authorization: `Bearer ${token}` } });
     expect((await revision(next)).status).toBe(200);
     await admin.callTool({ name: "token_revoke", arguments: { id: highlight } });
     expect((await revision(next)).status).toBe(401);
@@ -489,7 +501,7 @@ describe("management MCP", () => {
     expect(bad.isError).toBe(true);
     const iconed = await admin.callTool({ name: "connector_icon_set", arguments: { icon: png } });
     const { iconUrl } = (iconed.structuredContent as { branding: { iconUrl: string } }).branding;
-    expect(iconUrl).toMatch(new RegExp(`^${base}/w/${workspaceId}/icon\\?v=`));
+    expect(iconUrl).toMatch(new RegExp(`^${base}/w/acme/icon\\?v=`));
     expect((await fetch(iconUrl)).headers.get("content-type")).toBe("image/png");
     // Setting fields keeps the icon.
     const kept = await admin.callTool({ name: "connector_set", arguments: { title: null } });
@@ -599,10 +611,10 @@ describe("app-mcp login", () => {
     const traded = await post("/cli/token", { code, verifier });
     expect(traded.status).toBe(200);
     const body = (await traded.json()) as { token: string; workspace: { id: string; name: string }; mcp: string };
-    expect(body).toMatchObject({ workspace: { id: workspaceId, name: "acme" }, mcp: `${base}/w/${workspaceId}/mcp` });
+    expect(body).toMatchObject({ workspace: { id: workspaceId, name: "acme" }, mcp: `${base}/w/acme/mcp` });
 
     const whoami = await fetch(`${base}/v1/whoami`, { headers: { authorization: `Bearer ${body.token}` } });
-    expect(await whoami.json()).toEqual({ workspace: { id: workspaceId, name: "acme" }, scope: "admin", path: `/w/${workspaceId}/mcp` });
+    expect(await whoami.json()).toEqual({ workspace: { id: workspaceId, name: "acme", slug: "acme" }, scope: "admin", path: `/w/acme/mcp` });
 
     // A code works once.
     expect((await post("/cli/token", { code, verifier })).status).toBe(400);

@@ -77,8 +77,8 @@ beforeAll(async () => {
     params: [{ name: "item", description: "What to add", required: false }],
   });
   registry = await listen(created.app);
-  url = `http://localhost:${port(registry)}/w/${acme}/mcp`;
-  stagingUrl = `http://localhost:${port(registry)}/w/${acme}/staging/mcp`;
+  url = `http://localhost:${port(registry)}/w/acme/mcp`;
+  stagingUrl = `http://localhost:${port(registry)}/w/acme/staging/mcp`;
 });
 
 afterAll(() => registry?.close());
@@ -152,7 +152,7 @@ describe("mountAppMcp", () => {
     const ws = await second.store.createWorkspace("Down");
     const down = await listen(second.app);
     const appMcp = connectAppMcp({
-      url: `http://localhost:${port(down)}/w/${ws}/mcp`,
+      url: `http://localhost:${port(down)}/w/down/mcp`,
       token: await second.store.createToken(ws, "server", "down"),
       refreshSeconds: 0,
       logger: { warn: () => {} },

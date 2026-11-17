@@ -123,11 +123,11 @@ export function enableCliLogin(
     if (challenge !== code.challenge) return c.json({ error: "This sign-in was started by another app-mcp login." }, 400);
     try {
       const token = await store.revealToken(code.workspace, code.token);
-      const workspace = await store.workspace(code.workspace);
+      const workspace = (await store.workspace(code.workspace))!;
       return c.json({
         token,
-        workspace: { id: code.workspace, name: workspace?.name ?? code.workspace },
-        mcp: `${config.baseURL}${endUserPath(code.workspace, DEFAULT_ENVIRONMENT)}`,
+        workspace,
+        mcp: `${config.baseURL}${endUserPath(workspace.slug, DEFAULT_ENVIRONMENT)}`,
       });
     } catch (error) {
       if (error instanceof RegistryError) return c.json({ error: "This sign-in was already used. Run app-mcp login again." }, 400);

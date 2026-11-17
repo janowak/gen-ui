@@ -11,6 +11,23 @@ export const DEFAULT_ENVIRONMENT = "prod";
  */
 export const EnvironmentName = z.string().regex(/^[a-z][a-z0-9]{0,14}$/, "lowercase letters and digits, up to 15 characters");
 
+/** A workspace's handle in its end-user MCP address, `/w/<slug>/mcp`. Unique across the registry. */
+export const WorkspaceSlug = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "lowercase letters, digits and single dashes")
+  .max(40, "up to 40 characters");
+
+/** A valid slug from a workspace name: "Acme Support" → "acme-support". Empty when nothing usable is left. */
+export function slugify(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ'’]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 40)
+    .replace(/^-+|-+$/g, "");
+}
+
 /** Built-in components own render_form / render_chart. */
 export const RESERVED_NAMES = ["form", "chart"];
 
