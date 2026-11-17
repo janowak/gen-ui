@@ -43,6 +43,9 @@ export interface AuthConfig {
 
 export const SSO_PROVIDER_ID = "sso";
 
+/** Where a person in several workspaces picks the one an MCP connector manages, before consent. */
+export const WORKSPACE_PAGE = "/consent/workspace";
+
 /**
  * Fetches Client ID Metadata Documents without reaching private networks: `@better-auth/cimd/node` on
  * Node, which pins the checked DNS answer; a plain fetch on Workers, whose egress can't reach them.
@@ -118,10 +121,23 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
         resource: `${config.baseURL}/mcp`,
         allowDynamicClientRegistration: Boolean(config.dynamicRegistration),
         allowUnauthenticatedClientRegistration: Boolean(config.dynamicRegistration),
-        customAccessTokenClaims: async ({ user }) => {
+        // A person in several workspaces picks one before consent. The pick is the consent's reference:
+        // better-auth keeps it on the grant and its refresh tokens, so a connector stays on the workspace
+        // it was connected to, whatever the person switches to later.
+        postLogin: {
+          page: WORKSPACE_PAGE,
+          shouldRedirect: async ({ user, isContinuation }) => {
+            if (isContinuation) return false;
+            await resolveMembership(store, config, user);
+            return (await store.listWorkspaces(user.id)).length > 1;
+          },
+          // The picker makes the chosen workspace the active one; one workspace is active already.
+          consentReferenceId: async ({ user }) => (await resolveMembership(store, config, user))?.workspaceId,
+        },
+        customAccessTokenClaims: async ({ user, referenceId }) => {
           if (!user) return {};
-          const membership = await resolveMembership(store, config, user);
-          return membership ? { [WORKSPACE_CLAIM]: membership.workspaceId } : {};
+          const workspaceId = referenceId ?? (await resolveMembership(store, config, user))?.workspaceId;
+          return workspaceId ? { [WORKSPACE_CLAIM]: workspaceId } : {};
         },
       }),
       cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" }),
@@ -147,16 +163,31 @@ export function authOptions(db: Database, store: Store, config: AuthConfig, fetc
 
 export type Auth = ReturnType<typeof createAuth>;
 
-/** The person's workspace, joined or made at sign-in: by an access token for MCP clients, by the session for the web console. */
-export function resolveMembership(
-  store: Store,
-  config: AuthConfig,
-  user: { id: string; email: string; emailVerified?: boolean | null; name?: string | null },
-) {
-  return store.resolveMembership(
-    { id: user.id, email: user.email, emailVerified: Boolean(user.emailVerified), name: user.name ?? undefined },
-    { mode: config.mode, adminEmails: config.adminEmails, allowedEmails: config.allowedEmails },
-  );
+type User = { id: string; email: string; emailVerified?: boolean | null; name?: string | null };
+
+const signedInUser = (user: User) => ({
+  id: user.id,
+  email: user.email,
+  emailVerified: Boolean(user.emailVerified),
+  name: user.name ?? undefined,
+});
+const membershipOptions = (config: AuthConfig) => ({
+  mode: config.mode,
+  adminEmails: config.adminEmails,
+  allowedEmails: config.allowedEmails,
+});
+
+/**
+ * The person's active workspace, joined or made at sign-in: for the web console, the CLI page and the
+ * OAuth consent. Connected MCP clients carry their own workspace in the access token.
+ */
+export function resolveMembership(store: Store, config: AuthConfig, user: User) {
+  return store.resolveMembership(signedInUser(user), membershipOptions(config));
+}
+
+/** A new workspace the person admins, if the sign-up gate lets them have one. */
+export function createWorkspace(store: Store, config: AuthConfig, user: User, name: string) {
+  return store.createOwnWorkspace(signedInUser(user), name, membershipOptions(config));
 }
 
 /** What the sign-in page offers. */

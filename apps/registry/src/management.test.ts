@@ -628,7 +628,7 @@ describe("app-mcp login", () => {
     expect((await approve(ownerCookie, { ...request, port: 80 })).status).toBe(400);
     expect((await approve(ownerCookie, { ...request, challenge: "short" })).status).toBe(400);
     const context = await fetch(`${base}/cli/workspace`, { headers: { cookie: ownerCookie } });
-    expect(await context.json()).toEqual({ workspace: "acme", admin: true });
+    expect(await context.json()).toEqual({ workspaces: [{ id: workspaceId, name: "acme", admin: true }] });
     // Signed out is the only case that asks to sign in, so the page's redirect to sign-in can't loop.
     expect((await fetch(`${base}/cli/workspace`)).status).toBe(401);
   });

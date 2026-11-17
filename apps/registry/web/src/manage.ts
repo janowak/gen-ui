@@ -27,6 +27,9 @@ const HOST = { name: "app-mcp-web", version: "0.1.0" };
 const stage = $<HTMLElement>("stage");
 const error = $<HTMLDivElement>("error");
 const environmentSelect = $<HTMLSelectElement>("environment");
+const workspaceSelect = $<HTMLSelectElement>("workspace");
+/** The workspace picker's last option, which makes a new workspace. */
+const NEW_WORKSPACE = "new";
 const dark = matchMedia("(prefers-color-scheme: dark)");
 
 const fail = (message: string) => (error.textContent = message);
@@ -56,17 +59,39 @@ async function call<T>(name: string, args: Record<string, unknown> = {}): Promis
   return result.structuredContent as T;
 }
 
-/** The workspace name and the environment the views show, re-read on every tab since the views can change both. */
+/** The person's workspaces and the environment the views show, re-read on every tab since the views can change both. */
 async function header() {
-  const [workspace, components] = await Promise.all([
-    call<{ workspace: { name: string } }>("show_workspace"),
+  const [{ current, canCreate, workspaces }, components] = await Promise.all([
+    call<{ current: string; canCreate: boolean; workspaces: { id: string; name: string }[] }>("list_workspaces"),
     call<{ environment: string; environments: string[] }>("manage_components"),
   ]);
-  $<HTMLSpanElement>("workspace").textContent = workspace.workspace.name;
+  workspaceSelect.replaceChildren(
+    ...workspaces.map((w) => new Option(w.name, w.id)),
+    ...(canCreate ? [new Option("New workspace…", NEW_WORKSPACE)] : []),
+  );
+  workspaceSelect.value = current;
+  // Nothing to pick in a self-hosted registry's single workspace.
+  workspaceSelect.disabled = workspaces.length < 2 && !canCreate;
   environmentSelect.replaceChildren(...components.environments.map((name) => new Option(name, name)));
   environmentSelect.value = components.environment;
   $<HTMLLabelElement>("environment-picker").hidden = components.environments.length < 2;
 }
+
+// Another workspace has other tabs (its role) and data: start the console over in it.
+workspaceSelect.onchange = async () => {
+  try {
+    if (workspaceSelect.value === NEW_WORKSPACE) {
+      const name = prompt("Name of the new workspace")?.trim();
+      if (!name) return void (await header());
+      await call("create_workspace", { name });
+    } else await call("switch_workspace", { workspace: workspaceSelect.value });
+    location.hash = "";
+    location.reload();
+  } catch (err) {
+    fail((err as Error).message);
+    void header();
+  }
+};
 
 environmentSelect.onchange = async () => {
   try {

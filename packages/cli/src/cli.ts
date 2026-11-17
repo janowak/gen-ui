@@ -18,7 +18,7 @@ const USAGE = `app-mcp <command> [options]
 
 Commands:
   guide                             How to set app-mcp up in a project, written for AI coding agents
-  login [--no-browser]              Sign in through the browser; an admin clicks Allow, no token to copy
+  login [--no-browser]              Sign in through the browser: pick the workspace and click Allow, no token to copy
   logout                            Sign out and revoke the token login was given
   whoami                            The workspace you are signed in to, its admin link and end-user MCP
   init [dir] [--name n]             Start a new component in dir (default .), ready for dev and publish
