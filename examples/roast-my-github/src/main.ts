@@ -83,7 +83,7 @@ async function reroast(ctx: Context, asked: "harder" | "nicer", heat: Heat, setS
   const { username } = ctx.props!;
   const how = asked === "harder" ? "Roast them harder" : "Be nicer this time";
   const sent = await ctx.model.send(
-    `${how}: roast @${username} again with heat "${heat}". Reuse the github_roast_stats data, write new burns, and call render_roast_my_github again.`,
+    `${how}: roast @${username} again with heat "${heat}". Reuse the profile data you already have, write new burns, and call render_roast_my_github again.`,
   );
   if (sent) setState({ ...ctx.useState<ViewState>({})[0], asked });
   else {

@@ -3,9 +3,9 @@ import { defineComponent, z } from "@app-mcp/kit";
 export const HEAT = ["gentle", "medium", "savage"] as const;
 
 export const roastProps = z.object({
-  username: z.string().describe("GitHub login, as github_roast_stats returned it."),
+  username: z.string().describe("GitHub login, as the profile data spells it."),
   name: z.string().optional().describe("Display name from the profile, if any."),
-  avatar_url: z.url().optional().describe("avatar_url from github_roast_stats."),
+  avatar_url: z.url().optional().describe("avatar_url from the GitHub profile."),
   heat: z
     .enum(HEAT)
     .default("medium")
@@ -29,7 +29,7 @@ export const roastProps = z.object({
     )
     .min(3)
     .max(5)
-    .describe("3 to 5 burns, each tied to a specific real stat from github_roast_stats."),
+    .describe("3 to 5 burns, each tied to a specific real stat from the profile data."),
   compliment: z.string().max(220).describe("One backhanded compliment to close with."),
   stats: z
     .object({
@@ -40,14 +40,14 @@ export const roastProps = z.object({
       since: z.number().int().optional().describe("Year the account was created."),
     })
     .optional()
-    .describe("Headline numbers from github_roast_stats.summary, shown along the bottom of the card."),
+    .describe("Headline numbers from the profile data, shown along the bottom of the card."),
 });
 
 export default defineComponent({
   name: "roast_my_github",
   title: "Roast my GitHub",
   description:
-    "A roast card for a GitHub profile: avatar, a roast score, 3 to 5 burns each tied to a real stat, and a backhanded compliment, with buttons to roast harder, be nicer, or share it. First call github_roast_stats for the username and write the roast from that data only. Funny, not cruel: roast the code habits and stats, never appearance, identity, gender, ethnicity, religion, health or anything personal, and no slurs or profanity aimed at the person.",
+    "A roast card for a GitHub profile: avatar, a roast score, 3 to 5 burns each tied to a real stat, and a backhanded compliment, with buttons to roast harder, be nicer, or share it. First get the profile's real data (github_roast_stats if you have it, else GitHub's public API with your web fetch tool) and write the roast from that data only; never make up numbers. Funny, not cruel: roast the code habits and stats, never appearance, identity, gender, ethnicity, religion, health or anything personal, and no slurs or profanity aimed at the person.",
   props: roastProps,
   tools: ["share_roast"],
   csp: { resourceDomains: ["https://avatars.githubusercontent.com"] },
