@@ -65,11 +65,6 @@ export function enableCliLogin(
   }
 
   const origin = new URL(config.baseURL).origin;
-  const member = async (request: Request) => {
-    const signedIn = await session(request);
-    return signedIn ? resolveMembership(store, config, signedIn.user) : undefined;
-  };
-
   app.get("/cli", async (c) => {
     const url = new URL(c.req.url);
     return (await session(c.req.raw)) ? c.html(page) : c.redirect(`/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`);
@@ -77,8 +72,18 @@ export function enableCliLogin(
 
   // What the page shows before the person decides.
   app.get("/cli/workspace", async (c) => {
-    const membership = await member(c.req.raw);
-    if (!membership) return c.json({ error: "Sign in at /sign-in" }, 401);
+    const signedIn = await session(c.req.raw);
+    if (!signedIn) return c.json({ error: "Sign in first." }, 401);
+    const membership = await resolveMembership(store, config, signedIn.user);
+    // Signed in but in no workspace: the sign-up gate (APP_MCP_ALLOWED_EMAILS) kept them out, or their
+    // workspace belongs to another account. Saying "sign in" here sent people round in circles.
+    if (!membership)
+      return c.json(
+        {
+          error: `${signedIn.user.email} isn't in an app-mcp workspace. Sign in with the account that has one, or ask its admin to invite this email.`,
+        },
+        403,
+      );
     const workspace = await store.workspace(membership.workspaceId);
     return c.json({ workspace: workspace?.name ?? membership.workspaceId, admin: membership.role === "admin" });
   });
@@ -86,8 +91,10 @@ export function enableCliLogin(
   // The person clicked Allow. Same-origin only, like the web console: the session cookie alone isn't enough.
   app.post("/cli/approve", async (c) => {
     if (c.req.header("origin") !== origin) return c.json({ error: "Cross-origin request" }, 403);
-    const membership = await member(c.req.raw);
-    if (!membership) return c.json({ error: "Sign in at /sign-in" }, 401);
+    const signedIn = await session(c.req.raw);
+    if (!signedIn) return c.json({ error: "Sign in first." }, 401);
+    const membership = await resolveMembership(store, config, signedIn.user);
+    if (!membership) return c.json({ error: `${signedIn.user.email} isn't in an app-mcp workspace.` }, 403);
     if (membership.role !== "admin")
       return c.json({ error: "Only workspace admins can sign the CLI in. Ask an admin for a publish token." }, 403);
     const body = ApproveBody.safeParse(await c.req.json().catch(() => ({})));
