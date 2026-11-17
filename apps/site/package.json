@@ -20,6 +20,7 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
-    "@app-mcp/ui": "workspace:*"
+    "@app-mcp/ui": "workspace:*",
+    "@app-mcp/example-roast-my-github": "workspace:*"
   }
 }

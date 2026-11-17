@@ -1,5 +1,5 @@
 // A dev registry's starting data, for `pnpm dev:setup` in a worktree: the workspace, an admin token (the CLI),
-// a server token (the demo), a password user who manages it, and examples/rating and examples/wrapped with their workflows in prod.
+// a server token (the demo), a password user who manages it, and examples/rating, examples/wrapped and examples/roast-my-github with their workflows in prod.
 // Safe to re-run: tokens from the environment that still work are kept, and publishing the same bundle again
 // is a no-op. Prints the values for .env.worktree as JSON on stdout; everything else goes to stderr.
 import { DEFAULT_ENVIRONMENT } from "@app-mcp/format";
@@ -31,7 +31,7 @@ await store.addMember(workspace, userId, "admin");
 
 const served: string[] = [];
 let workflowCount = 0;
-for (const name of ["rating", "wrapped"]) {
+for (const name of ["rating", "wrapped", "roast-my-github"]) {
   const example = new URL(`../../../examples/${name}/`, import.meta.url).pathname;
   const { manifest, html } = await readComponentDir(example);
   const published = await store.publish(workspace, manifest, html, DEFAULT_ENVIRONMENT);

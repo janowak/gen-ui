@@ -20,6 +20,7 @@ Forms, charts and custom components for MCP Apps, with built-in loading patterns
 | `packages/kit` | `@app-mcp/kit`: build custom components. `defineComponent` + `mount` runtime, and the `appMcp()` Vite plugin |
 | `examples/rating` | Custom component (vanilla TS on `@app-mcp/kit`) published through the registry, with workflows next to it in `workflows/` |
 | `examples/wrapped` | AI Wrapped demo: `render_wrapped` shows a Wrapped-style card deck about the user's year with AI. Share links carry the cards in the URL fragment and open on the site's static `/wrapped/` page (the same bundle), so nothing is stored |
+| `examples/roast-my-github` | "Roast my GitHub" demo component: a roast card from public GitHub stats (`github_roast_stats` on the demo server), with roast harder / be nicer and a share link that opens the card on the site's `/roast` page. The card travels in the link's fragment, so nothing is stored |
 
 Views run on Preact: `packages/ui` aliases `react` / `react-dom` to `@preact/compat` (about 57 KB gzipped less per view), while code, types and shadcn components stay React. [`runtime/preact.ts`](packages/ui/src/runtime/preact.ts) passes `ref` to function components as a prop, like React 19, so components from `shadcn add` work unchanged. Avoid React 19-only APIs (`use`, `useActionState`, `useOptimistic`, `<Activity>`) and fragments as direct children of Recharts charts.
 
@@ -53,7 +54,7 @@ Flags: `--theme`, `--instructions`, `--port`, `--host`, `--stdio`, `--suffix`, `
 
 **In a worktree** (several agents, or you, running the stack side by side): run `pnpm dev:setup` in it.
 - **Ports:** it picks a free block for the worktree: registry 40000+10n, then serve, demo, playground and site on the next four ports.
-- **Database and data:** the registry gets its own SQLite file, seeded with a workspace, a password user and `examples/rating`.
+- **Database and data:** the registry gets its own SQLite file, seeded with a workspace, a password user, `examples/rating` and `examples/roast-my-github`.
 - **Config:** everything that differs goes in `.env.worktree`, which the registry, the demo and `pnpm app-mcp` load after `.env.local`. Claude Code copies `.env.local` into the worktrees it creates (`.worktreeinclude`); setup copies it for `git worktree add`.
 - **Services:** `.claude/launch.json` gets the worktree's ports, so services start by name as usual.
 - **Not in worktrees:** wrangler, tunnels and deploys. `pnpm test` covers D1. The deploy scripts refuse to run outside the main checkout.

@@ -1,0 +1,26 @@
+{
+  "name": "@app-mcp/example-roast-my-github",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./card": "./src/card.ts",
+    "./card.css": "./src/card.css"
+  },
+  "scripts": {
+    "dev": "app-mcp dev .",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "app-mcp:publish": "app-mcp publish ."
+  },
+  "dependencies": {
+    "@app-mcp/kit": "workspace:*",
+    "@fontsource/bricolage-grotesque": "^5"
+  },
+  "devDependencies": {
+    "@app-mcp/cli": "workspace:*",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

@@ -298,3 +298,13 @@
     animation: none !important;
   }
 }
+
+/* Share page for the Roast my GitHub demo (roast.html) */
+.roast-watermark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#roast .roast {
+  margin-inline: auto;
+}

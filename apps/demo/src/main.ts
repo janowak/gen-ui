@@ -4,6 +4,8 @@ import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
 import cors from "cors";
 import type { Request, Response } from "express";
+import { createGithubClient } from "./github.js";
+import { registerRoastTools } from "./roast.js";
 import { registerCompanyTools } from "./tools.js";
 
 // Not PORT: the registry reads that from the same .env files.
@@ -18,9 +20,13 @@ console.log(
   `app-mcp: ${appMcpUrl}${process.env.APP_MCP_MCP_URL ? "" : " (app-mcp serve; set APP_MCP_MCP_URL and APP_MCP_MCP_TOKEN in .env.local for a registry)"}`,
 );
 
+// One client for the process, so its cache outlives the per-request servers.
+const github = createGithubClient({ token: process.env.GITHUB_TOKEN });
+
 async function createServer(): Promise<McpServer> {
   const server = new McpServer({ name: "app-mcp-demo", version: "0.1.0" });
   registerCompanyTools(server);
+  registerRoastTools(server, github);
   await mountAppMcp(server, { appMcp });
   return server;
 }

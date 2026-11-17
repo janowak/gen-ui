@@ -47,6 +47,6 @@ export default defineConfig({
   plugins: [tailwindcss(), llmsTxt(), wrappedSharePage()],
   build: {
     // 404.html is served by Cloudflare for unknown paths (assets.not_found_handling in wrangler.jsonc)
-    rolldownOptions: { input: ["index.html", "404.html"] },
+    rolldownOptions: { input: ["index.html", "404.html", "roast.html"] },
   },
 });
