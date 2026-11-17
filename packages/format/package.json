@@ -4,6 +4,11 @@
   "description": "Schemas for app-mcp forms, charts, workflows, themes and component manifests",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/format"
+  },
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",

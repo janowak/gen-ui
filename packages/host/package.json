@@ -4,6 +4,11 @@
   "description": "Embed your MCP tools and interactive app-mcp views in your own application",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/host"
+  },
   "sideEffects": false,
   "exports": {
     ".": {

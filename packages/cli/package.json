@@ -4,6 +4,11 @@
   "description": "app-mcp CLI: start, develop, serve and publish MCP Apps components",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/cli"
+  },
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",

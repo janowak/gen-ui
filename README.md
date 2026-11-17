@@ -343,3 +343,7 @@ Python: `app_mcp = connect_app_mcp(url, token)`, then `mount_app_mcp(server, app
 - **Submit tools** return `{ ok: true, message?, result? }` or `{ ok: false, fieldErrors?, formError? }` in `structuredContent`.
 - **Answered once:** give a submit tool an idempotency-key parameter (e.g. `request_id`) and name it in `submit.idempotencyParam`. Forms pass one id per rendered form, so a repeated submit (another device, a view closed mid-submit) can return the first result. Forms keep their draft and their submitted state per render; `persistDraft: false` keeps answers out of storage for sensitive forms.
 - **Source tools** return any JSON. The model maps it with `itemsPath` / `idPath` / `labelPath` (selects) or `x` / `series` (charts).
+
+## License
+
+The SDKs, UI, CLI, format, host, kit and examples are [MIT](LICENSE). The registry server (`apps/registry`) and `packages/runtime` are [FSL-1.1-ALv2](apps/registry/LICENSE.md): use, change and self-host them for anything except a competing product or service. Each release becomes Apache 2.0 two years after it ships.

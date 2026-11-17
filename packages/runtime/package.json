@@ -4,6 +4,11 @@
   "description": "app-mcp end-user tools on an MCP server: forms, charts, your components and workflows",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/runtime"
+  },
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",

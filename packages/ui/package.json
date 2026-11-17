@@ -4,6 +4,11 @@
   "description": "app-mcp built-in views (forms, charts) as single-file MCP Apps HTML",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/ui"
+  },
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",

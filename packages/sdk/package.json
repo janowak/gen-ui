@@ -4,6 +4,11 @@
   "description": "Put app-mcp forms, charts and components on your own MCP server",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janowak/gen-ui.git",
+    "directory": "packages/sdk"
+  },
   "homepage": "https://app-mcp.com",
   "keywords": [
     "mcp",
